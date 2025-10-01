@@ -1,0 +1,11 @@
+id,date,amount,customer_id,product,category
+1,2024-01-15,1250.50,CUST001,Laptop,Electronics
+2,2024-01-15,89.99,CUST002,Mouse,Electronics
+3,2024-01-16,2499.00,CUST003,Desktop PC,Electronics
+4,2024-01-16,349.99,CUST001,Monitor,Electronics
+5,2024-01-17,1899.00,CUST004,Gaming PC,Electronics
+6,2024-01-17,599.00,CUST005,Tablet,Electronics
+7,2024-01-18,199.99,CUST002,Keyboard,Electronics
+8,2024-01-18,3999.00,CUST006,Server,Electronics
+9,2024-01-19,1299.00,CUST007,Laptop,Electronics
+10,2024-01-19,79.99,CUST008,Webcam,Electronics

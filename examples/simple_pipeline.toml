@@ -1,0 +1,76 @@
+# Simple ETL Pipeline Example
+# This pipeline reads CSV data, performs basic transformations, and outputs to JSON
+
+[pipeline]
+name = "simple_data_processing"
+version = "1.0.0"
+description = "Basic CSV to JSON transformation pipeline with filtering"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 300
+
+# Data Sources
+[[sources]]
+name = "sales_data"
+type = "csv"
+
+[sources.config]
+path = "data/sales.csv"
+headers = true
+delimiter = ","
+
+# Transformations
+[[transforms]]
+name = "validate_data"
+function = "validate_schema"
+
+[transforms.config]
+required_fields = ["id", "date", "amount", "customer_id"]
+date_fields = ["date"]
+
+[[transforms]]
+name = "filter_high_value"
+function = "filter"
+
+[transforms.config]
+column = "amount"
+operator = ">="
+value = 1000.0
+
+[[transforms]]
+name = "add_tax"
+function = "map"
+
+[transforms.config]
+expression = "amount * 1.1"
+output_column = "amount_with_tax"
+
+# Data Sinks
+[[sinks]]
+name = "output_json"
+type = "json"
+
+[sinks.config]
+path = "output/processed_sales.json"
+format = "records"
+pretty = true
+
+[[sinks]]
+name = "high_value_csv"
+type = "csv"
+
+[sinks.config]
+path = "output/high_value_sales.csv"
+headers = true
+
+# Error Handling
+[error_handling]
+strategy = "continue"  # Options: "stop", "continue", "retry"
+max_retries = 3
+retry_delay_seconds = 5
+
+[error_handling.dead_letter_queue]
+enabled = true
+path = "errors/"

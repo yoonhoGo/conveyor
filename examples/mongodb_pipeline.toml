@@ -1,0 +1,75 @@
+# MongoDB ETL Pipeline Example
+# This pipeline extracts data from MongoDB, transforms it, and loads into another collection
+
+[pipeline]
+name = "mongodb_etl"
+version = "1.0.0"
+description = "Extract from MongoDB, transform, and load back to MongoDB"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 2
+timeout_seconds = 600
+
+# MongoDB Source
+[[sources]]
+name = "user_events"
+type = "mongodb"
+
+[sources.config]
+connection_string = "mongodb://localhost:27017"
+database = "analytics"
+collection = "raw_events"
+query = '{ "event_type": "purchase" }'
+limit = 10000
+
+# Transformations
+[[transforms]]
+name = "aggregate_by_user"
+function = "aggregate"
+
+[transforms.config]
+group_by = ["user_id"]
+aggregations = [
+    { column = "amount", function = "sum", alias = "total_spent" },
+    { column = "event_id", function = "count", alias = "purchase_count" }
+]
+
+[[transforms]]
+name = "calculate_avg"
+function = "map"
+
+[transforms.config]
+expression = "total_spent / purchase_count"
+output_column = "avg_purchase"
+
+[[transforms]]
+name = "filter_active_users"
+function = "filter"
+
+[transforms.config]
+column = "purchase_count"
+operator = ">="
+value = 5
+
+# MongoDB Sink
+[[sinks]]
+name = "user_summary"
+type = "mongodb"
+
+[sinks.config]
+connection_string = "mongodb://localhost:27017"
+database = "analytics"
+collection = "user_summaries"
+mode = "upsert"  # Options: "insert", "upsert", "replace"
+key_fields = ["user_id"]
+
+# Error Handling
+[error_handling]
+strategy = "retry"
+max_retries = 5
+retry_delay_seconds = 10
+
+[error_handling.dead_letter_queue]
+enabled = true
+path = "errors/mongodb_errors/"
