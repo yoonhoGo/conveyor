@@ -81,7 +81,7 @@ async fn main() -> Result<()> {
 
             if dry_run {
                 info!("Dry run mode - validating configuration");
-                pipeline.validate()?;
+                pipeline.validate().await?;
                 info!("Configuration is valid");
             } else {
                 info!("Executing pipeline");
@@ -93,7 +93,7 @@ async fn main() -> Result<()> {
         Commands::Validate { config } => {
             info!("Validating pipeline configuration from {:?}", config);
             let pipeline = Pipeline::from_file(&config).await?;
-            pipeline.validate()?;
+            pipeline.validate().await?;
             println!("✓ Configuration is valid");
         }
 

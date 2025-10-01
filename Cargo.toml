@@ -1,7 +1,7 @@
 [package]
 name = "conveyor"
 version = "0.1.0"
-edition = "2025"
+edition = "2021"
 authors = ["Yoonho Go"]
 description = "A TOML-based ETL CLI tool for data pipelines"
 license = "MIT"

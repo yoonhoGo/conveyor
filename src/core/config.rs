@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use tokio::fs;
 
+use crate::core::strategy::ErrorStrategy;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PipelineConfig {
     pub pipeline: PipelineMetadata,
@@ -89,14 +91,8 @@ pub struct SinkConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorHandlingConfig {
-    #[serde(default = "default_error_strategy")]
-    pub strategy: String,
-
-    #[serde(default = "default_max_retries")]
-    pub max_retries: u32,
-
-    #[serde(default = "default_retry_delay_seconds")]
-    pub retry_delay_seconds: u64,
+    #[serde(default, flatten)]
+    pub strategy: ErrorStrategy,
 
     #[serde(default)]
     pub dead_letter_queue: Option<DeadLetterQueueConfig>,
@@ -125,18 +121,6 @@ fn default_timeout_seconds() -> u64 {
     300
 }
 
-fn default_error_strategy() -> String {
-    "stop".to_string()
-}
-
-fn default_max_retries() -> u32 {
-    3
-}
-
-fn default_retry_delay_seconds() -> u64 {
-    5
-}
-
 impl Default for GlobalConfig {
     fn default() -> Self {
         Self {
@@ -150,9 +134,7 @@ impl Default for GlobalConfig {
 impl Default for ErrorHandlingConfig {
     fn default() -> Self {
         Self {
-            strategy: default_error_strategy(),
-            max_retries: default_max_retries(),
-            retry_delay_seconds: default_retry_delay_seconds(),
+            strategy: ErrorStrategy::default(),
             dead_letter_queue: None,
         }
     }
@@ -179,16 +161,6 @@ impl PipelineConfig {
         // Validate that the pipeline has at least one sink
         if self.sinks.is_empty() {
             anyhow::bail!("Pipeline must have at least one sink");
-        }
-
-        // Validate error handling strategy
-        let valid_strategies = ["stop", "continue", "retry"];
-        if !valid_strategies.contains(&self.error_handling.strategy.as_str()) {
-            anyhow::bail!(
-                "Invalid error handling strategy: {}. Must be one of: {:?}",
-                self.error_handling.strategy,
-                valid_strategies
-            );
         }
 
         // Validate log level
@@ -238,9 +210,7 @@ mod tests {
         assert_eq!(global.timeout_seconds, 300);
 
         let error = ErrorHandlingConfig::default();
-        assert_eq!(error.strategy, "stop");
-        assert_eq!(error.max_retries, 3);
-        assert_eq!(error.retry_delay_seconds, 5);
+        assert_eq!(error.strategy, ErrorStrategy::Stop);
     }
 
     #[test]
@@ -257,9 +227,6 @@ type = "csv"
 [[sinks]]
 name = "sink1"
 type = "json"
-
-[error_handling]
-strategy = "stop"
 "#;
 
         let config: PipelineConfig = toml::from_str(valid_config).unwrap();
@@ -298,26 +265,4 @@ type = "csv"
         assert!(config.validate().is_err());
     }
 
-    #[test]
-    fn test_config_validation_invalid_strategy() {
-        let invalid_config = r#"
-[pipeline]
-name = "test"
-version = "1.0.0"
-
-[[sources]]
-name = "src1"
-type = "csv"
-
-[[sinks]]
-name = "sink1"
-type = "json"
-
-[error_handling]
-strategy = "invalid"
-"#;
-
-        let config: PipelineConfig = toml::from_str(invalid_config).unwrap();
-        assert!(config.validate().is_err());
-    }
 }

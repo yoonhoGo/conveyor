@@ -4,10 +4,11 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
-use crate::core::config::{PipelineConfig, SourceConfig, TransformConfig, SinkConfig};
+use crate::core::config::PipelineConfig;
 use crate::core::error::ConveyorError;
+use crate::core::executor::{StageExecutor, StageValidator};
 use crate::core::registry::ModuleRegistry;
 use crate::core::traits::DataFormat;
 
@@ -27,36 +28,25 @@ impl Pipeline {
         Self { config, registry }
     }
 
-    pub fn validate(&self) -> Result<()> {
+    pub async fn validate(&self) -> Result<()> {
         // Validate configuration
         self.config.validate()?;
 
-        // Validate all sources exist
+        let validator = StageValidator::new(self.registry.clone());
+
+        // Validate all sources
         for source in &self.config.sources {
-            if self.registry.get_source(&source.source_type).is_none() {
-                return Err(ConveyorError::ModuleNotFound(
-                    format!("Source type '{}' not found", source.source_type)
-                ).into());
-            }
+            validator.validate_source(source).await?;
         }
 
-        // Validate all transforms exist
+        // Validate all transforms
         for transform in &self.config.transforms {
-            let function_name = transform.function.split('.').next().unwrap_or(&transform.function);
-            if self.registry.get_transform(function_name).is_none() {
-                return Err(ConveyorError::ModuleNotFound(
-                    format!("Transform function '{}' not found", function_name)
-                ).into());
-            }
+            validator.validate_transform(transform).await?;
         }
 
-        // Validate all sinks exist
+        // Validate all sinks
         for sink in &self.config.sinks {
-            if self.registry.get_sink(&sink.sink_type).is_none() {
-                return Err(ConveyorError::ModuleNotFound(
-                    format!("Sink type '{}' not found", sink.sink_type)
-                ).into());
-            }
+            validator.validate_sink(sink).await?;
         }
 
         Ok(())
@@ -92,129 +82,70 @@ impl Pipeline {
     }
 
     async fn execute_internal(&self, continue_on_error: bool) -> Result<()> {
+        use crate::core::strategy::ErrorStrategy;
+
         let mut data_map: HashMap<String, DataFormat> = HashMap::new();
+
+        // Convert continue_on_error to ErrorStrategy
+        let strategy = if continue_on_error {
+            ErrorStrategy::Continue
+        } else {
+            ErrorStrategy::Stop
+        };
+
+        let executor = StageExecutor::new(self.registry.clone(), strategy);
 
         // Process sources
         for source_config in &self.config.sources {
-            match self.execute_source(source_config).await {
-                Ok(data) => {
-                    info!("Source '{}' produced data", source_config.name);
-                    data_map.insert(source_config.name.clone(), data);
-                }
-                Err(e) => {
-                    if continue_on_error {
-                        warn!("Source '{}' failed: {}. Continuing...", source_config.name, e);
-                    } else {
-                        return Err(e);
-                    }
-                }
-            }
+            let data = executor.execute_source(source_config).await?;
+            data_map.insert(source_config.name.clone(), data);
         }
 
         // Process transforms
         for transform_config in &self.config.transforms {
             // Get input data
-            let input_name = transform_config.input.as_ref()
+            let input_name = transform_config
+                .input
+                .as_ref()
                 .unwrap_or(&self.config.sources.last().unwrap().name);
 
-            let input_data = data_map.get(input_name)
-                .ok_or_else(|| ConveyorError::PipelineError(
-                    format!("Input '{}' not found for transform '{}'", input_name, transform_config.name)
-                ))?;
+            let input_data = data_map.get(input_name).ok_or_else(|| {
+                ConveyorError::PipelineError(format!(
+                    "Input '{}' not found for transform '{}'",
+                    input_name, transform_config.name
+                ))
+            })?;
 
-            match self.execute_transform(transform_config, input_data.clone()).await {
-                Ok(transformed_data) => {
-                    info!("Transform '{}' completed", transform_config.name);
-                    data_map.insert(transform_config.name.clone(), transformed_data);
-                }
-                Err(e) => {
-                    if continue_on_error {
-                        warn!("Transform '{}' failed: {}. Continuing...", transform_config.name, e);
-                    } else {
-                        return Err(e);
-                    }
-                }
-            }
+            let transformed_data = executor
+                .execute_transform(transform_config, input_data.clone())
+                .await?;
+            data_map.insert(transform_config.name.clone(), transformed_data);
         }
 
         // Process sinks
         for sink_config in &self.config.sinks {
             // Get input data
-            let input_name = sink_config.input.as_ref()
-                .unwrap_or_else(|| {
-                    if !self.config.transforms.is_empty() {
-                        &self.config.transforms.last().unwrap().name
-                    } else {
-                        &self.config.sources.last().unwrap().name
-                    }
-                });
-
-            let input_data = data_map.get(input_name)
-                .ok_or_else(|| ConveyorError::PipelineError(
-                    format!("Input '{}' not found for sink '{}'", input_name, sink_config.name)
-                ))?;
-
-            match self.execute_sink(sink_config, input_data.clone()).await {
-                Ok(()) => {
-                    info!("Sink '{}' completed", sink_config.name);
+            let input_name = sink_config.input.as_ref().unwrap_or_else(|| {
+                if !self.config.transforms.is_empty() {
+                    &self.config.transforms.last().unwrap().name
+                } else {
+                    &self.config.sources.last().unwrap().name
                 }
-                Err(e) => {
-                    if continue_on_error {
-                        warn!("Sink '{}' failed: {}. Continuing...", sink_config.name, e);
-                    } else {
-                        return Err(e);
-                    }
-                }
-            }
+            });
+
+            let input_data = data_map.get(input_name).ok_or_else(|| {
+                ConveyorError::PipelineError(format!(
+                    "Input '{}' not found for sink '{}'",
+                    input_name, sink_config.name
+                ))
+            })?;
+
+            executor
+                .execute_sink(sink_config, input_data.clone())
+                .await?;
         }
 
         Ok(())
     }
 
-    async fn execute_source(&self, config: &SourceConfig) -> Result<DataFormat> {
-        let source = self.registry.get_source(&config.source_type)
-            .ok_or_else(|| ConveyorError::ModuleNotFound(
-                format!("Source type '{}' not found", config.source_type)
-            ))?;
-
-        // Validate configuration
-        source.validate_config(&config.config).await?;
-
-        // Execute source
-        let data = source.read(&config.config).await?;
-
-        Ok(data)
-    }
-
-    async fn execute_transform(&self, config: &TransformConfig, data: DataFormat) -> Result<DataFormat> {
-        let function_name = config.function.split('.').next().unwrap_or(&config.function);
-
-        let transform = self.registry.get_transform(function_name)
-            .ok_or_else(|| ConveyorError::ModuleNotFound(
-                format!("Transform function '{}' not found", function_name)
-            ))?;
-
-        // Validate configuration
-        transform.validate_config(&config.config).await?;
-
-        // Execute transform
-        let transformed_data = transform.apply(data, &config.config).await?;
-
-        Ok(transformed_data)
-    }
-
-    async fn execute_sink(&self, config: &SinkConfig, data: DataFormat) -> Result<()> {
-        let sink = self.registry.get_sink(&config.sink_type)
-            .ok_or_else(|| ConveyorError::ModuleNotFound(
-                format!("Sink type '{}' not found", config.sink_type)
-            ))?;
-
-        // Validate configuration
-        sink.validate_config(&config.config).await?;
-
-        // Execute sink
-        sink.write(data, &config.config).await?;
-
-        Ok(())
-    }
 }
