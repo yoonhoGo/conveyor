@@ -1,0 +1,356 @@
+<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
+
+# TOML 기반 Rust ETL CLI 도구 설계 및 구현 가이드
+
+이 보고서는 Rust로 구현되는 TOML 설정 파일 기반의 ETL(Extract, Transform, Load) CLI 도구에 대한 종합적인 설계 및 구현 가이드를 제공합니다. 이 도구는 사용자가 Rust 코드를 직접 작성하지 않고도 TOML 파일로 정의된 명세에 따라 강력한 데이터 파이프라인을 실행할 수 있게 합니다.
+
+![Rust ETL CLI 도구의 시스템 아키텍처](https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/15a70b94-c9fa-4ea5-8fae-8d48742ebb59/98c94a8d.png)
+
+Rust ETL CLI 도구의 시스템 아키텍처
+
+## 핵심 아키텍처 설계
+
+### 시스템 구성 요소
+
+제안된 ETL 도구는 다음과 같은 주요 구성 요소로 설계됩니다[^1_1][^1_2][^1_3]:
+
+1. **CLI 엔트리 포인트**: clap 라이브러리를 활용한 명령줄 인터페이스
+2. **TOML 파서**: serde와 toml 크레이트를 사용한 설정 파일 파싱
+3. **파이프라인 엔진**: 설정에 따른 파이프라인 실행 및 오케스트레이션
+4. **모듈 레지스트리**: 다양한 데이터 소스, 변환 함수, 출력 대상 관리
+5. **플러그인 시스템**: libloading을 활용한 동적 모듈 로딩
+
+### 기술 스택 선정
+
+**핵심 크레이트들**:
+
+- `clap`: CLI 인터페이스 구현[^1_4][^1_5][^1_6]
+- `serde` + `toml`: TOML 설정 파일 처리[^1_7][^1_8][^1_9]
+- `tokio`: 비동기 런타임[^1_3][^1_10]
+- `polars`: 고성능 데이터프레임 처리[^1_2][^1_3]
+- `libloading`: 동적 라이브러리 로딩[^1_11][^1_12][^1_13]
+- `reqwest`: HTTP 클라이언트[^1_14][^1_15]
+- `mongodb`: MongoDB 연결[^1_16][^1_14][^1_15]
+
+이러한 선택은 성능, 안전성, 생태계 성숙도를 고려한 것으로, 특히 Node.js 백엔드 개발 경험이 있는 개발자에게 친숙한 비동기 패러다임을 활용합니다[^1_17].
+
+## TOML 설정 파일 명세
+
+설정 파일은 다음과 같은 구조를 따릅니다:
+
+### 파이프라인 메타데이터
+
+```toml
+[pipeline]
+name = "data_processing_pipeline"
+version = "1.0.0"
+description = "데이터 변환 및 로딩 파이프라인"
+```
+
+
+### 글로벌 설정
+
+```toml
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 300
+```
+
+
+### 데이터 소스 정의
+
+각 소스는 타입별로 다른 설정을 가집니다:
+
+```toml
+[[sources]]
+name = "csv_input"
+type = "file"
+config = { path = "data/input.csv", format = "csv", headers = true }
+
+[[sources]]
+name = "api_input"
+type = "http" 
+config = { url = "https://api.example.com/data", method = "GET" }
+```
+
+
+### 변환 단계 정의
+
+내장 함수와 사용자 정의 함수를 모두 지원합니다:
+
+```toml
+[[transforms]]
+name = "data_validation"
+function = "validate_schema"
+config = { required_fields = ["id", "timestamp", "value"] }
+
+[[transforms]]
+name = "custom_transform"
+function = "custom.transform_business_logic"
+module = "business_rules"
+```
+
+
+## 모듈 시스템 구현
+
+### 내장 모듈들
+
+**데이터 소스 모듈들**:
+
+- `stdin`: 표준 입력에서 데이터 읽기[^1_1][^1_3]
+- `stdout`: 표준 출력으로 데이터 쓰기[^1_1][^1_3]
+- `file`: CSV, JSON 파일 처리[^1_2][^1_8]
+- `mongodb`: MongoDB 컬렉션 연결[^1_16][^1_14][^1_15][^1_18][^1_19]
+- `http`: HTTP API 연동[^1_3][^1_20]
+
+**변환 함수들**:
+
+- `validate_schema`: 스키마 검증
+- `clean_data`: 중복 제거, null 값 처리
+- `filter`: 조건부 필터링
+- `map`: 데이터 매핑 및 변환
+
+
+### 트레이트 기반 확장성
+
+모든 모듈은 다음 트레이트들을 구현합니다:
+
+```rust
+#[async_trait]
+pub trait DataSource: Send + Sync {
+    async fn read(&self, config: &HashMap<String, toml::Value>) -> DataFrameResult;
+}
+
+#[async_trait]
+pub trait Transform: Send + Sync {
+    async fn apply(&self, data: DataFrame, config: &Option<HashMap<String, toml::Value>>) -> DataFrameResult;
+}
+```
+
+이는 타입 안전성을 보장하면서도 확장 가능한 아키텍처를 제공합니다[^1_21][^1_22].
+
+## 플러그인 시스템 설계
+
+### 동적 로딩 메커니즘
+
+플러그인 시스템은 libloading 크레이트를 활용하여 런타임에 동적 라이브러리를 로드합니다[^1_12][^1_13][^1_23]:
+
+```rust
+pub struct PluginLoader {
+    config: PluginConfig,
+    loaded_libraries: HashMap<String, Library>,
+}
+
+impl PluginLoader {
+    pub async fn load_plugins(&mut self, registry: &mut ModuleRegistry) -> Result<()> {
+        // 플러그인 검색 및 로드 로직
+    }
+}
+```
+
+
+### 플러그인 개발 인터페이스
+
+플러그인 개발자는 다음과 같은 간단한 인터페이스를 구현합니다:
+
+```rust
+pub trait PluginRegistrar {
+    fn register(&self, registry: &mut ModuleRegistry);
+}
+
+// 플러그인 선언 매크로
+etl_cli::declare_plugin!(MyCustomPlugin, create_plugin);
+```
+
+이는 WebAssembly보다 네이티브 성능에 가까운 속도를 제공하면서도[^1_20][^1_24], 메모리 안전성을 유지합니다.
+
+## 성능 최적화 전략
+
+### 데이터 처리 성능
+
+**Polars 활용**: Apache Arrow 기반의 Polars 라이브러리를 사용하여 다음과 같은 최적화를 달성합니다[^1_2][^1_3]:
+
+- Lazy evaluation으로 불필요한 연산 방지
+- SIMD 명령어 활용
+- 멀티코어 병렬 처리
+- Zero-copy 연산
+
+
+### 메모리 관리
+
+Rust의 소유권 시스템과 결합하여:
+
+- 컴파일 타임 메모리 안전성 보장[^1_1][^1_3][^1_20]
+- 가비지 컬렉션 오버헤드 없음
+- 예측 가능한 성능 특성
+
+실제 벤치마크에서 Python 기반 파이프라인 대비 상당한 성능 향상이 보고되었습니다[^1_20].
+
+## 오류 처리 및 복구
+
+### 포괄적인 오류 처리
+
+```toml
+[error_handling]
+strategy = "continue"  # "stop", "continue", "retry"
+max_retries = 3
+retry_delay_seconds = 5
+dead_letter_queue = { enabled = true, path = "errors/" }
+```
+
+
+### 타입 안전 오류 정의
+
+thiserror 크레이트를 활용한 구조화된 오류 타입:
+
+```rust
+#[derive(Error, Debug)]
+pub enum EtlError {
+    #[error("설정 오류: {0}")]
+    ConfigError(String),
+    #[error("데이터 소스 오류: {0}")]
+    DataSourceError(String),
+    // ... 추가 오류 타입들
+}
+```
+
+
+## 실제 구현 예제
+
+### 프로젝트 구조
+
+![Rust ETL CLI 도구의 프로젝트 구조](https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/4463da36-8e14-4ef0-a41d-59059d2b5867/694afef8.png)
+
+Rust ETL CLI 도구의 프로젝트 구조
+
+### 빌드 및 실행
+
+```bash
+# 프로젝트 빌드
+cargo build --release
+
+# 설정 검증
+./target/release/etl -c pipeline.toml --dry-run
+
+# 파이프라인 실행  
+./target/release/etl -c pipeline.toml
+```
+
+
+### 플러그인 개발
+
+```rust
+// 사용자 정의 플러그인
+pub struct BusinessRulesPlugin;
+
+impl PluginRegistrar for BusinessRulesPlugin {
+    fn register(&self, registry: &mut ModuleRegistry) {
+        registry.register_transform(
+            "validate_business_rules".to_string(),
+            Box::new(BusinessRuleValidator),
+        );
+    }
+}
+```## 확장성 및 미래 계획
+
+### 수평 확장성
+
+- **분산 처리**: 향후 Apache Arrow Flight 프로토콜 지원으로 분산 처리 가능[^1_25]
+- **클라우드 네이티브**: Kubernetes 배포 및 오케스트레이션 지원
+- **스트림 처리**: Apache Kafka와 같은 스트리밍 플랫폼 연동[^1_10]
+
+### 개발자 경험 향상
+
+- **타입 안전 설정**: 컴파일 타임 설정 검증
+- **Hot reload**: 설정 변경 시 자동 재시작
+- **모니터링 대시보드**: 파이프라인 실행 상태 시각화
+
+## 결론
+
+제안된 Rust ETL CLI 도구는 다음과 같은 주요 이점을 제공합니다:
+
+1. **성능**: 네이티브 성능과 효율적인 메모리 사용[^1_1][^1_20][^1_26]
+2. **안전성**: 컴파일 타임 보장과 타입 안전성[^1_1][^1_3]
+3. **확장성**: 모듈화된 아키텍처와 플러그인 시스템[^1_27][^1_24][^1_28]
+4. **사용 편의성**: 직관적인 TOML 설정[^1_29][^1_7][^1_30]
+5. **생산성**: 코드 변경 없이 파이프라인 수정 가능
+
+이러한 설계는 Node.js 백엔드 개발 경험을 가진 개발자들이 쉽게 적응할 수 있는 현대적인 도구를 제공하면서도, Rust 생태계의 성능과 안전성 이점을 최대한 활용합니다. 특히 Kubernetes와 microservices 환경에서 운영되는 데이터 파이프라인에 최적화된 솔루션입니다.
+<span style="display:none">[^1_31][^1_32][^1_33][^1_34][^1_35][^1_36][^1_37][^1_38][^1_39][^1_40][^1_41][^1_42][^1_43][^1_44][^1_45][^1_46][^1_47][^1_48][^1_49][^1_50][^1_51][^1_52][^1_53][^1_54][^1_55][^1_56][^1_57][^1_58][^1_59][^1_60][^1_61][^1_62][^1_63][^1_64][^1_65][^1_66][^1_67][^1_68][^1_69][^1_70][^1_71][^1_72]</span>
+
+<div align="center">⁂</div>
+
+[^1_1]: https://doc.rust-lang.org/cargo/reference/config.html
+[^1_2]: https://github.com/MrDataPsycho/data-pipelines-in-rust
+[^1_3]: https://www.decube.io/post/data-pipeline-with-rust
+[^1_4]: https://leapcell.io/blog/clap-and-structopt-crafting-intuitive-rust-clis
+[^1_5]: https://www.thorsten-hans.com/how-to-build-clis-in-rust-with-structopt/
+[^1_6]: https://dev.to/sgchris/building-cli-tools-with-clap-and-structopt-62j
+[^1_7]: https://docs.rs/toml
+[^1_8]: https://rust-lang-nursery.github.io/rust-cookbook/encoding/complex.html
+[^1_9]: https://docs.rs/toml-rsl
+[^1_10]: https://tarkalabs.com/blogs/building-scalable-ingestion-pipeline-rust/
+[^1_11]: https://www.reddit.com/r/rust/comments/1eqnall/dynamically_load_libraries_from_dir/
+[^1_12]: https://docs.rs/libloading/
+[^1_13]: https://creative-coding-the-hard-way.github.io/Agents/libloading/struct.Library.html
+[^1_14]: https://www.djamware.com/post/674bc4ad5127914b1112d912/rust-and-mongodb-tutorial-create-crud-restapi
+[^1_15]: https://dev.to/hackmamba/build-a-rest-api-with-rust-and-mongodb-actix-web-version-ei1
+[^1_16]: https://stackoverflow.com/questions/65379841/how-to-save-a-document-in-mongodb-by-r2d2-and-actix
+[^1_17]: https://blog.logrocket.com/configuration-management-in-rust-web-services/
+[^1_18]: https://blog.logrocket.com/using-mongodb-in-a-rust-web-service/
+[^1_19]: https://codevoweb.com/build-a-crud-api-with-axum-and-mongodb-in-rust/
+[^1_20]: https://medium.datadriveninvestor.com/i-rewrote-our-data-pipeline-in-rust-heres-what-happened-to-performance-c4e439cc3101
+[^1_21]: https://acalustra.com/rust-design-patterns-i-use-all-the-time.html
+[^1_22]: https://www.bipinpaulbedi.com/functional-design-patterns-using-rust/
+[^1_23]: https://github.com/nagisa/rust_libloading
+[^1_24]: https://www.arroyo.dev/blog/rust-plugin-systems/
+[^1_25]: https://docs.rs/dataflow-rs
+[^1_26]: https://www.xenonstack.com/blog/rust-big-data-applications
+[^1_27]: https://docs.rs/dynamic-plugin
+[^1_28]: https://www.reddit.com/r/rust/comments/ynx27x/need_help_creating_a_plugin_system_using_dynamic/
+[^1_29]: https://rust-cli-recommendations.sunshowers.io/configuration.html
+[^1_30]: https://www.reddit.com/r/rust/comments/1e6ns5p/does_everything_rust_have_to_be_toml/
+[^1_31]: https://www.youtube.com/watch?v=4EmKgrzHfv4
+[^1_32]: https://doc.rust-lang.org/beta/nightly-rustc/bootstrap/core/config/toml/install/index.html
+[^1_33]: https://lib.rs/config
+[^1_34]: https://github.com/wpcodevo/rust-mongodb-crud
+[^1_35]: https://crates.io/crates/toml-cli
+[^1_36]: https://www.reddit.com/r/dataengineering/comments/172domw/how_is_rust_for_data_pipelines/
+[^1_37]: https://www.confessionsofadataguy.com/using-rust-to-write-a-data-pipeline-thoughts-musings/
+[^1_38]: https://www.reddit.com/r/rust/comments/1gcwdly/toml_edit_cli_tool/
+[^1_39]: https://betterprogramming.pub/build-a-serverless-data-pipeline-with-rust-and-aws-lambda-ec4e38a0ce9d
+[^1_40]: https://users.rust-lang.org/t/is-there-a-crate-to-read-toml-files/60166
+[^1_41]: https://leapcell.io/blog/ko/clap-gwa-structopt-reul-hwalyonghan-jikgwanjeogin-rust-cli-jejag
+[^1_42]: https://users.rust-lang.org/t/loading-dynamic-libraries-from-memory/41697
+[^1_43]: https://github.com/toml-rs/toml
+[^1_44]: https://github.com/TeXitoi/structopt
+[^1_45]: https://stackoverflow.com/questions/77974087/can-rust-lazy-load-dynamically-linked-dll-so-dylib-crates
+[^1_46]: https://stackoverflow.com/questions/78818330/reading-a-toml-file-with-serde-camelcase-vs-snake-case
+[^1_47]: https://docs.rs/structopt/
+[^1_48]: https://www.reddit.com/r/rust/comments/pkzde6/whats_the_relationship_between_structopt_and_clap/
+[^1_49]: https://rust-unofficial.github.io/patterns/functional/
+[^1_50]: https://cloud.google.com/blog/topics/developers-practitioners/framework-building-configuration-driven-data-lake-using-data-fusion-and-composer
+[^1_51]: https://users.rust-lang.org/t/writing-a-plugin-system-in-rust/119980
+[^1_52]: https://refactoring.guru/design-patterns/rust
+[^1_53]: https://github.com/venuswhispers/Rust-awesome-frameworks
+[^1_54]: https://users.rust-lang.org/t/dynamic-load-plugins-in-rust/74961
+[^1_55]: https://www.reddit.com/r/dataengineering/comments/nbua2l/etl_pipelines_learning_resources/
+[^1_56]: https://crates.io/crates/dataflow-rs
+[^1_57]: https://www.reddit.com/r/rust/comments/12x58fe/any_sort_of_plugin_engine_with_dynamic_load/
+[^1_58]: https://stackoverflow.com/questions/66120507/design-pattern-for-data-consolidation-layer-etl
+[^1_59]: https://github.com/Michael-F-Bryan/plugins_in_rust
+[^1_60]: https://www.ssp.sh/brain/functional-data-engineering/
+[^1_61]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/453e4ede-e5c9-48a0-9966-192de62bb43b/a62e537b.toml
+[^1_62]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/8438d10a-6888-4a83-acd2-d9eee43065cf/2e9d962a.toml
+[^1_63]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/8438d10a-6888-4a83-acd2-d9eee43065cf/1699c1fe.rs
+[^1_64]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/8438d10a-6888-4a83-acd2-d9eee43065cf/912952d1.rs
+[^1_65]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/8438d10a-6888-4a83-acd2-d9eee43065cf/9177877a.rs
+[^1_66]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/57206615-73ed-4b64-aa60-e4c38a8b9718/a311c240.rs
+[^1_67]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/57206615-73ed-4b64-aa60-e4c38a8b9718/0544fc95.rs
+[^1_68]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/57206615-73ed-4b64-aa60-e4c38a8b9718/fe3e7c2c.rs
+[^1_69]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/57206615-73ed-4b64-aa60-e4c38a8b9718/c9ff5422.rs
+[^1_70]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/3f3c7f67-b392-424c-943e-602bfeaaa62f/76ed074a
+[^1_71]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/3f3c7f67-b392-424c-943e-602bfeaaa62f/b3356305.md
+[^1_72]: https://ppl-ai-code-interpreter-files.s3.amazonaws.com/web/direct-files/e6aa37614da0b169b2928c2239ec4285/3f3c7f67-b392-424c-943e-602bfeaaa62f/b381df2c.sh```
+
