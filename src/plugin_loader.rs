@@ -101,9 +101,9 @@ impl PluginLoader {
 
         tracing::info!(
             "Plugin '{}' v{} loaded successfully: {}",
-            declaration.name.as_str(),
-            declaration.version.as_str(),
-            declaration.description.as_str()
+            declaration.name,
+            declaration.version,
+            declaration.description
         );
 
         // Call the plugin's register function

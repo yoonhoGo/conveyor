@@ -833,6 +833,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "conveyor-plugin-test"
+version = "0.1.0"
+dependencies = [
+ "conveyor-plugin-api",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

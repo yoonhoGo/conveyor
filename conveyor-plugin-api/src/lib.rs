@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 // Re-export abi_stable types for convenience
 pub use abi_stable::{
     marker_type::ErasedObject,
+    rstr,
     sabi_trait,
     std_types::{RBox, RBoxError, RErr, RHashMap, ROk, ROption, RResult, RStr, RString, RVec},
     StableAbi,
@@ -57,14 +58,14 @@ pub struct PluginDeclaration {
     /// Plugin API version this plugin was compiled with
     pub api_version: u32,
 
-    /// Plugin name
-    pub name: RString,
+    /// Plugin name (static string slice)
+    pub name: RStr<'static>,
 
-    /// Plugin version
-    pub version: RString,
+    /// Plugin version (static string slice)
+    pub version: RStr<'static>,
 
-    /// Plugin description
-    pub description: RString,
+    /// Plugin description (static string slice)
+    pub description: RStr<'static>,
 
     /// Function to register plugin modules with the host
     /// This will be called by the host after loading the plugin
@@ -74,9 +75,9 @@ pub struct PluginDeclaration {
 impl PluginDeclaration {
     /// Create a new plugin declaration
     pub const fn new(
-        name: RString,
-        version: RString,
-        description: RString,
+        name: RStr<'static>,
+        version: RStr<'static>,
+        description: RStr<'static>,
         register: extern "C" fn() -> RResult<(), RBoxError>,
     ) -> Self {
         Self {
@@ -119,15 +120,15 @@ mod tests {
         }
 
         let decl = PluginDeclaration::new(
-            RString::from("test"),
-            RString::from("1.0.0"),
-            RString::from("Test plugin"),
+            RStr::from("test"),
+            RStr::from("1.0.0"),
+            RStr::from("Test plugin"),
             dummy_register,
         );
 
         assert_eq!(decl.api_version, PLUGIN_API_VERSION);
         assert!(decl.is_compatible());
-        assert_eq!(decl.name.as_str(), "test");
+        assert_eq!(decl.name, "test");
     }
 
     #[test]
