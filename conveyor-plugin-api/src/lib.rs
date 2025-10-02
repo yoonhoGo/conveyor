@@ -3,6 +3,8 @@
 //! This crate defines the FFI-safe plugin interface for Conveyor ETL pipelines.
 //! Uses abi_stable for cross-compiler compatibility.
 
+pub mod data;
+
 use serde::{Deserialize, Serialize};
 
 // Re-export abi_stable types for convenience
