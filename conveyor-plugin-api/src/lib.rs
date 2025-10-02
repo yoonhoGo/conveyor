@@ -4,6 +4,7 @@
 //! Uses abi_stable for cross-compiler compatibility.
 
 pub mod data;
+pub mod traits;
 
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub use abi_stable::{
     marker_type::ErasedObject,
     sabi_trait,
-    std_types::{RBox, RBoxError, RErr, ROk, ROption, RResult, RStr, RString, RVec},
+    std_types::{RBox, RBoxError, RErr, RHashMap, ROk, ROption, RResult, RStr, RString, RVec},
     StableAbi,
 };
 

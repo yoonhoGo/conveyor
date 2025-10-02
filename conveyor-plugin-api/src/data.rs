@@ -12,9 +12,8 @@ use serde_json;
 /// This enum represents different data formats that can be passed between
 /// the host and plugins. Since Polars DataFrame and RecordBatch are not
 /// FFI-safe, they are serialized to bytes.
-#[repr(u8)]
+#[repr(C)]
 #[derive(StableAbi, Debug, Clone)]
-#[sabi(kind(WithNonExhaustive(size = 64, align = 8)))]
 pub enum FfiDataFormat {
     /// Arrow IPC serialized DataFrame (Polars)
     ///
