@@ -1,0 +1,52 @@
+# Auto-labeling configuration
+
+'documentation':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.md'
+      - 'docs/**/*'
+
+'rust':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'src/**/*.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+'plugin-ffi':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'plugins/**/*'
+      - 'conveyor-plugin-api/**/*'
+
+'plugin-wasm':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'plugins-wasm/**/*'
+      - 'conveyor-wasm-plugin-api/**/*'
+      - '**/*.wit'
+
+'tests':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'tests/**/*'
+      - '**/*test.rs'
+
+'ci/cd':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/**/*'
+
+'npm':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'package.json'
+      - 'scripts/**/*.js'
+      - '.npmignore'
+
+'dependencies':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'package.json'

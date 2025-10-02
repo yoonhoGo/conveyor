@@ -1,6 +1,12 @@
 # Conveyor
 
-A high-performance, TOML-based ETL (Extract, Transform, Load) CLI tool built in Rust for data pipeline processing with a **dynamic plugin system**.
+[![CI](https://github.com/yoonhoGo/conveyor/actions/workflows/ci.yml/badge.svg)](https://github.com/yoonhoGo/conveyor/actions/workflows/ci.yml)
+[![Release](https://github.com/yoonhoGo/conveyor/actions/workflows/release.yml/badge.svg)](https://github.com/yoonhoGo/conveyor/actions/workflows/release.yml)
+[![npm version](https://badge.fury.io/js/%40conveyor%2Fcli.svg)](https://www.npmjs.com/package/@conveyor/cli)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-blue.svg)](https://www.rust-lang.org)
+
+A high-performance, TOML-based ETL (Extract, Transform, Load) CLI tool built in Rust for data pipeline processing with a **dual plugin system** (FFI + WASM).
 
 ## Features
 
@@ -14,15 +20,26 @@ A high-performance, TOML-based ETL (Extract, Transform, Load) CLI tool built in 
 
 ## Installation
 
-### Prerequisites
+### Option 1: npm (Recommended for End Users)
 
+```bash
+# Install globally
+npm install -g @conveyor/cli
+
+# Or use with npx (no installation)
+npx @conveyor/cli --help
+```
+
+The npm package automatically downloads the appropriate binary for your platform (macOS, Linux, Windows).
+
+### Option 2: Build from Source
+
+**Prerequisites:**
 - Rust 1.70 or higher
 - Cargo
 
-### Build from Source
-
 ```bash
-git clone https://github.com/yourusername/conveyor.git
+git clone https://github.com/yoonhoGo/conveyor.git
 cd conveyor
 cargo build --release --all
 ```

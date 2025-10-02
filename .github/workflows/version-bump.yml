@@ -1,0 +1,53 @@
+name: Version Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  bump-version:
+    name: Bump Version and Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-edit
+        run: cargo install cargo-edit
+
+      - name: Bump Cargo version
+        run: |
+          cargo set-version --bump ${{ inputs.version_type }}
+          NEW_VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Update package.json version
+        run: |
+          sed -i "s/\"version\": \".*\"/\"version\": \"$NEW_VERSION\"/" package.json
+
+      - name: Commit version bump
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add Cargo.toml Cargo.lock package.json
+          git commit -m "chore: bump version to v$NEW_VERSION"
+          git push
+
+      - name: Create and push tag
+        run: |
+          git tag v$NEW_VERSION
+          git push origin v$NEW_VERSION

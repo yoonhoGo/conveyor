@@ -1,0 +1,85 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate:
+    name: Validate PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check PR title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            chore
+            ci
+            build
+
+      - name: Check for merge conflicts
+        run: |
+          if git grep -l "<<<<<<< HEAD" -- ':!.github' ':!*.md'; then
+            echo "::error::Merge conflicts detected"
+            exit 1
+          fi
+
+  size-check:
+    name: Binary Size Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Check binary size
+        run: |
+          SIZE=$(stat -c%s target/release/conveyor 2>/dev/null || stat -f%z target/release/conveyor)
+          SIZE_MB=$((SIZE / 1024 / 1024))
+          echo "Binary size: ${SIZE_MB}MB"
+
+          if [ $SIZE_MB -gt 100 ]; then
+            echo "::warning::Binary size is larger than 100MB"
+          fi
+
+  dependency-check:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.base.ref == 'main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  auto-label:
+    name: Auto Label
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Label PR
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
