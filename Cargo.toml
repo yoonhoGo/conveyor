@@ -5,6 +5,7 @@ members = [
     "plugins/conveyor-plugin-test",
     "plugins/conveyor-plugin-http",
     "plugins/conveyor-plugin-mongodb",
+    "plugins-wasm/conveyor-plugin-echo-wasm",
 ]
 exclude = [
     "examples/plugin-template",  # Template for creating new plugins

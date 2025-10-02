@@ -5,7 +5,14 @@
 // Generate bindings from WIT file
 wit_bindgen::generate!({
     world: "plugin",
+    path: "../conveyor-wasm-plugin-api/wit",
+    exports: {
+        world: __MyExports,
+    },
 });
+
+// Re-export the generated types and export macro
+pub use __MyExports as Exports;
 
 /// Plugin API version
 pub const PLUGIN_API_VERSION: u32 = 1;
