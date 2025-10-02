@@ -27,6 +27,7 @@ tracing = "0.1"
 
 # Plugin API
 conveyor-plugin-api = { path = "conveyor-plugin-api" }
+abi_stable = "0.11"
 
 
 # HTTP client
