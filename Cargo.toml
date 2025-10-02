@@ -2,9 +2,8 @@
 members = [
     "conveyor-plugin-api",
     "plugins/conveyor-plugin-test",
-    # Note: Plugin crates are not yet functional - FFI implementation pending
-    # "plugins/conveyor-plugin-http",
-    # "plugins/conveyor-plugin-mongodb",
+    "plugins/conveyor-plugin-http",
+    "plugins/conveyor-plugin-mongodb",
 ]
 exclude = [
     "examples/plugin-template",  # Template for creating new plugins

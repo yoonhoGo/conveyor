@@ -1,308 +1,378 @@
 //! HTTP Plugin for Conveyor
 //!
-//! Provides ABI-stable HTTP source and sink capabilities for REST API integration.
+//! Provides FFI-safe HTTP source and sink capabilities for REST API integration.
 
-use abi_stable::std_types::{ROption, RString};
-use conveyor_plugin_api::*;
-use reqwest::{
-    header::{HeaderMap, HeaderName, HeaderValue},
-    Client, Method,
+use conveyor_plugin_api::{
+    data::FfiDataFormat,
+    rstr,
+    traits::{FfiDataSource, FfiSink},
+    PluginDeclaration, RBoxError, RHashMap, RResult, RStr, RString, ROk, RErr,
 };
+use reqwest::{Client, Method};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
 
-/// HTTP Source implementation
-pub struct HttpSource;
+// ============================================================================
+// HTTP Source Implementation
+// ============================================================================
 
-impl SourcePlugin for HttpSource {
-    fn name(&self) -> RString {
-        "http".into()
+/// HTTP Source - fetches data from REST APIs
+struct HttpSource;
+
+impl FfiDataSource for HttpSource {
+    fn name(&self) -> RStr<'_> {
+        "http_source".into()
     }
 
-    fn read(&self, config: PluginConfig) -> PluginResult<DataFormat> {
+    fn read(&self, config: RHashMap<RString, RString>) -> RResult<FfiDataFormat, RBoxError> {
         // Use tokio runtime to execute async code
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| PluginError::new(format!("Failed to create runtime: {}", e)))?;
+        let runtime = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create runtime: {}", e))),
+        };
 
         runtime.block_on(async { self.read_async(&config).await })
     }
 
-    fn validate_config(&self, config: &PluginConfig) -> PluginResult<()> {
-        if !config.contains_key(&"url".into()) {
-            return Err(PluginError::new("HTTP source requires 'url' configuration"));
+    fn validate_config(&self, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
+        if !config.contains_key(&RString::from("url")) {
+            return RErr(RBoxError::from_fmt(&format_args!("HTTP source requires 'url' configuration")));
         }
 
-        if let Ok(Some(method)) = parse_config_value::<String>(config, "method") {
-            let method_upper = method.to_uppercase();
-            if !["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]
-                .contains(&method_upper.as_str())
-            {
-                return Err(PluginError::new(format!("Invalid HTTP method: {}", method)));
+        if let Some(method) = config.get(&RString::from("method")) {
+            let method_upper = method.as_str().to_uppercase();
+            if !["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].contains(&method_upper.as_str()) {
+                return RErr(RBoxError::from_fmt(&format_args!("Invalid HTTP method: {}", method)));
             }
         }
 
-        if let Ok(Some(format)) = parse_config_value::<String>(config, "format") {
-            let valid_formats = ["json", "jsonl"];
-            if !valid_formats.contains(&format.as_str()) {
-                return Err(PluginError::new(format!(
-                    "Invalid HTTP format: {}. Must be one of: {:?}",
-                    format, valid_formats
-                )));
-            }
-        }
-
-        Ok(())
+        ROk(())
     }
 }
 
 impl HttpSource {
-    async fn read_async(&self, config: &PluginConfig) -> PluginResult<DataFormat> {
-        let url: String = parse_config_value(config, "url")
-            .map_err(|e| PluginError::new(e))?
-            .ok_or_else(|| PluginError::new("Missing 'url' configuration"))?;
+    async fn read_async(&self, config: &RHashMap<RString, RString>) -> RResult<FfiDataFormat, RBoxError> {
+        // Get URL
+        let url = match config.get(&RString::from("url")) {
+            Some(u) => u.as_str(),
+            None => return RErr(RBoxError::from_fmt(&format_args!("Missing 'url' configuration"))),
+        };
 
-        let method: String = parse_config_value(config, "method")
-            .map_err(|e| PluginError::new(e))?
-            .unwrap_or_else(|| "GET".to_string());
+        // Get method (default: GET)
+        let method = config
+            .get(&RString::from("method"))
+            .map(|m| m.as_str())
+            .unwrap_or("GET");
 
-        let timeout_secs: u64 = parse_config_value(config, "timeout")
-            .map_err(|e| PluginError::new(e))?
+        // Get timeout (default: 30 seconds)
+        let timeout_secs: u64 = config
+            .get(&RString::from("timeout"))
+            .and_then(|t| t.as_str().parse().ok())
             .unwrap_or(30);
 
-        // Build client with timeout
-        let mut client_builder = Client::builder().timeout(Duration::from_secs(timeout_secs));
+        // Build client
+        let client = match Client::builder().timeout(Duration::from_secs(timeout_secs)).build() {
+            Ok(c) => c,
+            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to build HTTP client: {}", e))),
+        };
 
-        // Add headers if provided
-        let mut headers = HeaderMap::new();
-        if let Ok(Some(headers_str)) = parse_config_value::<String>(config, "headers") {
-            // Parse headers as TOML table
-            let headers_value: toml::Value = toml::from_str(&headers_str)
-                .map_err(|e| PluginError::new(format!("Failed to parse headers: {}", e)))?;
-
-            if let Some(headers_table) = headers_value.as_table() {
-                for (key, value) in headers_table {
-                    if let Some(val_str) = value.as_str() {
-                        let header_name: HeaderName = key
-                            .parse()
-                            .map_err(|_| PluginError::new(format!("Invalid header name: {}", key)))?;
-                        let header_value: HeaderValue = val_str.parse().map_err(|_| {
-                            PluginError::new(format!("Invalid header value for {}", key))
-                        })?;
-                        headers.insert(header_name, header_value);
-                    }
-                }
-            }
-        }
-
-        if !headers.is_empty() {
-            client_builder = client_builder.default_headers(headers);
-        }
-
-        let client = client_builder
-            .build()
-            .map_err(|e| PluginError::new(format!("Failed to build HTTP client: {}", e)))?;
+        // Parse method
+        let method_enum = match method.parse::<Method>() {
+            Ok(m) => m,
+            Err(_) => return RErr(RBoxError::from_fmt(&format_args!("Invalid HTTP method: {}", method))),
+        };
 
         // Build request
-        let method_enum = method
-            .parse::<Method>()
-            .map_err(|_| PluginError::new(format!("Invalid HTTP method: {}", method)))?;
+        let mut request = client.request(method_enum, url);
 
-        let mut request = client.request(method_enum, &url);
-
-        // Add body for POST/PUT/PATCH requests
-        if let Ok(Some(body_str)) = parse_config_value::<String>(config, "body") {
-            request = request.body(body_str);
+        // Add body for POST/PUT/PATCH
+        if let Some(body) = config.get(&RString::from("body")) {
+            request = request.body(body.as_str().to_string());
         }
 
         // Send request
-        let response = request
-            .send()
-            .await
-            .map_err(|e| PluginError::new(format!("HTTP request failed: {}", e)))?;
+        let response = match request.send().await {
+            Ok(r) => r,
+            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("HTTP request failed: {}", e))),
+        };
 
         if !response.status().is_success() {
-            return Err(PluginError::new(format!(
+            return RErr(RBoxError::from_fmt(&format_args!(
                 "HTTP request failed with status: {}",
                 response.status()
             )));
         }
 
-        let content_type = response
-            .headers()
-            .get("content-type")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("")
-            .to_string();
+        // Get response text
+        let response_text = match response.text().await {
+            Ok(t) => t,
+            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to read response: {}", e))),
+        };
 
-        let response_text = response
-            .text()
-            .await
-            .map_err(|e| PluginError::new(format!("Failed to read response: {}", e)))?;
-
-        // Determine format from config or content-type header
-        let format: String = parse_config_value(config, "format")
-            .map_err(|e| PluginError::new(e))?
-            .unwrap_or_else(|| {
-                if content_type.contains("json") {
-                    "json".to_string()
-                } else {
-                    "jsonl".to_string()
-                }
-            });
+        // Determine format (default: json)
+        let format = config
+            .get(&RString::from("format"))
+            .map(|f| f.as_str())
+            .unwrap_or("json");
 
         // Parse response based on format
-        match format.as_str() {
+        match format {
             "json" => {
-                let json_value: Value = serde_json::from_str(&response_text)
-                    .map_err(|e| PluginError::new(format!("Failed to parse JSON: {}", e)))?;
+                let json_value: Value = match serde_json::from_str(&response_text) {
+                    Ok(v) => v,
+                    Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to parse JSON: {}", e))),
+                };
 
-                if let Some(array) = json_value.as_array() {
-                    let records: Vec<HashMap<String, Value>> = array
+                let records = if let Some(array) = json_value.as_array() {
+                    array
                         .iter()
                         .filter_map(|v| {
-                            if let Some(obj) = v.as_object() {
-                                Some(obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-                            } else {
-                                None
-                            }
+                            v.as_object().map(|obj| {
+                                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+                            })
                         })
-                        .collect();
-                    Ok(DataFormat::from_json_records(records))
+                        .collect::<Vec<HashMap<String, Value>>>()
                 } else if let Some(obj) = json_value.as_object() {
-                    let record: HashMap<String, Value> =
-                        obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-                    Ok(DataFormat::from_json_records(vec![record]))
+                    vec![obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect()]
                 } else {
-                    Err(PluginError::new("Unexpected JSON format - expected array or object"))
-                }
+                    return RErr(RBoxError::from_fmt(&format_args!(
+                        "Unexpected JSON format - expected array or object"
+                    )));
+                };
+
+                FfiDataFormat::from_json_records(&records)
             }
             "jsonl" => {
-                let records: Vec<HashMap<String, Value>> = response_text
+                let records: Result<Vec<HashMap<String, Value>>, _> = response_text
                     .lines()
                     .filter(|line| !line.trim().is_empty())
-                    .map(|line| {
-                        serde_json::from_str(line).map_err(|e| {
-                            PluginError::new(format!("Failed to parse JSONL line: {}", e))
-                        })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(DataFormat::from_json_records(records))
+                    .map(|line| serde_json::from_str(line))
+                    .collect();
+
+                match records {
+                    Ok(r) => FfiDataFormat::from_json_records(&r),
+                    Err(e) => RErr(RBoxError::from_fmt(&format_args!("Failed to parse JSONL: {}", e))),
+                }
             }
-            _ => Err(PluginError::new(format!(
-                "Unknown HTTP format: {}. Use 'json' or 'jsonl'",
+            _ => RErr(RBoxError::from_fmt(&format_args!(
+                "Unknown format: {}. Use 'json' or 'jsonl'",
                 format
             ))),
         }
     }
 }
 
-/// HTTP Sink implementation
-pub struct HttpSink;
+// ============================================================================
+// HTTP Sink Implementation
+// ============================================================================
 
-impl SinkPlugin for HttpSink {
-    fn name(&self) -> RString {
-        "http".into()
+/// HTTP Sink - sends data to REST APIs
+struct HttpSink;
+
+impl FfiSink for HttpSink {
+    fn name(&self) -> RStr<'_> {
+        "http_sink".into()
     }
 
-    fn write(&self, data: DataFormat, config: PluginConfig) -> PluginResult<()> {
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| PluginError::new(format!("Failed to create runtime: {}", e)))?;
+    fn write(&self, data: FfiDataFormat, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
+        // Use tokio runtime to execute async code
+        let runtime = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create runtime: {}", e))),
+        };
 
         runtime.block_on(async { self.write_async(data, &config).await })
     }
 
-    fn validate_config(&self, config: &PluginConfig) -> PluginResult<()> {
-        if !config.contains_key(&"url".into()) {
-            return Err(PluginError::new("HTTP sink requires 'url' configuration"));
+    fn validate_config(&self, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
+        if !config.contains_key(&RString::from("url")) {
+            return RErr(RBoxError::from_fmt(&format_args!("HTTP sink requires 'url' configuration")));
         }
 
-        if let Ok(Some(method)) = parse_config_value::<String>(config, "method") {
-            let method_upper = method.to_uppercase();
+        if let Some(method) = config.get(&RString::from("method")) {
+            let method_upper = method.as_str().to_uppercase();
             if !["POST", "PUT", "PATCH"].contains(&method_upper.as_str()) {
-                return Err(PluginError::new(format!(
+                return RErr(RBoxError::from_fmt(&format_args!(
                     "Invalid HTTP method for sink: {}. Must be POST, PUT, or PATCH",
                     method
                 )));
             }
         }
 
-        Ok(())
+        ROk(())
     }
 }
 
 impl HttpSink {
-    async fn write_async(&self, data: DataFormat, config: &PluginConfig) -> PluginResult<()> {
-        let url: String = parse_config_value(config, "url")
-            .map_err(|e| PluginError::new(e))?
-            .ok_or_else(|| PluginError::new("Missing 'url' configuration"))?;
+    async fn write_async(&self, data: FfiDataFormat, config: &RHashMap<RString, RString>) -> RResult<(), RBoxError> {
+        // Get URL
+        let url = match config.get(&RString::from("url")) {
+            Some(u) => u.as_str(),
+            None => return RErr(RBoxError::from_fmt(&format_args!("Missing 'url' configuration"))),
+        };
 
-        let method: String = parse_config_value(config, "method")
-            .map_err(|e| PluginError::new(e))?
-            .unwrap_or_else(|| "POST".to_string());
+        // Get method (default: POST)
+        let method = config
+            .get(&RString::from("method"))
+            .map(|m| m.as_str())
+            .unwrap_or("POST");
 
-        let timeout_secs: u64 = parse_config_value(config, "timeout")
-            .map_err(|e| PluginError::new(e))?
+        // Get timeout (default: 30 seconds)
+        let timeout_secs: u64 = config
+            .get(&RString::from("timeout"))
+            .and_then(|t| t.as_str().parse().ok())
             .unwrap_or(30);
 
-        let client = Client::builder()
-            .timeout(Duration::from_secs(timeout_secs))
-            .build()
-            .map_err(|e| PluginError::new(format!("Failed to build HTTP client: {}", e)))?;
+        // Build client
+        let client = match Client::builder().timeout(Duration::from_secs(timeout_secs)).build() {
+            Ok(c) => c,
+            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to build HTTP client: {}", e))),
+        };
 
-        let records = data
-            .to_json_records()
-            .map_err(|e| PluginError::new(format!("Failed to convert data: {}", e)))?;
+        // Convert data to JSON records
+        let records = match data.to_json_records() {
+            ROk(r) => r,
+            RErr(e) => return RErr(e),
+        };
 
-        let format: String = parse_config_value(config, "format")
-            .map_err(|e| PluginError::new(e))?
-            .unwrap_or_else(|| "json".to_string());
+        // Get format (default: json)
+        let format = config
+            .get(&RString::from("format"))
+            .map(|f| f.as_str())
+            .unwrap_or("json");
 
-        let body = match format.as_str() {
-            "json" => serde_json::to_string(&records)
-                .map_err(|e| PluginError::new(format!("Failed to serialize JSON: {}", e)))?,
-            "jsonl" => records
-                .iter()
-                .map(|r| serde_json::to_string(r))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| PluginError::new(format!("Failed to serialize JSONL: {}", e)))?
-                .join("\n"),
+        // Serialize body based on format
+        let body = match format {
+            "json" => match serde_json::to_string(&records) {
+                Ok(s) => s,
+                Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to serialize JSON: {}", e))),
+            },
+            "jsonl" => {
+                let lines: Result<Vec<String>, _> = records
+                    .iter()
+                    .map(|r| serde_json::to_string(r))
+                    .collect();
+
+                match lines {
+                    Ok(l) => l.join("\n"),
+                    Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to serialize JSONL: {}", e))),
+                }
+            }
             _ => {
-                return Err(PluginError::new(format!(
+                return RErr(RBoxError::from_fmt(&format_args!(
                     "Invalid format: {}. Use 'json' or 'jsonl'",
                     format
                 )))
             }
         };
 
-        let method_enum = method
-            .parse::<Method>()
-            .map_err(|_| PluginError::new(format!("Invalid HTTP method: {}", method)))?;
+        // Parse method
+        let method_enum = match method.parse::<Method>() {
+            Ok(m) => m,
+            Err(_) => return RErr(RBoxError::from_fmt(&format_args!("Invalid HTTP method: {}", method))),
+        };
 
-        let response = client
-            .request(method_enum, &url)
+        // Send request
+        let response = match client
+            .request(method_enum, url)
             .header("Content-Type", "application/json")
             .body(body)
             .send()
             .await
-            .map_err(|e| PluginError::new(format!("HTTP request failed: {}", e)))?;
+        {
+            Ok(r) => r,
+            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("HTTP request failed: {}", e))),
+        };
 
         if !response.status().is_success() {
-            return Err(PluginError::new(format!(
+            return RErr(RBoxError::from_fmt(&format_args!(
                 "HTTP request failed with status: {}",
                 response.status()
             )));
         }
 
-        Ok(())
+        ROk(())
     }
 }
 
-// Export plugin using the macro
-conveyor_plugin_api::export_plugin! {
-    name: "http",
-    version: env!("CARGO_PKG_VERSION"),
-    description: "HTTP plugin for REST API integration",
-    source: HttpSource,
-    sink: HttpSink,
+// ============================================================================
+// Plugin Registration
+// ============================================================================
+
+extern "C" fn register() -> RResult<(), RBoxError> {
+    // Future: Register modules with host registry
+    ROk(())
+}
+
+/// Plugin declaration - exported symbol
+#[no_mangle]
+pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
+    api_version: conveyor_plugin_api::PLUGIN_API_VERSION,
+    name: rstr!("http"),
+    version: rstr!("0.1.0"),
+    description: rstr!("HTTP plugin for REST API integration"),
+    register,
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_http_source() {
+        let source = HttpSource;
+        assert_eq!(source.name(), "http_source");
+    }
+
+    #[test]
+    fn test_http_sink() {
+        let sink = HttpSink;
+        assert_eq!(sink.name(), "http_sink");
+    }
+
+    #[test]
+    fn test_plugin_declaration() {
+        assert_eq!(_plugin_declaration.name, "http");
+        assert_eq!(_plugin_declaration.version, "0.1.0");
+        assert!(_plugin_declaration.is_compatible());
+    }
+
+    #[test]
+    fn test_source_validation() {
+        let source = HttpSource;
+        let mut config = RHashMap::new();
+
+        // Missing URL should fail
+        assert!(source.validate_config(config.clone()).is_err());
+
+        // With URL should succeed
+        config.insert(RString::from("url"), RString::from("https://api.example.com"));
+        assert!(source.validate_config(config.clone()).is_ok());
+
+        // Invalid method should fail
+        config.insert(RString::from("method"), RString::from("INVALID"));
+        assert!(source.validate_config(config).is_err());
+    }
+
+    #[test]
+    fn test_sink_validation() {
+        let sink = HttpSink;
+        let mut config = RHashMap::new();
+
+        // Missing URL should fail
+        assert!(sink.validate_config(config.clone()).is_err());
+
+        // With URL should succeed
+        config.insert(RString::from("url"), RString::from("https://api.example.com"));
+        assert!(sink.validate_config(config.clone()).is_ok());
+
+        // GET method should fail for sink
+        config.insert(RString::from("method"), RString::from("GET"));
+        assert!(sink.validate_config(config).is_err());
+    }
 }

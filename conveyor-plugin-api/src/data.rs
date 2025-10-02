@@ -74,6 +74,30 @@ impl FfiDataFormat {
     pub fn size(&self) -> usize {
         self.as_bytes().len()
     }
+
+    /// Convert to JSON records (Vec<HashMap<String, Value>>)
+    pub fn to_json_records(&self) -> RResult<Vec<std::collections::HashMap<String, serde_json::Value>>, RBoxError> {
+        match self {
+            Self::JsonRecords(bytes) => {
+                match serde_json::from_slice(bytes.as_slice()) {
+                    Ok(records) => ROk(records),
+                    Err(e) => RErr(RBoxError::from_box(Box::new(e))),
+                }
+            }
+            Self::Raw(bytes) => {
+                // Try to parse raw bytes as JSON
+                match serde_json::from_slice(bytes.as_slice()) {
+                    Ok(records) => ROk(records),
+                    Err(e) => RErr(RBoxError::from_box(Box::new(e))),
+                }
+            }
+            Self::ArrowIpc(_) => {
+                RErr(RBoxError::from_fmt(&format_args!(
+                    "Cannot convert ArrowIpc to JSON records directly. Use Polars to deserialize first."
+                )))
+            }
+        }
+    }
 }
 
 #[cfg(test)]
