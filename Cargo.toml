@@ -6,6 +6,9 @@ members = [
     # "plugins/conveyor-plugin-http",
     # "plugins/conveyor-plugin-mongodb",
 ]
+exclude = [
+    "examples/plugin-template",  # Template for creating new plugins
+]
 resolver = "2"
 
 # Shared dependencies across workspace
