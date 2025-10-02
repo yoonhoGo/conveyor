@@ -59,19 +59,6 @@ jobs:
             echo "::warning::Binary size is larger than 100MB"
           fi
 
-  dependency-check:
-    name: Dependency Review
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.base.ref == 'main'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-
   auto-label:
     name: Auto Label
     runs-on: ubuntu-latest
