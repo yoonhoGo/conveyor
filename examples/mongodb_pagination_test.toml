@@ -1,0 +1,38 @@
+# MongoDB Cursor Pagination Test
+# This pipeline demonstrates cursor-based pagination with small batch sizes
+
+[pipeline]
+name = "mongodb_pagination_test"
+version = "1.0.0"
+description = "Test cursor-based pagination with MongoDB"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 2
+timeout_seconds = 600
+
+# MongoDB Source - Page 1 (batch_size = 8)
+[[sources]]
+name = "events_page1"
+type = "mongodb"
+
+[sources.config]
+connection_string = "mongodb://localhost:27017"
+database = "analytics"
+collection = "raw_events"
+query = '{}'
+cursor_field = "_id"          # Use _id for pagination
+batch_size = 8                # Small batch to test pagination
+sort = '{ "_id": 1 }'
+
+# Output to stdout
+[[sinks]]
+name = "preview_page1"
+type = "stdout"
+
+[sinks.config]
+format = "table"
+
+# Error Handling
+[error_handling]
+strategy = "stop"

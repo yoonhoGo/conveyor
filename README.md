@@ -127,12 +127,15 @@ conveyor generate --output sample-pipeline.toml
 
 ## Modules
 
+📖 **[Complete Module Reference](docs/module-reference.md)** - Detailed field specifications for all modules
+
 ### Data Sources
 
 | Module | Description | Configuration |
 |--------|-------------|---------------|
 | `csv` | Read CSV files | `path`, `headers`, `delimiter` |
 | `json` | Read JSON files | `path`, `format` (records/jsonl/dataframe) |
+| `mongodb` | Read from MongoDB with cursor pagination | `connection_string`, `database`, `collection`, `query`, `cursor_field` |
 | `stdin` | Read from standard input | `format` (json/jsonl/csv/raw) |
 
 ### Transforms

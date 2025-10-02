@@ -1,0 +1,39 @@
+# MongoDB Cursor Pagination Test - Page 2
+# This pipeline demonstrates fetching the next page using cursor_value
+
+[pipeline]
+name = "mongodb_pagination_page2"
+version = "1.0.0"
+description = "Test cursor-based pagination - page 2"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 2
+timeout_seconds = 600
+
+# MongoDB Source - Page 2 (starting after first 8 documents)
+[[sources]]
+name = "events_page2"
+type = "mongodb"
+
+[sources.config]
+connection_string = "mongodb://localhost:27017"
+database = "analytics"
+collection = "raw_events"
+query = '{}'
+cursor_field = "_id"
+cursor_value = "68ddb46805d95baf344f8805"  # Last _id from previous batch
+batch_size = 8
+sort = '{ "_id": 1 }'
+
+# Output to stdout
+[[sinks]]
+name = "preview_page2"
+type = "stdout"
+
+[sinks.config]
+format = "table"
+
+# Error Handling
+[error_handling]
+strategy = "stop"

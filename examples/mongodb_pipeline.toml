@@ -1,17 +1,18 @@
 # MongoDB ETL Pipeline Example
-# This pipeline extracts data from MongoDB, transforms it, and loads into another collection
+# This pipeline extracts data from MongoDB, transforms it, and loads into another format
+# Demonstrates cursor-based pagination for large datasets
 
 [pipeline]
 name = "mongodb_etl"
 version = "1.0.0"
-description = "Extract from MongoDB, transform, and load back to MongoDB"
+description = "Extract from MongoDB with cursor pagination and transform data"
 
 [global]
 log_level = "info"
 max_parallel_tasks = 2
 timeout_seconds = 600
 
-# MongoDB Source
+# MongoDB Source - First Page with Cursor Pagination
 [[sources]]
 name = "user_events"
 type = "mongodb"
@@ -21,48 +22,60 @@ connection_string = "mongodb://localhost:27017"
 database = "analytics"
 collection = "raw_events"
 query = '{ "event_type": "purchase" }'
-limit = 10000
+# Cursor-based pagination settings
+cursor_field = "_id"          # Use _id for pagination
+# cursor_value = ""           # Omit for first page, or set to last _id from previous batch
+batch_size = 5000             # Fetch 5000 documents per batch
+limit = 10000                 # Optional: total limit across all batches
 
 # Transformations
 [[transforms]]
-name = "aggregate_by_user"
-function = "aggregate"
+name = "validate_data"
+function = "validate_schema"
 
 [transforms.config]
-group_by = ["user_id"]
-aggregations = [
-    { column = "amount", function = "sum", alias = "total_spent" },
-    { column = "event_id", function = "count", alias = "purchase_count" }
-]
+required_fields = ["_id", "event_type", "user_id", "amount"]
+non_nullable = ["_id", "user_id"]
+
+[transforms.config.field_types]
+user_id = "string"
+amount = "int"
 
 [[transforms]]
-name = "calculate_avg"
-function = "map"
-
-[transforms.config]
-expression = "total_spent / purchase_count"
-output_column = "avg_purchase"
-
-[[transforms]]
-name = "filter_active_users"
+name = "filter_high_value"
 function = "filter"
 
 [transforms.config]
-column = "purchase_count"
+column = "amount"
 operator = ">="
-value = 5
+value = 100.0
 
-# MongoDB Sink
+[[transforms]]
+name = "add_tax"
+function = "map"
+
+[transforms.config]
+expression = "amount * 1.1"
+output_column = "amount_with_tax"
+
+# Output to JSON file
 [[sinks]]
-name = "user_summary"
-type = "mongodb"
+name = "output_json"
+type = "json"
 
 [sinks.config]
-connection_string = "mongodb://localhost:27017"
-database = "analytics"
-collection = "user_summaries"
-mode = "upsert"  # Options: "insert", "upsert", "replace"
-key_fields = ["user_id"]
+path = "output/processed_events.json"
+format = "jsonl"
+pretty = false
+
+# Also output to stdout for preview
+[[sinks]]
+name = "preview"
+type = "stdout"
+
+[sinks.config]
+format = "table"
+limit = 10
 
 # Error Handling
 [error_handling]

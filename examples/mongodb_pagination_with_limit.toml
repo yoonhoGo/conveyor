@@ -1,0 +1,39 @@
+# MongoDB Cursor Pagination with Limit
+# This demonstrates using both cursor pagination and limit
+
+[pipeline]
+name = "mongodb_pagination_with_limit"
+version = "1.0.0"
+description = "Test cursor pagination with limit"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 2
+timeout_seconds = 600
+
+# MongoDB Source - First page with limit
+[[sources]]
+name = "events_limited"
+type = "mongodb"
+
+[sources.config]
+connection_string = "mongodb://localhost:27017"
+database = "analytics"
+collection = "raw_events"
+query = '{}'
+cursor_field = "_id"
+batch_size = 100
+limit = 5                     # Only fetch 5 documents
+sort = '{ "_id": 1 }'
+
+# Output to stdout
+[[sinks]]
+name = "preview"
+type = "stdout"
+
+[sinks.config]
+format = "table"
+
+# Error Handling
+[error_handling]
+strategy = "stop"

@@ -1,5 +1,6 @@
 pub mod csv;
 pub mod json;
+pub mod mongodb;
 pub mod stdin;
 
 use crate::core::traits::DataSourceRef;
@@ -11,6 +12,7 @@ pub fn register_sources() -> HashMap<String, DataSourceRef> {
 
     sources.insert("csv".to_string(), Arc::new(csv::CsvSource) as DataSourceRef);
     sources.insert("json".to_string(), Arc::new(json::JsonSource) as DataSourceRef);
+    sources.insert("mongodb".to_string(), Arc::new(mongodb::MongodbSource) as DataSourceRef);
     sources.insert("stdin".to_string(), Arc::new(stdin::StdinSource) as DataSourceRef);
 
     sources
