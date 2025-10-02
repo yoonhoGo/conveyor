@@ -1,0 +1,43 @@
+{
+  "name": "@conveyor/cli",
+  "version": "0.1.0",
+  "description": "A TOML-based ETL CLI tool for data pipelines",
+  "author": "Yoonho Go",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yoonhoGo/conveyor.git"
+  },
+  "keywords": [
+    "etl",
+    "data-pipeline",
+    "cli",
+    "rust",
+    "toml",
+    "polars",
+    "wasm",
+    "plugins"
+  ],
+  "bin": {
+    "conveyor": "./bin/conveyor"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js",
+    "build": "cargo build --release",
+    "test": "cargo test"
+  },
+  "optionalDependencies": {
+    "@conveyor/cli-darwin-arm64": "0.1.0",
+    "@conveyor/cli-darwin-x64": "0.1.0",
+    "@conveyor/cli-linux-x64": "0.1.0",
+    "@conveyor/cli-linux-arm64": "0.1.0",
+    "@conveyor/cli-win32-x64": "0.1.0"
+  },
+  "files": [
+    "bin",
+    "scripts"
+  ],
+  "engines": {
+    "node": ">=14"
+  }
+}
