@@ -1,6 +1,7 @@
-//! Echo WASM Plugin for Conveyor
+//! Echo WASM Plugin for Conveyor - Version 2 (Unified API)
 //!
 //! A simple test plugin that echoes data back, useful for testing the WASM plugin system.
+//! Supports source, transform, and sink operations.
 
 use std::collections::HashMap;
 
@@ -46,52 +47,152 @@ impl Guest for EchoPlugin {
     fn get_metadata() -> PluginMetadata {
         PluginMetadata {
             name: "echo-wasm".to_string(),
-            version: "0.1.0".to_string(),
+            version: "1.0.0".to_string(),
             description: "Echo WASM plugin for testing".to_string(),
             api_version: PLUGIN_API_VERSION,
         }
     }
 
-    /// Read operation - returns a simple message
-    fn read(config: Vec<(String, String)>) -> Result<DataFormat, PluginError> {
-        // Get message from config, or use default
-        let message = get_config_value(&config, "message")
-            .unwrap_or("Hello from WASM Echo Plugin!");
-
-        // Create a simple JSON record
-        let mut record = HashMap::new();
-        record.insert("message".to_string(), serde_json::Value::String(message.to_string()));
-        record.insert("plugin".to_string(), serde_json::Value::String("echo-wasm".to_string()));
-
-        let records = vec![record];
-        data_format_from_json(&records)
+    /// Get list of stages this plugin provides
+    fn get_capabilities() -> Vec<StageCapability> {
+        vec![
+            StageCapability {
+                name: "echo".to_string(),
+                stage_type: StageType::Source,
+                description: "Echo source - returns a test message".to_string(),
+            },
+            StageCapability {
+                name: "echo".to_string(),
+                stage_type: StageType::Transform,
+                description: "Echo transform - passes data through unchanged".to_string(),
+            },
+            StageCapability {
+                name: "echo".to_string(),
+                stage_type: StageType::Sink,
+                description: "Echo sink - validates and accepts data".to_string(),
+            },
+        ]
     }
 
-    /// Write operation - accepts any data and returns success
-    fn write(data: DataFormat, _config: Vec<(String, String)>) -> Result<(), PluginError> {
-        // In a real plugin, we would write data somewhere
-        // For echo plugin, we just validate we can read it
-        let bytes = data_format_to_bytes(&data);
-
-        if bytes.is_empty() {
-            return Err(PluginError::RuntimeError("Received empty data".to_string()));
+    /// Execute a stage
+    fn execute(stage_name: String, context: ExecutionContext) -> Result<DataFormat, PluginError> {
+        // Verify stage name
+        if stage_name != "echo" {
+            return Err(PluginError::ConfigError(format!(
+                "Unknown stage: {}. Echo plugin only provides 'echo' stage",
+                stage_name
+            )));
         }
 
-        // Successfully "wrote" the data (actually just validated it)
-        Ok(())
+        // Determine operation type based on inputs
+        if context.inputs.is_empty() {
+            // No inputs = Source operation
+            execute_source(&context.config)
+        } else {
+            // Has inputs - check if there's a "mode" config
+            let mode = get_config_value(&context.config, "mode").unwrap_or("transform");
+
+            match mode {
+                "sink" => execute_sink(&context.inputs, &context.config),
+                _ => execute_transform(&context.inputs, &context.config),
+            }
+        }
     }
 
-    /// Transform operation - passes data through unchanged
-    fn transform(data: DataFormat, _config: Vec<(String, String)>) -> Result<DataFormat, PluginError> {
-        // Echo plugin just returns the data as-is
-        Ok(data)
-    }
+    /// Validate configuration for a stage
+    fn validate_config(stage_name: String, _config: Vec<(String, String)>) -> Result<(), PluginError> {
+        // Verify stage name
+        if stage_name != "echo" {
+            return Err(PluginError::ConfigError(format!(
+                "Unknown stage: {}. Echo plugin only provides 'echo' stage",
+                stage_name
+            )));
+        }
 
-    /// Validate configuration
-    fn validate_config(_config: Vec<(String, String)>) -> Result<(), PluginError> {
         // Echo plugin accepts any configuration
         Ok(())
     }
+}
+
+/// Execute as source (generate test data)
+fn execute_source(config: &[(String, String)]) -> Result<DataFormat, PluginError> {
+    // Get message from config, or use default
+    let message = get_config_value(config, "message")
+        .unwrap_or("Hello from WASM Echo Plugin!");
+
+    // Create a simple JSON record
+    let mut record = HashMap::new();
+    record.insert("message".to_string(), serde_json::Value::String(message.to_string()));
+    record.insert("plugin".to_string(), serde_json::Value::String("echo-wasm".to_string()));
+    record.insert("type".to_string(), serde_json::Value::String("source".to_string()));
+
+    let records = vec![record];
+    data_format_from_json(&records)
+}
+
+/// Execute as transform (pass data through)
+fn execute_transform(
+    inputs: &[(String, DataFormat)],
+    config: &[(String, String)],
+) -> Result<DataFormat, PluginError> {
+    // Get the first input (echo transform works on single input)
+    let input_data = inputs
+        .first()
+        .ok_or_else(|| PluginError::RuntimeError("Transform requires at least one input".to_string()))?;
+
+    // Check if we should add metadata
+    let add_metadata = get_config_value(config, "add_metadata")
+        .map(|v| v == "true")
+        .unwrap_or(false);
+
+    if add_metadata {
+        // Parse input data and add echo metadata
+        let bytes = data_format_to_bytes(&input_data.1);
+
+        match &input_data.1 {
+            DataFormat::JsonRecords(_) => {
+                // Parse and add metadata
+                let mut records: Vec<HashMap<String, serde_json::Value>> =
+                    serde_json::from_slice(bytes)
+                        .map_err(|e| PluginError::SerializationError(format!("Failed to parse JSON: {}", e)))?;
+
+                // Add echo metadata to each record
+                for record in &mut records {
+                    record.insert("_echo_processed".to_string(), serde_json::Value::Bool(true));
+                }
+
+                data_format_from_json(&records)
+            }
+            _ => {
+                // For other formats, just pass through
+                Ok(input_data.1.clone())
+            }
+        }
+    } else {
+        // Just pass through unchanged
+        Ok(input_data.1.clone())
+    }
+}
+
+/// Execute as sink (validate and accept data)
+fn execute_sink(
+    inputs: &[(String, DataFormat)],
+    _config: &[(String, String)],
+) -> Result<DataFormat, PluginError> {
+    // Get the first input
+    let input_data = inputs
+        .first()
+        .ok_or_else(|| PluginError::RuntimeError("Sink requires at least one input".to_string()))?;
+
+    // Validate we can read it
+    let bytes = data_format_to_bytes(&input_data.1);
+
+    if bytes.is_empty() {
+        return Err(PluginError::RuntimeError("Received empty data".to_string()));
+    }
+
+    // Return the input data (sinks pass through)
+    Ok(input_data.1.clone())
 }
 
 // Export the plugin implementation

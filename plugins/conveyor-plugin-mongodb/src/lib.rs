@@ -1,13 +1,14 @@
-//! MongoDB Plugin for Conveyor
+//! MongoDB Plugin for Conveyor - Version 2 (Unified Stage API)
 //!
-//! Provides FFI-safe MongoDB source and sink capabilities for database integration.
+//! Provides MongoDB source and sink functionality as a unified stage.
+//! Supports database reads and writes with query filtering.
 
 use conveyor_plugin_api::{
-    data::FfiDataFormat,
-    rstr,
-    traits::{FfiDataSource, FfiSink},
-    PluginDeclaration, RBoxError, RHashMap, RResult, RStr, RString, ROk, RErr,
+    FfiDataFormat, PluginCapability, PluginDeclaration, StageType, PLUGIN_API_VERSION,
+    RBox, RBoxError, RHashMap, RResult, RString, RVec, rstr, ROk, RErr,
 };
+use conveyor_plugin_api::traits::{FfiExecutionContext, FfiStage, FfiStage_TO};
+use conveyor_plugin_api::sabi_trait::prelude::*;
 use mongodb::{
     bson::{doc, Document},
     options::{ClientOptions, FindOptions},
@@ -16,69 +17,41 @@ use mongodb::{
 use serde_json::Value;
 use std::collections::HashMap;
 
-// ============================================================================
-// MongoDB Source Implementation
-// ============================================================================
-
-/// MongoDB Source - reads data from MongoDB collections
-struct MongoDbSource;
-
-impl FfiDataSource for MongoDbSource {
-    fn name(&self) -> RStr<'_> {
-        "mongodb_source".into()
-    }
-
-    fn read(&self, config: RHashMap<RString, RString>) -> RResult<FfiDataFormat, RBoxError> {
-        // Use tokio runtime to execute async code
-        let runtime = match tokio::runtime::Runtime::new() {
-            Ok(rt) => rt,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create runtime: {}", e))),
-        };
-
-        runtime.block_on(async { self.read_async(&config).await })
-    }
-
-    fn validate_config(&self, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
-        if !config.contains_key(&RString::from("uri")) {
-            return RErr(RBoxError::from_fmt(&format_args!("MongoDB source requires 'uri' configuration")));
-        }
-
-        if !config.contains_key(&RString::from("database")) {
-            return RErr(RBoxError::from_fmt(&format_args!("MongoDB source requires 'database' configuration")));
-        }
-
-        if !config.contains_key(&RString::from("collection")) {
-            return RErr(RBoxError::from_fmt(&format_args!("MongoDB source requires 'collection' configuration")));
-        }
-
-        ROk(())
-    }
+/// MongoDB Stage - unified source and sink
+pub struct MongoDbStage {
+    name: String,
+    stage_type: StageType,
 }
 
-impl MongoDbSource {
-    async fn read_async(&self, config: &RHashMap<RString, RString>) -> RResult<FfiDataFormat, RBoxError> {
+impl MongoDbStage {
+    fn new(name: String, stage_type: StageType) -> Self {
+        Self { name, stage_type }
+    }
+
+    /// Execute as MongoDB source (read data from MongoDB)
+    async fn execute_source_async(&self, config: &HashMap<String, String>) -> RResult<FfiDataFormat, RBoxError> {
         // Get MongoDB URI
-        let uri = match config.get(&RString::from("uri")) {
-            Some(u) => u.as_str(),
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing 'uri' configuration"))),
+        let uri = match config.get("uri") {
+            Some(u) => u,
+            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'uri' configuration"))),
         };
 
         // Get database name
-        let database = match config.get(&RString::from("database")) {
-            Some(d) => d.as_str(),
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing 'database' configuration"))),
+        let database = match config.get("database") {
+            Some(d) => d,
+            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'database' configuration"))),
         };
 
         // Get collection name
-        let collection_name = match config.get(&RString::from("collection")) {
-            Some(c) => c.as_str(),
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing 'collection' configuration"))),
+        let collection_name = match config.get("collection") {
+            Some(c) => c,
+            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'collection' configuration"))),
         };
 
         // Parse limit (default: no limit)
         let limit: Option<i64> = config
-            .get(&RString::from("limit"))
-            .and_then(|l| l.as_str().parse().ok());
+            .get("limit")
+            .and_then(|l| l.parse().ok());
 
         // Connect to MongoDB
         let client_options = match ClientOptions::parse(uri).await {
@@ -95,8 +68,8 @@ impl MongoDbSource {
         let collection = db.collection::<Document>(collection_name);
 
         // Build query filter (optional)
-        let filter = if let Some(query_str) = config.get(&RString::from("query")) {
-            match serde_json::from_str::<Value>(query_str.as_str()) {
+        let filter = if let Some(query_str) = config.get("query") {
+            match serde_json::from_str::<Value>(query_str) {
                 Ok(Value::Object(obj)) => {
                     let mut filter_doc = Document::new();
                     for (key, value) in obj {
@@ -147,6 +120,137 @@ impl MongoDbSource {
 
         FfiDataFormat::from_json_records(&records)
     }
+
+    /// Execute as MongoDB sink (write data to MongoDB)
+    async fn execute_sink_async(&self, input_data: &FfiDataFormat, config: &HashMap<String, String>) -> RResult<FfiDataFormat, RBoxError> {
+        // Get MongoDB URI
+        let uri = match config.get("uri") {
+            Some(u) => u,
+            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'uri' configuration"))),
+        };
+
+        // Get database name
+        let database = match config.get("database") {
+            Some(d) => d,
+            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'database' configuration"))),
+        };
+
+        // Get collection name
+        let collection_name = match config.get("collection") {
+            Some(c) => c,
+            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'collection' configuration"))),
+        };
+
+        // Connect to MongoDB
+        let client_options = match ClientOptions::parse(uri).await {
+            Ok(opts) => opts,
+            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to parse MongoDB URI: {}", e))),
+        };
+
+        let client = match Client::with_options(client_options) {
+            Ok(c) => c,
+            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create MongoDB client: {}", e))),
+        };
+
+        let db = client.database(database);
+        let collection = db.collection::<Document>(collection_name);
+
+        // Convert data to JSON records
+        let records = match input_data.to_json_records() {
+            ROk(r) => r,
+            RErr(e) => return RErr(e),
+        };
+
+        // Convert records to BSON documents
+        let documents: Vec<Document> = records
+            .iter()
+            .filter_map(|record| {
+                let mut doc = Document::new();
+                for (key, value) in record {
+                    if let Some(bson_val) = json_to_bson(value) {
+                        doc.insert(key.clone(), bson_val);
+                    }
+                }
+                if doc.is_empty() {
+                    None
+                } else {
+                    Some(doc)
+                }
+            })
+            .collect();
+
+        if documents.is_empty() {
+            return ROk(input_data.clone());
+        }
+
+        // Insert documents
+        match collection.insert_many(documents).await {
+            Ok(_) => ROk(input_data.clone()),
+            Err(e) => RErr(RBoxError::from_fmt(&format_args!("MongoDB insert failed: {}", e))),
+        }
+    }
+}
+
+impl FfiStage for MongoDbStage {
+    fn name(&self) -> conveyor_plugin_api::RStr<'_> {
+        self.name.as_str().into()
+    }
+
+    fn stage_type(&self) -> StageType {
+        self.stage_type
+    }
+
+    fn execute(&self, context: FfiExecutionContext) -> RResult<FfiDataFormat, RBoxError> {
+        // Convert config to HashMap
+        let config: HashMap<String, String> = context.config.into_iter()
+            .map(|tuple| (tuple.0.to_string(), tuple.1.to_string()))
+            .collect();
+
+        // Use tokio runtime to execute async code
+        let runtime = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create runtime: {}", e))),
+        };
+
+        runtime.block_on(async {
+            match self.stage_type {
+                StageType::Source => {
+                    // Source mode: read from MongoDB
+                    self.execute_source_async(&config).await
+                }
+                StageType::Sink => {
+                    // Sink mode: write to MongoDB
+                    // Get input data (should have exactly one input)
+                    let input_data = match context.inputs.into_iter().next() {
+                        Some(tuple) => tuple.1,
+                        None => return RErr(RBoxError::from_fmt(&format_args!("MongoDB sink requires input data"))),
+                    };
+
+                    self.execute_sink_async(&input_data, &config).await
+                }
+                StageType::Transform => {
+                    RErr(RBoxError::from_fmt(&format_args!("MongoDB transform not supported in this plugin")))
+                }
+            }
+        })
+    }
+
+    fn validate_config(&self, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
+        // Check required fields
+        if !config.contains_key("uri") {
+            return RErr(RBoxError::from_fmt(&format_args!("Missing required 'uri' configuration")));
+        }
+
+        if !config.contains_key("database") {
+            return RErr(RBoxError::from_fmt(&format_args!("Missing required 'database' configuration")));
+        }
+
+        if !config.contains_key("collection") {
+            return RErr(RBoxError::from_fmt(&format_args!("Missing required 'collection' configuration")));
+        }
+
+        ROk(())
+    }
 }
 
 // Helper function to convert JSON value to BSON
@@ -180,132 +284,43 @@ fn json_to_bson(value: &Value) -> Option<mongodb::bson::Bson> {
     }
 }
 
-// ============================================================================
-// MongoDB Sink Implementation
-// ============================================================================
-
-/// MongoDB Sink - writes data to MongoDB collections
-struct MongoDbSink;
-
-impl FfiSink for MongoDbSink {
-    fn name(&self) -> RStr<'_> {
-        "mongodb_sink".into()
-    }
-
-    fn write(&self, data: FfiDataFormat, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
-        // Use tokio runtime to execute async code
-        let runtime = match tokio::runtime::Runtime::new() {
-            Ok(rt) => rt,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create runtime: {}", e))),
-        };
-
-        runtime.block_on(async { self.write_async(data, &config).await })
-    }
-
-    fn validate_config(&self, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
-        if !config.contains_key(&RString::from("uri")) {
-            return RErr(RBoxError::from_fmt(&format_args!("MongoDB sink requires 'uri' configuration")));
-        }
-
-        if !config.contains_key(&RString::from("database")) {
-            return RErr(RBoxError::from_fmt(&format_args!("MongoDB sink requires 'database' configuration")));
-        }
-
-        if !config.contains_key(&RString::from("collection")) {
-            return RErr(RBoxError::from_fmt(&format_args!("MongoDB sink requires 'collection' configuration")));
-        }
-
-        ROk(())
-    }
+// Factory functions
+#[no_mangle]
+pub extern "C" fn create_mongodb_source() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(MongoDbStage::new("mongodb".to_string(), StageType::Source), TD_Opaque)
 }
 
-impl MongoDbSink {
-    async fn write_async(&self, data: FfiDataFormat, config: &RHashMap<RString, RString>) -> RResult<(), RBoxError> {
-        // Get MongoDB URI
-        let uri = match config.get(&RString::from("uri")) {
-            Some(u) => u.as_str(),
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing 'uri' configuration"))),
-        };
-
-        // Get database name
-        let database = match config.get(&RString::from("database")) {
-            Some(d) => d.as_str(),
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing 'database' configuration"))),
-        };
-
-        // Get collection name
-        let collection_name = match config.get(&RString::from("collection")) {
-            Some(c) => c.as_str(),
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing 'collection' configuration"))),
-        };
-
-        // Connect to MongoDB
-        let client_options = match ClientOptions::parse(uri).await {
-            Ok(opts) => opts,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to parse MongoDB URI: {}", e))),
-        };
-
-        let client = match Client::with_options(client_options) {
-            Ok(c) => c,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create MongoDB client: {}", e))),
-        };
-
-        let db = client.database(database);
-        let collection = db.collection::<Document>(collection_name);
-
-        // Convert data to JSON records
-        let records = match data.to_json_records() {
-            ROk(r) => r,
-            RErr(e) => return RErr(e),
-        };
-
-        // Convert records to BSON documents
-        let documents: Vec<Document> = records
-            .iter()
-            .filter_map(|record| {
-                let mut doc = Document::new();
-                for (key, value) in record {
-                    if let Some(bson_val) = json_to_bson(value) {
-                        doc.insert(key.clone(), bson_val);
-                    }
-                }
-                if doc.is_empty() {
-                    None
-                } else {
-                    Some(doc)
-                }
-            })
-            .collect();
-
-        if documents.is_empty() {
-            return ROk(());
-        }
-
-        // Insert documents
-        match collection.insert_many(documents).await {
-            Ok(_) => ROk(()),
-            Err(e) => RErr(RBoxError::from_fmt(&format_args!("MongoDB insert failed: {}", e))),
-        }
-    }
+#[no_mangle]
+pub extern "C" fn create_mongodb_sink() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(MongoDbStage::new("mongodb".to_string(), StageType::Sink), TD_Opaque)
 }
 
-// ============================================================================
-// Plugin Registration
-// ============================================================================
-
-extern "C" fn register() -> RResult<(), RBoxError> {
-    // Future: Register modules with host registry
-    ROk(())
+// Plugin capabilities
+extern "C" fn get_capabilities() -> RVec<PluginCapability> {
+    vec![
+        PluginCapability {
+            name: RString::from("mongodb"),
+            stage_type: StageType::Source,
+            description: RString::from("MongoDB source - read data from MongoDB collections"),
+            factory_symbol: RString::from("create_mongodb_source"),
+        },
+        PluginCapability {
+            name: RString::from("mongodb"),
+            stage_type: StageType::Sink,
+            description: RString::from("MongoDB sink - write data to MongoDB collections"),
+            factory_symbol: RString::from("create_mongodb_sink"),
+        },
+    ].into()
 }
 
-/// Plugin declaration - exported symbol
+// Plugin declaration
 #[no_mangle]
 pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
-    api_version: conveyor_plugin_api::PLUGIN_API_VERSION,
+    api_version: PLUGIN_API_VERSION,
     name: rstr!("mongodb"),
-    version: rstr!("0.1.0"),
-    description: rstr!("MongoDB plugin for database integration"),
-    register,
+    version: rstr!("1.0.0"),
+    description: rstr!("MongoDB source and sink plugin for database integration"),
+    get_capabilities,
 };
 
 // ============================================================================
@@ -318,63 +333,65 @@ mod tests {
 
     #[test]
     fn test_mongodb_source() {
-        let source = MongoDbSource;
-        assert_eq!(source.name(), "mongodb_source");
+        let stage = MongoDbStage::new("mongodb".to_string(), StageType::Source);
+        assert_eq!(stage.name(), "mongodb");
+        assert_eq!(stage.stage_type(), StageType::Source);
     }
 
     #[test]
     fn test_mongodb_sink() {
-        let sink = MongoDbSink;
-        assert_eq!(sink.name(), "mongodb_sink");
+        let stage = MongoDbStage::new("mongodb".to_string(), StageType::Sink);
+        assert_eq!(stage.name(), "mongodb");
+        assert_eq!(stage.stage_type(), StageType::Sink);
     }
 
     #[test]
     fn test_plugin_declaration() {
         assert_eq!(_plugin_declaration.name, "mongodb");
-        assert_eq!(_plugin_declaration.version, "0.1.0");
+        assert_eq!(_plugin_declaration.version, "1.0.0");
         assert!(_plugin_declaration.is_compatible());
     }
 
     #[test]
     fn test_source_validation() {
-        let source = MongoDbSource;
+        let stage = MongoDbStage::new("mongodb".to_string(), StageType::Source);
         let mut config = RHashMap::new();
 
         // Missing all configs should fail
-        assert!(source.validate_config(config.clone()).is_err());
+        assert!(stage.validate_config(config.clone()).is_err());
 
         // With only URI should still fail
         config.insert(RString::from("uri"), RString::from("mongodb://localhost:27017"));
-        assert!(source.validate_config(config.clone()).is_err());
+        assert!(stage.validate_config(config.clone()).is_err());
 
         // With URI and database should still fail
         config.insert(RString::from("database"), RString::from("testdb"));
-        assert!(source.validate_config(config.clone()).is_err());
+        assert!(stage.validate_config(config.clone()).is_err());
 
         // With all required configs should succeed
         config.insert(RString::from("collection"), RString::from("testcol"));
-        assert!(source.validate_config(config).is_ok());
+        assert!(stage.validate_config(config).is_ok());
     }
 
     #[test]
     fn test_sink_validation() {
-        let sink = MongoDbSink;
+        let stage = MongoDbStage::new("mongodb".to_string(), StageType::Sink);
         let mut config = RHashMap::new();
 
         // Missing all configs should fail
-        assert!(sink.validate_config(config.clone()).is_err());
+        assert!(stage.validate_config(config.clone()).is_err());
 
         // With only URI should still fail
         config.insert(RString::from("uri"), RString::from("mongodb://localhost:27017"));
-        assert!(sink.validate_config(config.clone()).is_err());
+        assert!(stage.validate_config(config.clone()).is_err());
 
         // With URI and database should still fail
         config.insert(RString::from("database"), RString::from("testdb"));
-        assert!(sink.validate_config(config.clone()).is_err());
+        assert!(stage.validate_config(config.clone()).is_err());
 
         // With all required configs should succeed
         config.insert(RString::from("collection"), RString::from("testcol"));
-        assert!(sink.validate_config(config).is_ok());
+        assert!(stage.validate_config(config).is_ok());
     }
 
     #[test]
@@ -400,5 +417,14 @@ mod tests {
         } else {
             panic!("Expected string");
         }
+    }
+
+    #[test]
+    fn test_capabilities() {
+        let caps = get_capabilities();
+        assert_eq!(caps.len(), 2);
+        assert_eq!(caps[0].name.as_str(), "mongodb");
+        assert_eq!(caps[0].stage_type, StageType::Source);
+        assert_eq!(caps[1].stage_type, StageType::Sink);
     }
 }

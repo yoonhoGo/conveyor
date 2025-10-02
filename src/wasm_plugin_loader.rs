@@ -1,9 +1,8 @@
-//! WASM Plugin Loader
+//! WASM Plugin Loader (Version 2)
 //!
 //! Loads and manages WebAssembly plugins using Wasmtime Component Model.
 //!
-//! This module provides host-side integration for WASM plugins, complementing
-//! the FFI plugin system with enhanced sandboxing and portability.
+//! Version 2 supports unified execute interface with input-aware execution.
 
 use anyhow::{Context, Result};
 use std::collections::HashMap;
@@ -39,6 +38,39 @@ impl WasiView for PluginState {
 pub struct WasmPluginHandle {
     component: Component,
     metadata: PluginMetadata,
+    capabilities: Vec<StageCapability>,
+}
+
+impl WasmPluginHandle {
+    /// Get plugin name
+    pub fn name(&self) -> &str {
+        &self.metadata.name
+    }
+
+    /// Get plugin version
+    pub fn version(&self) -> &str {
+        &self.metadata.version
+    }
+
+    /// Get plugin description
+    pub fn description(&self) -> &str {
+        &self.metadata.description
+    }
+
+    /// Get plugin capabilities
+    pub fn capabilities(&self) -> &[StageCapability] {
+        &self.capabilities
+    }
+
+    /// List available stages
+    pub fn stage_names(&self) -> Vec<String> {
+        self.capabilities.iter().map(|c| c.name.clone()).collect()
+    }
+
+    /// Check if plugin provides a stage
+    pub fn has_stage(&self, stage_name: &str) -> bool {
+        self.capabilities.iter().any(|c| c.name == stage_name)
+    }
 }
 
 /// WASM Plugin Loader
@@ -114,17 +146,34 @@ impl WasmPluginLoader {
             .await
             .with_context(|| format!("Failed to get metadata from WASM plugin '{}'", name))?;
 
+        // Get capabilities
+        let capabilities = plugin
+            .call_get_capabilities(&mut store)
+            .await
+            .with_context(|| format!("Failed to get capabilities from WASM plugin '{}'", name))?;
+
+        if capabilities.is_empty() {
+            anyhow::bail!("WASM plugin '{}' provides no stages", name);
+        }
+
         tracing::info!(
-            "Loaded WASM plugin: {} v{} (API v{})",
+            "Loaded WASM plugin: {} v{} (API v{}) with {} stage(s): {}",
             metadata.name,
             metadata.version,
-            metadata.api_version
+            metadata.api_version,
+            capabilities.len(),
+            capabilities
+                .iter()
+                .map(|c| format!("{} ({})", c.name, format!("{:?}", c.stage_type)))
+                .collect::<Vec<_>>()
+                .join(", ")
         );
 
         // Store plugin handle
         let handle = WasmPluginHandle {
             component,
             metadata,
+            capabilities,
         };
 
         self.plugins.insert(name.to_string(), handle);
@@ -142,6 +191,11 @@ impl WasmPluginLoader {
         Ok(())
     }
 
+    /// Get loaded plugin
+    pub fn get_plugin(&self, name: &str) -> Option<&WasmPluginHandle> {
+        self.plugins.get(name)
+    }
+
     /// Get loaded plugin metadata
     pub fn get_plugin_metadata(&self, name: &str) -> Option<&PluginMetadata> {
         self.plugins.get(name).map(|h| &h.metadata)
@@ -152,48 +206,33 @@ impl WasmPluginLoader {
         self.plugins.keys().map(|s| s.as_str()).collect()
     }
 
-    /// Execute read operation on a WASM plugin
-    pub async fn read(
+    /// Find which plugin provides a stage
+    pub fn find_plugin_for_stage(&self, stage_name: &str) -> Option<&WasmPluginHandle> {
+        self.plugins.values().find(|p| p.has_stage(stage_name))
+    }
+
+    /// Execute a stage from a WASM plugin
+    ///
+    /// This is the unified execution interface for all stages.
+    pub async fn execute(
         &self,
         plugin_name: &str,
-        config: Vec<(String, String)>,
+        stage_name: &str,
+        context: ExecutionContext,
     ) -> Result<DataFormat> {
         let handle = self
             .plugins
             .get(plugin_name)
             .ok_or_else(|| anyhow::anyhow!("WASM plugin '{}' not loaded", plugin_name))?;
 
-        // Create new store for this execution
-        let wasi = WasiCtxBuilder::new().inherit_stdio().build();
-        let table = ResourceTable::new();
-        let state = PluginState { wasi, table };
-        let mut store = Store::new(&self.engine, state);
-
-        // Create linker
-        let mut linker = Linker::new(&self.engine);
-        wasmtime_wasi::add_to_linker_async(&mut linker)?;
-
-        // Instantiate plugin
-        let plugin = Plugin::instantiate_async(&mut store, &handle.component, &linker).await?;
-
-        // Call read function
-        plugin
-            .call_read(&mut store, &config)
-            .await?
-            .map_err(|e| anyhow::anyhow!("Plugin read error: {:?}", e))
-    }
-
-    /// Execute write operation on a WASM plugin
-    pub async fn write(
-        &self,
-        plugin_name: &str,
-        data: DataFormat,
-        config: Vec<(String, String)>,
-    ) -> Result<()> {
-        let handle = self
-            .plugins
-            .get(plugin_name)
-            .ok_or_else(|| anyhow::anyhow!("WASM plugin '{}' not loaded", plugin_name))?;
+        // Verify the plugin provides this stage
+        if !handle.has_stage(stage_name) {
+            anyhow::bail!(
+                "WASM plugin '{}' does not provide stage '{}'",
+                plugin_name,
+                stage_name
+            );
+        }
 
         // Create new store for this execution
         let wasi = WasiCtxBuilder::new().inherit_stdio().build();
@@ -208,55 +247,33 @@ impl WasmPluginLoader {
         // Instantiate plugin
         let plugin = Plugin::instantiate_async(&mut store, &handle.component, &linker).await?;
 
-        // Call write function
+        // Call execute function
         plugin
-            .call_write(&mut store, &data, &config)
+            .call_execute(&mut store, stage_name, &context)
             .await?
-            .map_err(|e| anyhow::anyhow!("Plugin write error: {:?}", e))
+            .map_err(|e| anyhow::anyhow!("WASM plugin '{}' stage '{}' error: {:?}", plugin_name, stage_name, e))
     }
 
-    /// Execute transform operation on a WASM plugin
-    pub async fn transform(
-        &self,
-        plugin_name: &str,
-        data: DataFormat,
-        config: Vec<(String, String)>,
-    ) -> Result<DataFormat> {
-        let handle = self
-            .plugins
-            .get(plugin_name)
-            .ok_or_else(|| anyhow::anyhow!("WASM plugin '{}' not loaded", plugin_name))?;
-
-        // Create new store for this execution
-        let wasi = WasiCtxBuilder::new().inherit_stdio().build();
-        let table = ResourceTable::new();
-        let state = PluginState { wasi, table };
-        let mut store = Store::new(&self.engine, state);
-
-        // Create linker
-        let mut linker = Linker::new(&self.engine);
-        wasmtime_wasi::add_to_linker_async(&mut linker)?;
-
-        // Instantiate plugin
-        let plugin = Plugin::instantiate_async(&mut store, &handle.component, &linker).await?;
-
-        // Call transform function
-        plugin
-            .call_transform(&mut store, &data, &config)
-            .await?
-            .map_err(|e| anyhow::anyhow!("Plugin transform error: {:?}", e))
-    }
-
-    /// Validate plugin configuration
+    /// Validate plugin configuration for a stage
     pub async fn validate_config(
         &self,
         plugin_name: &str,
+        stage_name: &str,
         config: Vec<(String, String)>,
     ) -> Result<()> {
         let handle = self
             .plugins
             .get(plugin_name)
             .ok_or_else(|| anyhow::anyhow!("WASM plugin '{}' not loaded", plugin_name))?;
+
+        // Verify the plugin provides this stage
+        if !handle.has_stage(stage_name) {
+            anyhow::bail!(
+                "WASM plugin '{}' does not provide stage '{}'",
+                plugin_name,
+                stage_name
+            );
+        }
 
         // Create new store for this execution
         let wasi = WasiCtxBuilder::new().inherit_stdio().build();
@@ -273,9 +290,9 @@ impl WasmPluginLoader {
 
         // Call validate-config function
         plugin
-            .call_validate_config(&mut store, &config)
+            .call_validate_config(&mut store, stage_name, &config)
             .await?
-            .map_err(|e| anyhow::anyhow!("Plugin config validation error: {:?}", e))
+            .map_err(|e| anyhow::anyhow!("WASM plugin '{}' stage '{}' config validation error: {:?}", plugin_name, stage_name, e))
     }
 }
 

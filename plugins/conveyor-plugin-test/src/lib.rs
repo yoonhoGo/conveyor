@@ -1,26 +1,59 @@
-//! Test plugin for Conveyor
+//! Test plugin for Conveyor - Version 2 (Unified Stage API)
 //!
 //! A minimal plugin to verify the FFI plugin system works correctly.
 
 use conveyor_plugin_api::{
-    data::FfiDataFormat,
-    rstr,
-    traits::FfiDataSource,
-    PluginDeclaration, RBoxError, RHashMap, RResult, RStr, RString, ROk,
+    FfiDataFormat, PluginCapability, PluginDeclaration, StageType, PLUGIN_API_VERSION,
+    RBox, RBoxError, RHashMap, RResult, RString, RVec, rstr, ROk, RErr,
 };
+use conveyor_plugin_api::traits::{FfiExecutionContext, FfiStage, FfiStage_TO};
+use conveyor_plugin_api::sabi_trait::prelude::*;
 
-/// Simple test data source
-struct TestSource;
+/// Simple test stage
+pub struct TestStage {
+    name: String,
+    stage_type: StageType,
+}
 
-impl FfiDataSource for TestSource {
-    fn name(&self) -> RStr<'_> {
-        "test".into()
+impl TestStage {
+    fn new(name: String, stage_type: StageType) -> Self {
+        Self { name, stage_type }
+    }
+}
+
+impl FfiStage for TestStage {
+    fn name(&self) -> conveyor_plugin_api::RStr<'_> {
+        self.name.as_str().into()
     }
 
-    fn read(&self, _config: RHashMap<RString, RString>) -> RResult<FfiDataFormat, RBoxError> {
-        // Return simple test data
-        let data = b"Hello from test plugin!".to_vec();
-        ROk(FfiDataFormat::from_raw(data))
+    fn stage_type(&self) -> StageType {
+        self.stage_type
+    }
+
+    fn execute(&self, context: FfiExecutionContext) -> RResult<FfiDataFormat, RBoxError> {
+        match self.stage_type {
+            StageType::Source => {
+                // Return simple test data
+                let data = b"Hello from test plugin!".to_vec();
+                ROk(FfiDataFormat::from_raw(data))
+            }
+            StageType::Transform => {
+                // Pass through first input
+                let input_data = match context.inputs.into_iter().next() {
+                    Some(tuple) => tuple.1,
+                    None => return RErr(RBoxError::from_fmt(&format_args!("Test transform requires input data"))),
+                };
+                ROk(input_data)
+            }
+            StageType::Sink => {
+                // Validate input exists
+                let input_data = match context.inputs.into_iter().next() {
+                    Some(tuple) => tuple.1,
+                    None => return RErr(RBoxError::from_fmt(&format_args!("Test sink requires input data"))),
+                };
+                ROk(input_data)
+            }
+        }
     }
 
     fn validate_config(&self, _config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
@@ -28,19 +61,52 @@ impl FfiDataSource for TestSource {
     }
 }
 
-/// Plugin registration function
-extern "C" fn register() -> RResult<(), RBoxError> {
-    // For now, just return success
-    // In a full implementation, this would register the modules with the host
-    ROk(())
+// Factory functions
+#[no_mangle]
+pub extern "C" fn create_test_source() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(TestStage::new("test".to_string(), StageType::Source), TD_Opaque)
+}
+
+#[no_mangle]
+pub extern "C" fn create_test_transform() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(TestStage::new("test".to_string(), StageType::Transform), TD_Opaque)
+}
+
+#[no_mangle]
+pub extern "C" fn create_test_sink() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(TestStage::new("test".to_string(), StageType::Sink), TD_Opaque)
+}
+
+// Plugin capabilities
+extern "C" fn get_capabilities() -> RVec<PluginCapability> {
+    vec![
+        PluginCapability {
+            name: RString::from("test"),
+            stage_type: StageType::Source,
+            description: RString::from("Test source - returns simple test data"),
+            factory_symbol: RString::from("create_test_source"),
+        },
+        PluginCapability {
+            name: RString::from("test"),
+            stage_type: StageType::Transform,
+            description: RString::from("Test transform - passes data through"),
+            factory_symbol: RString::from("create_test_transform"),
+        },
+        PluginCapability {
+            name: RString::from("test"),
+            stage_type: StageType::Sink,
+            description: RString::from("Test sink - validates data"),
+            factory_symbol: RString::from("create_test_sink"),
+        },
+    ].into()
 }
 
 /// Plugin declaration export
 #[no_mangle]
 pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
-    api_version: conveyor_plugin_api::PLUGIN_API_VERSION,
+    api_version: PLUGIN_API_VERSION,
     name: rstr!("test"),
-    version: rstr!("0.1.0"),
+    version: rstr!("1.0.0"),
     description: rstr!("Simple test plugin"),
-    register,
+    get_capabilities,
 };

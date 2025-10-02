@@ -1,6 +1,6 @@
 [package]
 name = "conveyor-wasm-plugin-api"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Yoonho Go"]
 description = "WASM plugin API for Conveyor - guest-side library for building WASM plugins"

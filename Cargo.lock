@@ -967,7 +967,7 @@ checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
 name = "conveyor"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -999,7 +999,7 @@ dependencies = [
 
 [[package]]
 name = "conveyor-plugin-api"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "abi_stable",
  "serde",
@@ -1009,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "conveyor-plugin-echo-wasm"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "conveyor-plugin-http"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "conveyor-plugin-api",
@@ -1031,7 +1031,7 @@ dependencies = [
 
 [[package]]
 name = "conveyor-plugin-mongodb"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1046,14 +1046,14 @@ dependencies = [
 
 [[package]]
 name = "conveyor-plugin-test"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "conveyor-plugin-api",
 ]
 
 [[package]]
 name = "conveyor-wasm-plugin-api"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",

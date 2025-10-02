@@ -1,4 +1,5 @@
 // Conveyor WASM Plugin Interface
+// Unified interface with input-aware execution
 package conveyor:plugin@0.1.0;
 
 world plugin {
@@ -20,6 +21,26 @@ world plugin {
         serialization-error(string),
     }
 
+    /// Stage type enumeration
+    enum stage-type {
+        /// Source stage (reads data from external sources)
+        source,
+        /// Transform stage (transforms data)
+        transform,
+        /// Sink stage (writes data to external destinations)
+        sink,
+    }
+
+    /// Execution context
+    /// Contains input data from previous stages and configuration
+    record execution-context {
+        /// Input data from previous stages
+        /// Key: input stage ID, Value: data from that stage
+        inputs: list<tuple<string, data-format>>,
+        /// Configuration parameters
+        config: list<tuple<string, string>>,
+    }
+
     /// Plugin metadata
     record plugin-metadata {
         name: string,
@@ -28,18 +49,33 @@ world plugin {
         api-version: u32,
     }
 
+    /// Stage capability
+    /// Describes a stage that the plugin provides
+    record stage-capability {
+        /// Stage name (e.g., "http", "mongodb")
+        name: string,
+        /// Stage type
+        stage-type: stage-type,
+        /// Description
+        description: string,
+    }
+
     /// Get plugin metadata
     export get-metadata: func() -> plugin-metadata;
 
-    /// Read data from source (optional - return error if not supported)
-    export read: func(config: list<tuple<string, string>>) -> result<data-format, plugin-error>;
+    /// Get list of stages this plugin provides
+    export get-capabilities: func() -> list<stage-capability>;
 
-    /// Write data to sink (optional - return error if not supported)
-    export write: func(data: data-format, config: list<tuple<string, string>>) -> result<_, plugin-error>;
+    /// Execute a stage
+    ///
+    /// This is the unified execution interface for all stages.
+    /// - Sources: context.inputs is empty, use context.config to read data
+    /// - Transforms: context.inputs contains data from previous stages
+    /// - Sinks: context.inputs contains data to write, return empty or confirmation
+    ///
+    /// The stage name parameter identifies which stage to execute.
+    export execute: func(stage-name: string, context: execution-context) -> result<data-format, plugin-error>;
 
-    /// Transform data (optional - return error if not supported)
-    export transform: func(data: data-format, config: list<tuple<string, string>>) -> result<data-format, plugin-error>;
-
-    /// Validate configuration
-    export validate-config: func(config: list<tuple<string, string>>) -> result<_, plugin-error>;
+    /// Validate configuration for a stage
+    export validate-config: func(stage-name: string, config: list<tuple<string, string>>) -> result<_, plugin-error>;
 }

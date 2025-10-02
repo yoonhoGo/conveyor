@@ -2,6 +2,53 @@
 //!
 //! This crate defines the FFI-safe plugin interface for Conveyor ETL pipelines.
 //! Uses abi_stable for cross-compiler compatibility.
+//!
+//! # Architecture
+//!
+//! Plugins implement the `FfiStage` trait to provide custom pipeline stages.
+//! The unified `FfiStage` interface supports:
+//!
+//! - **Sources**: Generate or fetch data from external sources
+//! - **Transforms**: Process and transform data
+//! - **Sinks**: Write data to external destinations
+//!
+//! All stages are **input-aware**, meaning they can access data from previous
+//! stages in the pipeline DAG. This enables advanced use cases like:
+//!
+//! - HTTP fetch transforms that use input data to construct API requests
+//! - Join operations that combine multiple inputs
+//! - Conditional execution based on input data
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use conveyor_plugin_api::*;
+//!
+//! struct MyHttpStage;
+//!
+//! impl FfiStage for MyHttpStage {
+//!     fn name(&self) -> RStr<'_> {
+//!         "http".into()
+//!     }
+//!
+//!     fn stage_type(&self) -> StageType {
+//!         StageType::Source
+//!     }
+//!
+//!     fn execute(&self, context: FfiExecutionContext) -> RResult<FfiDataFormat, RBoxError> {
+//!         let url = context.get_config("url").unwrap();
+//!         // Fetch data from URL...
+//!         ROk(FfiDataFormat::from_json_records(&data)?)
+//!     }
+//!
+//!     fn validate_config(&self, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
+//!         if !config.contains_key(&RString::from("url")) {
+//!             return RErr(RBoxError::from_fmt(&format_args!("Missing 'url' config")));
+//!         }
+//!         ROk(())
+//!     }
+//! }
+//! ```
 
 pub mod data;
 pub mod traits;
@@ -16,6 +63,10 @@ pub use abi_stable::{
     std_types::{RBox, RBoxError, RErr, RHashMap, ROk, ROption, RResult, RStr, RString, RVec},
     StableAbi,
 };
+
+// Re-export core trait types
+pub use data::FfiDataFormat;
+pub use traits::{FfiExecutionContext, FfiStage, PluginCapability, StageType};
 
 /// Plugin API version - increment when breaking changes occur
 ///
@@ -52,6 +103,27 @@ impl PluginMetadata {
 ///
 /// This struct is the entry point for a plugin. It should be exported with
 /// the name `_plugin_declaration` from the plugin's dynamic library.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use conveyor_plugin_api::*;
+///
+/// #[no_mangle]
+/// pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
+///     api_version: PLUGIN_API_VERSION,
+///     name: rstr!("my_plugin"),
+///     version: rstr!("1.0.0"),
+///     description: rstr!("My custom plugin"),
+///     get_capabilities,
+/// };
+///
+/// extern "C" fn get_capabilities() -> RVec<PluginCapability> {
+///     vec![
+///         PluginCapability::new("http", StageType::Source, "HTTP data source"),
+///     ].into()
+/// }
+/// ```
 #[repr(C)]
 #[derive(StableAbi)]
 pub struct PluginDeclaration {
@@ -67,9 +139,11 @@ pub struct PluginDeclaration {
     /// Plugin description (static string slice)
     pub description: RStr<'static>,
 
-    /// Function to register plugin modules with the host
-    /// This will be called by the host after loading the plugin
-    pub register: extern "C" fn() -> RResult<(), RBoxError>,
+    /// Function to get plugin capabilities
+    ///
+    /// Returns a list of stages that this plugin provides.
+    /// The host will use this information to know what stages are available.
+    pub get_capabilities: extern "C" fn() -> RVec<PluginCapability>,
 }
 
 impl PluginDeclaration {
@@ -78,14 +152,14 @@ impl PluginDeclaration {
         name: RStr<'static>,
         version: RStr<'static>,
         description: RStr<'static>,
-        register: extern "C" fn() -> RResult<(), RBoxError>,
+        get_capabilities: extern "C" fn() -> RVec<PluginCapability>,
     ) -> Self {
         Self {
             api_version: PLUGIN_API_VERSION,
             name,
             version,
             description,
-            register,
+            get_capabilities,
         }
     }
 
@@ -115,15 +189,15 @@ mod tests {
 
     #[test]
     fn test_plugin_declaration_compatibility() {
-        extern "C" fn dummy_register() -> RResult<(), RBoxError> {
-            ROk(())
+        extern "C" fn get_capabilities() -> RVec<PluginCapability> {
+            RVec::new()
         }
 
         let decl = PluginDeclaration::new(
             RStr::from("test"),
             RStr::from("1.0.0"),
             RStr::from("Test plugin"),
-            dummy_register,
+            get_capabilities,
         );
 
         assert_eq!(decl.api_version, PLUGIN_API_VERSION);

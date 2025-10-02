@@ -1,10 +1,15 @@
-//! Dynamic Plugin Loader
+//! Dynamic Plugin Loader (Version 2)
 //!
 //! Manages loading and unloading of dynamic plugins at runtime using FFI.
+//!
+//! Version 2 supports unified FfiStage interface with input-aware execution.
 
 use anyhow::{anyhow, Context, Result};
-use conveyor_plugin_api::{PluginDeclaration, PLUGIN_API_VERSION};
-use libloading::Library;
+use conveyor_plugin_api::{
+    PluginCapability, PluginDeclaration, PLUGIN_API_VERSION, RBox,
+};
+use conveyor_plugin_api::traits::{FfiStage_TO, StageFactory};
+use libloading::{Library, Symbol};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -13,7 +18,8 @@ pub struct LoadedPlugin {
     name: String,
     version: String,
     description: String,
-    _library: Library, // Keep library alive
+    capabilities: Vec<PluginCapability>,
+    library: Library, // Keep library alive and accessible for factory loading
 }
 
 impl LoadedPlugin {
@@ -30,6 +36,52 @@ impl LoadedPlugin {
     /// Get plugin description
     pub fn description(&self) -> &str {
         &self.description
+    }
+
+    /// Get plugin capabilities
+    pub fn capabilities(&self) -> &[PluginCapability] {
+        &self.capabilities
+    }
+
+    /// Create a stage instance by name
+    ///
+    /// This loads the factory function from the plugin library and calls it
+    /// to create a new stage instance.
+    pub fn create_stage(&self, stage_name: &str) -> Result<FfiStage_TO<'static, RBox<()>>> {
+        // Find the capability for this stage
+        let capability = self
+            .capabilities
+            .iter()
+            .find(|c| c.name.as_str() == stage_name)
+            .ok_or_else(|| anyhow!("Stage '{}' not found in plugin '{}'", stage_name, self.name))?;
+
+        // Load the factory function from the library
+        unsafe {
+            // Add null terminator to symbol name
+            let mut symbol_name = capability.factory_symbol.as_str().to_string();
+            symbol_name.push('\0');
+
+            let factory: Symbol<StageFactory> = self
+                .library
+                .get(symbol_name.as_bytes())
+                .with_context(|| {
+                    format!(
+                        "Failed to load factory symbol '{}' for stage '{}'",
+                        capability.factory_symbol, stage_name
+                    )
+                })?;
+
+            // Call the factory to create a new stage instance
+            Ok(factory())
+        }
+    }
+
+    /// List available stages
+    pub fn stage_names(&self) -> Vec<String> {
+        self.capabilities
+            .iter()
+            .map(|c| c.name.to_string())
+            .collect()
     }
 }
 
@@ -106,19 +158,27 @@ impl PluginLoader {
             declaration.description
         );
 
-        // Call the plugin's register function
-        match (declaration.register)() {
-            conveyor_plugin_api::ROk(_) => {
-                tracing::debug!("Plugin '{}' registered successfully", name);
-            }
-            conveyor_plugin_api::RErr(e) => {
-                return Err(anyhow!(
-                    "Plugin '{}' registration failed: {:?}",
-                    name,
-                    e
-                ));
-            }
+        // Get plugin capabilities
+        let capabilities = (declaration.get_capabilities)();
+        let capabilities: Vec<PluginCapability> = capabilities.into();
+
+        if capabilities.is_empty() {
+            return Err(anyhow!(
+                "Plugin '{}' provides no stages",
+                name
+            ));
         }
+
+        tracing::info!(
+            "Plugin '{}' provides {} stage(s): {}",
+            name,
+            capabilities.len(),
+            capabilities
+                .iter()
+                .map(|c| format!("{} ({})", c.name, c.stage_type.as_str()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
 
         // Store the loaded plugin
         self.plugins.insert(
@@ -127,7 +187,8 @@ impl PluginLoader {
                 name: declaration.name.to_string(),
                 version: declaration.version.to_string(),
                 description: declaration.description.to_string(),
-                _library: library,
+                capabilities,
+                library,
             },
         );
 
@@ -213,6 +274,35 @@ impl PluginLoader {
     /// Get all loaded plugins
     pub fn plugins(&self) -> &HashMap<String, LoadedPlugin> {
         &self.plugins
+    }
+
+    /// Create a stage from any loaded plugin
+    ///
+    /// Searches all loaded plugins for a stage with the given name.
+    pub fn create_stage(&self, stage_name: &str) -> Result<FfiStage_TO<'static, RBox<()>>> {
+        for plugin in self.plugins.values() {
+            if plugin.capabilities.iter().any(|c| c.name.as_str() == stage_name) {
+                return plugin.create_stage(stage_name);
+            }
+        }
+
+        Err(anyhow!(
+            "Stage '{}' not found in any loaded plugin",
+            stage_name
+        ))
+    }
+
+    /// Find which plugin provides a stage
+    pub fn find_plugin_for_stage(&self, stage_name: &str) -> Option<&LoadedPlugin> {
+        self.plugins
+            .values()
+            .find(|plugin| plugin.capabilities.iter().any(|c| c.name.as_str() == stage_name))
+    }
+}
+
+impl Default for PluginLoader {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

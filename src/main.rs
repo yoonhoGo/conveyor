@@ -8,6 +8,7 @@ mod cli;
 mod core;
 mod modules;
 mod plugin_loader;
+mod wasm_plugin_loader;
 mod utils;
 
 use crate::core::pipeline::Pipeline;
