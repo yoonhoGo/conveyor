@@ -1,6 +1,6 @@
 [package]
 name = "conveyor-plugin-api"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Yoonho Go"]
 description = "Plugin API for Conveyor ETL pipelines"
