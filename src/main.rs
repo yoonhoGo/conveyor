@@ -54,10 +54,34 @@ enum Commands {
         module_type: Option<String>,
     },
 
-    #[command(about = "Generate a sample pipeline configuration")]
-    Generate {
+    #[command(about = "Stage management commands")]
+    Stage {
+        #[command(subcommand)]
+        command: StageCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum StageCommands {
+    #[command(about = "Create a new DAG-based pipeline template")]
+    New {
         #[arg(short = 'o', long, help = "Output file path")]
         output: Option<PathBuf>,
+
+        #[arg(short = 'i', long, help = "Interactive mode with prompts")]
+        interactive: bool,
+    },
+
+    #[command(about = "Add a new stage to an existing pipeline")]
+    Add {
+        #[arg(help = "Path to the pipeline TOML file")]
+        pipeline: PathBuf,
+    },
+
+    #[command(about = "Edit pipeline stages interactively")]
+    Edit {
+        #[arg(help = "Path to the pipeline TOML file")]
+        pipeline: PathBuf,
     },
 }
 
@@ -104,9 +128,21 @@ async fn main() -> Result<()> {
             cli::list_modules(module_type).await?;
         }
 
-        Commands::Generate { output } => {
-            info!("Generating sample configuration");
-            cli::generate_sample(output)?;
+        Commands::Stage { command } => match command {
+            StageCommands::New { output, interactive } => {
+                info!("Creating new DAG pipeline");
+                cli::scaffold_pipeline(output.clone(), interactive)?;
+            }
+
+            StageCommands::Add { pipeline } => {
+                info!("Adding stage to pipeline: {:?}", pipeline);
+                cli::add_stage_to_pipeline(pipeline.clone()).await?;
+            }
+
+            StageCommands::Edit { pipeline } => {
+                info!("Opening interactive pipeline editor: {:?}", pipeline);
+                cli::edit_pipeline_interactive(pipeline.clone()).await?;
+            }
         }
     }
 

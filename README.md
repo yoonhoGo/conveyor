@@ -383,6 +383,49 @@ conveyor list --module-type sources
 conveyor generate --output sample-pipeline.toml
 ```
 
+#### Stage Management Commands (NEW!)
+
+Manage pipeline stages with interactive commands:
+
+**Create New Pipeline:**
+
+```bash
+# Non-interactive mode (uses defaults)
+conveyor stage new --output my-pipeline.toml
+
+# Interactive mode (prompts for details)
+conveyor stage new --output my-pipeline.toml --interactive
+```
+
+**Add Stage to Pipeline:**
+
+Interactively add a new stage to an existing pipeline:
+
+```bash
+conveyor stage add my-pipeline.toml
+```
+
+This command will prompt you to:
+1. Enter a unique stage ID
+2. Select the stage type (source, transform, sink, etc.)
+3. Choose input dependencies
+4. Configure stage-specific settings
+
+**Edit Pipeline Interactively:**
+
+Open an interactive editor to manage pipeline stages:
+
+```bash
+conveyor stage edit my-pipeline.toml
+```
+
+Features:
+- Add new stages
+- Remove existing stages
+- View stage details
+- Reorder stages (move up/down)
+- Live validation
+
 ## Modules
 
 ### Built-in Data Sources
