@@ -162,7 +162,7 @@ impl WasmPluginLoader {
             capabilities.len(),
             capabilities
                 .iter()
-                .map(|c| format!("{} ({})", c.name, format!("{:?}", c.stage_type)))
+                .map(|c| format!("{} ({:?})", c.name, c.stage_type))
                 .collect::<Vec<_>>()
                 .join(", ")
         );

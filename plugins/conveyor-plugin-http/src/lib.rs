@@ -171,7 +171,7 @@ impl HttpStage {
                 let records: Result<Vec<HashMap<String, Value>>, _> = text
                     .lines()
                     .filter(|line| !line.trim().is_empty())
-                    .map(|line| serde_json::from_str(line))
+                    .map(serde_json::from_str)
                     .collect();
 
                 match records {
@@ -260,7 +260,7 @@ impl HttpStage {
             },
             "jsonl" => {
                 let lines: Result<Vec<String>, _> =
-                    records.iter().map(|r| serde_json::to_string(r)).collect();
+                    records.iter().map(serde_json::to_string).collect();
 
                 match lines {
                     Ok(l) => l.join("\n"),

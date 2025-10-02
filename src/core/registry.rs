@@ -12,6 +12,12 @@ pub struct ModuleRegistry {
     stages: HashMap<String, StageRef>,
 }
 
+impl Default for ModuleRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModuleRegistry {
     pub fn new() -> Self {
         Self {

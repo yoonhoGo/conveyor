@@ -10,7 +10,7 @@ use conveyor_plugin_api::{
     RResult, RString, RVec, StageType, PLUGIN_API_VERSION,
 };
 use mongodb::{
-    bson::{doc, Document},
+    bson::Document,
     options::{ClientOptions, FindOptions},
     Client,
 };
@@ -338,11 +338,7 @@ fn json_to_bson(value: &Value) -> Option<mongodb::bson::Bson> {
         Value::Number(n) => {
             if let Some(i) = n.as_i64() {
                 Some(mongodb::bson::Bson::Int64(i))
-            } else if let Some(f) = n.as_f64() {
-                Some(mongodb::bson::Bson::Double(f))
-            } else {
-                None
-            }
+            } else { n.as_f64().map(mongodb::bson::Bson::Double) }
         }
         Value::String(s) => Some(mongodb::bson::Bson::String(s.clone())),
         Value::Array(arr) => {

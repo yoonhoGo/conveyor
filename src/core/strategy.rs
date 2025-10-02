@@ -6,7 +6,9 @@ use tracing::{error, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "strategy", rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ErrorStrategy {
+    #[default]
     Stop,
     Continue,
     Retry {
@@ -25,11 +27,6 @@ fn default_retry_delay_seconds() -> u64 {
     5
 }
 
-impl Default for ErrorStrategy {
-    fn default() -> Self {
-        ErrorStrategy::Stop
-    }
-}
 
 impl ErrorStrategy {
     /// Execute an operation with the configured error handling strategy

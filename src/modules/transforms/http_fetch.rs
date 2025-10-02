@@ -16,6 +16,12 @@ pub struct HttpFetchTransform {
     handlebars: Handlebars<'static>,
 }
 
+impl Default for HttpFetchTransform {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HttpFetchTransform {
     pub fn new() -> Self {
         let client = Client::builder()

@@ -42,7 +42,7 @@ impl DataSource for JsonSource {
                     content
                         .lines()
                         .filter(|line| !line.trim().is_empty())
-                        .map(|line| serde_json::from_str(line))
+                        .map(serde_json::from_str)
                         .collect::<Result<Vec<_>, _>>()?
                 } else {
                     // Parse as a JSON array

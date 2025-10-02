@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dialoguer::{Confirm, Input, Select};
+use dialoguer::{Confirm, Input};
 use std::path::PathBuf;
 
 pub fn scaffold_pipeline(output: Option<PathBuf>, interactive: bool) -> Result<()> {

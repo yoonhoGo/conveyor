@@ -3,6 +3,8 @@
 //! This module defines the core FfiStage trait that plugins must implement.
 //! All traits are FFI-safe using the #[sabi_trait] attribute.
 
+#![allow(non_local_definitions)]
+
 use crate::{data::FfiDataFormat, sabi_trait, RBoxError, RHashMap, RResult, RStr, RString};
 
 /// FFI-safe execution context
@@ -84,6 +86,7 @@ impl StageType {
 /// - Use previous stage data to make dynamic decisions (e.g., HTTP fetch)
 /// - Combine multiple inputs (e.g., join operation)
 /// - Execute conditionally based on input data
+#[allow(non_local_definitions)]
 #[sabi_trait]
 pub trait FfiStage: Send + Sync {
     /// Get the name of this stage

@@ -1,6 +1,5 @@
 use anyhow::Result;
 use dialoguer::{Input, MultiSelect, Select};
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub async fn add_stage_to_pipeline(pipeline_file: PathBuf) -> Result<()> {

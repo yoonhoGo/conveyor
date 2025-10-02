@@ -94,6 +94,7 @@ pub struct SinkConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct ErrorHandlingConfig {
     #[serde(default, flatten)]
     pub strategy: ErrorStrategy,
@@ -136,14 +137,6 @@ impl Default for GlobalConfig {
     }
 }
 
-impl Default for ErrorHandlingConfig {
-    fn default() -> Self {
-        Self {
-            strategy: ErrorStrategy::default(),
-            dead_letter_queue: None,
-        }
-    }
-}
 
 impl PipelineConfig {
     pub async fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -151,6 +144,7 @@ impl PipelineConfig {
         Self::from_str(&content)
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(content: &str) -> Result<Self> {
         let config: PipelineConfig = toml::from_str(content)?;
         config.validate()?;
@@ -315,6 +309,7 @@ impl DagPipelineConfig {
         Self::from_str(&content)
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(content: &str) -> Result<Self> {
         let config: DagPipelineConfig = toml::from_str(content)?;
         config.validate()?;

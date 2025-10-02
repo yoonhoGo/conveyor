@@ -53,7 +53,7 @@ impl Sink for JsonSink {
                 let records = data.as_record_batch()?;
                 records
                     .iter()
-                    .map(|record| serde_json::to_string(record))
+                    .map(serde_json::to_string)
                     .collect::<Result<Vec<_>, _>>()?
                     .join("\n")
             }

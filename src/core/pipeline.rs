@@ -183,6 +183,7 @@ impl Pipeline {
 /// DAG-based pipeline supporting flexible stage composition
 pub struct DagPipeline {
     config: DagPipelineConfig,
+    #[allow(dead_code)]
     registry: Arc<ModuleRegistry>,
     executor: DagExecutor,
     #[allow(dead_code)]
