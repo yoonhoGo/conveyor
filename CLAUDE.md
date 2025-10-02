@@ -23,21 +23,36 @@ Conveyor uses a Cargo workspace to organize the codebase into separate, independ
 ```
 conveyor/
 ├── Cargo.toml                     # Workspace root with shared dependencies
-├── conveyor-plugin-api/           # Plugin API crate (lib)
-│   ├── src/lib.rs                 # Plugin traits and types
+├── conveyor-plugin-api/           # FFI Plugin API crate (lib)
+│   ├── src/
+│   │   ├── lib.rs                 # FFI-safe plugin traits and types
+│   │   ├── data.rs                # FfiDataFormat
+│   │   └── traits.rs              # FfiDataSource, FfiTransform, FfiSink
 │   └── Cargo.toml
-├── plugins/                       # Plugin crates (cdylib)
+├── conveyor-wasm-plugin-api/      # WASM Plugin API crate (lib)
+│   ├── wit/
+│   │   └── conveyor-plugin.wit    # WIT interface definition
+│   ├── src/lib.rs                 # Guest-side helpers and types
+│   └── Cargo.toml
+├── plugins/                       # FFI Plugin crates (cdylib)
 │   ├── conveyor-plugin-http/
-│   │   ├── src/lib.rs             # HTTP source & sink
+│   │   ├── src/lib.rs             # HTTP source & sink (FFI)
 │   │   └── Cargo.toml
-│   └── conveyor-plugin-mongodb/
-│       ├── src/lib.rs             # MongoDB source & sink
+│   ├── conveyor-plugin-mongodb/
+│   │   ├── src/lib.rs             # MongoDB source & sink (FFI)
+│   │   └── Cargo.toml
+│   └── conveyor-plugin-test/
+│       ├── src/lib.rs             # Test plugin (FFI)
 │       └── Cargo.toml
+├── plugins-wasm/                  # WASM Plugin crates (future)
+│   └── ...
+├── examples/
+│   └── plugin-template/           # FFI plugin template
 └── src/                           # Main application
     ├── main.rs
     ├── core/
     ├── modules/
-    └── plugin_loader.rs
+    └── plugin_loader.rs           # FFI plugin loader
 ```
 
 **Key Design Decisions**:
@@ -528,14 +543,20 @@ async fn main() -> Result<()> {
    - Capability verification
    - Independent plugin compilation
 
-3. **HTTP Plugin**: REST API integration (pending FFI migration)
+3. **HTTP Plugin**: REST API integration ✅ FFI-safe
    - Source and sink implementation
    - Multiple HTTP methods (GET/POST/PUT/PATCH/DELETE)
-   - Format support (JSON, JSONL, CSV, raw)
+   - Format support (JSON, JSONL)
    - Custom headers and timeout configuration
+   - 32KB .dylib plugin
 
-4. **MongoDB Source**: Database integration (pending FFI migration)
-   - Cursor-based pagination
+4. **MongoDB Plugin**: Database integration ✅ FFI-safe
+   - Source and sink implementation
+   - Cursor-based pagination for large datasets
+   - Batch insert support
+   - JSON to BSON conversion
+   - Query filter support
+   - 33KB .dylib plugin
 
 5. **Workspace Dependencies**: Centralized dependency management
    - `[workspace.dependencies]` for version consistency
@@ -548,11 +569,31 @@ async fn main() -> Result<()> {
    - Example implementations for all plugin types
    - Testing examples and troubleshooting guide
 
+7. **WASM Plugin System** ⭐ NEW (October 2025)
+   - WebAssembly Component Model foundation
+   - WIT (WebAssembly Interface Types) interface definition
+   - `conveyor-wasm-plugin-api` crate for guest-side development
+   - `wit-bindgen` v0.46 integration with macros
+   - Target: `wasm32-wasip2` (WASI Preview 2)
+   - Key features:
+     - Complete sandboxing and memory isolation
+     - Language-independent (Rust, C, Go, Python, etc.)
+     - Cross-platform portability
+     - Smaller binary sizes vs FFI
+   - Guest-side helpers:
+     - Config extraction utilities
+     - DataFormat conversion (JSON, Arrow IPC, Raw)
+     - Error creation helpers
+     - `not_supported!` macro
+   - Status: Foundation complete, host integration pending
+
 ### Short Term
 
-1. **Migrate Existing Plugins to FFI**:
-   - HTTP plugin → FFI-safe implementation
-   - MongoDB plugin → FFI-safe implementation
+1. **Complete WASM Plugin System**:
+   - Host-side Wasmtime integration
+   - `WasmPluginLoader` implementation
+   - Example WASM plugin (HTTP or simple echo)
+   - Performance benchmarks vs FFI plugins
 
 2. **Database Connectors**: PostgreSQL, MySQL implementations
 3. **Advanced Transforms**:
@@ -564,9 +605,9 @@ async fn main() -> Result<()> {
 ### Medium Term
 
 1. **Enhanced Plugin System**:
-   - WebAssembly plugins for ultimate sandboxing
    - Plugin marketplace/registry
-   - Hot reload support
+   - Hot reload support for both FFI and WASM plugins
+   - Plugin dependency management
 
 2. **Stream Processing**: Process data in chunks for memory efficiency
    - Implement streaming for large datasets
@@ -584,6 +625,84 @@ async fn main() -> Result<()> {
 2. **Web UI**: Visual pipeline builder and monitoring
 3. **Scheduling**: Cron-like execution management
 4. **Data Catalog**: Metadata management and lineage tracking
+
+## Plugin Systems Comparison
+
+Conveyor supports two plugin architectures, each with distinct advantages:
+
+### FFI Plugins (using `abi_stable`)
+
+**Architecture:**
+- Dynamic library loading (.dylib, .so, .dll)
+- FFI-safe traits with `#[sabi_trait]` macro
+- Direct memory access between host and plugin
+- Same Rust version required (or compatible ABI)
+
+**Advantages:**
+- ✅ **Best Performance**: Near-zero overhead, direct function calls
+- ✅ **Rich Type System**: Full Rust type support with `abi_stable`
+- ✅ **Mature Ecosystem**: Well-tested with production libraries
+- ✅ **Async Support**: Native async/await throughout
+
+**Trade-offs:**
+- ⚠️ Less sandboxing (plugins share process memory)
+- ⚠️ Platform-specific binaries required
+- ⚠️ Potential for version mismatches
+
+**Best For:**
+- High-performance plugins (HTTP, databases)
+- Complex data transformations
+- When you control the plugin development
+
+### WASM Plugins (using WebAssembly Component Model)
+
+**Architecture:**
+- WebAssembly Component Model (WASI Preview 2)
+- WIT (WebAssembly Interface Types) definitions
+- Wasmtime runtime for execution
+- Complete memory isolation
+
+**Advantages:**
+- ✅ **Ultimate Sandboxing**: Memory-safe, capability-based security
+- ✅ **Cross-Platform**: Write once, run anywhere
+- ✅ **Language Agnostic**: Support for Rust, C, Go, Python, etc.
+- ✅ **Smaller Binaries**: Typically 10-50% smaller than FFI plugins
+- ✅ **Version Independence**: No ABI compatibility issues
+
+**Trade-offs:**
+- ⚠️ Slight performance overhead (5-15% vs FFI)
+- ⚠️ Limited async support (WASI Preview 2 constraints)
+- ⚠️ Ecosystem still maturing
+
+**Best For:**
+- Third-party/untrusted plugins
+- Simple transformations
+- Cross-platform distribution
+- Security-critical environments
+
+### Decision Matrix
+
+| Feature | FFI Plugins | WASM Plugins |
+|---------|-------------|--------------|
+| Performance | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| Security | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| Cross-platform | ⭐⭐ | ⭐⭐⭐⭐⭐ |
+| Language support | Rust only | Any WASI language |
+| Binary size | ~30-40KB | ~20-30KB |
+| Development complexity | Medium | Low |
+| Maturity | High | Medium |
+
+### Current Status
+
+- **FFI Plugins**: ✅ Production-ready
+  - HTTP plugin (32KB)
+  - MongoDB plugin (33KB)
+  - Test plugin (33KB)
+
+- **WASM Plugins**: 🚧 Foundation complete, host integration pending
+  - WIT interface defined
+  - Guest-side API ready
+  - Wasmtime integration in progress
 
 ## Dependencies
 
