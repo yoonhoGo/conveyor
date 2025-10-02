@@ -709,6 +709,79 @@ async fn main() -> Result<()> {
 
    **Status**: ✅ Production-ready, enables API-driven data pipelines
 
+10. **Pipeline Stage** ⭐ NEW (January 2025) ✅ Production-ready
+   - **Architecture**: Recursive pipeline execution as a stage type
+   - **Nested Pipelines**: Execute complete pipelines within pipeline stages
+   - **Flexible Configuration**: File-based or inline pipeline definitions
+   - **Modular Composition**: Reusable pipeline components
+
+   **Core Features**:
+   - ✅ File-based pipeline inclusion: Load external TOML pipeline files
+   - ✅ Inline pipeline definitions: Embed pipelines directly in configuration
+   - ✅ Full DAG integration: Pipeline stages work seamlessly with DAG executor
+   - ✅ Configuration validation: Validates nested pipeline structure before execution
+   - ✅ Recursive support: Pipelines can contain other pipeline stages
+
+   **Configuration Format (File-based)**:
+   ```toml
+   [[stages]]
+   id = "preprocessing"
+   type = "stage.pipeline"
+   inputs = ["load_data"]
+
+   [stages.config]
+   file = "pipelines/preprocess.toml"
+   ```
+
+   **Configuration Format (Inline)**:
+   ```toml
+   [[stages]]
+   id = "preprocessing"
+   type = "stage.pipeline"
+   inputs = ["load_data"]
+
+   [stages.config]
+   inline = """
+   [[stages]]
+   id = "clean"
+   type = "transform.filter"
+   inputs = []
+
+   [stages.config]
+   column = "status"
+   operator = "!="
+   value = "invalid"
+
+   [[stages]]
+   id = "output"
+   type = "sink.stdout"
+   inputs = ["clean"]
+
+   [stages.config]
+   format = "json"
+   """
+   ```
+
+   **Use Cases**:
+   - Pipeline composition: Combine reusable pipeline components
+   - Modular workflows: Break complex pipelines into manageable pieces
+   - Team collaboration: Share common pipeline patterns across projects
+   - Testing: Test sub-pipelines independently
+
+   **Implementation**:
+   - `PipelineStage` struct in `src/modules/stages/pipeline.rs`
+   - Integrates with `DagPipelineBuilder` for dynamic stage creation
+   - Registry support for stage lookup and management
+   - Independent ModuleRegistry for each sub-pipeline
+
+   **Testing**:
+   - 3 integration tests passing (tests/pipeline_stage_test.rs)
+   - Inline pipeline execution verified
+   - Configuration validation tested
+   - Nested pipeline composition validated
+
+   **Status**: ✅ Production-ready, enables modular pipeline architecture
+
 ### Short Term
 
 1. **WASM Plugin Expansion**:
@@ -935,7 +1008,10 @@ conveyor/
 │           └── lib.rs             # Echo plugin (~75 lines)
 ├── tests/
 │   ├── integration_test.rs        # FFI plugin tests
-│   └── wasm_plugin_test.rs        # WASM plugin tests (~80 lines)
+│   ├── wasm_plugin_test.rs        # WASM plugin tests (~80 lines)
+│   ├── dag_pipeline_test.rs       # DAG pipeline tests
+│   ├── http_fetch_test.rs         # HTTP fetch transform tests
+│   └── pipeline_stage_test.rs     # Pipeline stage tests (~172 lines)
 └── src/                           # Main application
     ├── main.rs                    # CLI entry point
     ├── lib.rs                     # Library exports
@@ -962,24 +1038,27 @@ conveyor/
     │   │   ├── filter.rs          # Filter transform (130 lines)
     │   │   ├── map.rs             # Map transform (143 lines)
     │   │   └── validate.rs        # Validation (157 lines)
-    │   └── sinks/
-    │       ├── mod.rs             # Sink registration
-    │       ├── csv.rs             # CSV sink (72 lines)
-    │       ├── json.rs            # JSON sink (166 lines)
-    │       └── stdout.rs          # Stdout sink (121 lines)
+    │   ├── sinks/
+    │   │   ├── mod.rs             # Sink registration
+    │   │   ├── csv.rs             # CSV sink (72 lines)
+    │   │   ├── json.rs            # JSON sink (166 lines)
+    │   │   └── stdout.rs          # Stdout sink (121 lines)
+    │   └── stages/
+    │       ├── mod.rs             # Stage exports
+    │       └── pipeline.rs        # Pipeline stage (217 lines)
     └── utils/
         └── mod.rs                 # Utilities (placeholder)
 ```
 
 **Total Lines of Code**:
-- Main binary: ~2,300 lines (including WASM loader)
+- Main binary: ~2,520 lines (including WASM loader and pipeline stage)
 - FFI Plugin API: ~100 lines
 - WASM Plugin API: ~100 lines
 - HTTP plugin (FFI): ~300 lines
 - MongoDB plugin (FFI): ~400 lines
 - Echo plugin (WASM): ~75 lines
-- Tests: ~230 lines (FFI + WASM integration tests)
-- **Total**: ~3,500 lines (excluding tests: ~3,270 lines)
+- Tests: ~400 lines (FFI + WASM + DAG + HTTP Fetch + Pipeline Stage integration tests)
+- **Total**: ~3,900 lines (excluding tests: ~3,500 lines)
 
 **Key Organization Principles**:
 - **Dual Plugin Systems**: FFI for performance, WASM for security/portability

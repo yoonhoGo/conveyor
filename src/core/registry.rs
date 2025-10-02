@@ -2,12 +2,14 @@ use anyhow::Result;
 use std::collections::HashMap;
 
 use crate::core::traits::{DataSourceRef, TransformRef, SinkRef};
+use crate::core::stage::StageRef;
 use crate::modules::{sources, transforms, sinks};
 
 pub struct ModuleRegistry {
     sources: HashMap<String, DataSourceRef>,
     transforms: HashMap<String, TransformRef>,
     sinks: HashMap<String, SinkRef>,
+    stages: HashMap<String, StageRef>,
 }
 
 impl ModuleRegistry {
@@ -16,6 +18,7 @@ impl ModuleRegistry {
             sources: HashMap::new(),
             transforms: HashMap::new(),
             sinks: HashMap::new(),
+            stages: HashMap::new(),
         }
     }
 
@@ -34,6 +37,9 @@ impl ModuleRegistry {
 
         // Register built-in sinks
         self.sinks.extend(sinks::register_sinks());
+
+        // Note: PipelineStage is registered dynamically in DagPipelineBuilder
+        // to avoid circular dependencies with the registry
 
         tracing::debug!(
             "Registered {} sources, {} transforms, {} sinks",
@@ -57,6 +63,10 @@ impl ModuleRegistry {
         self.sinks.insert(name, sink);
     }
 
+    pub fn register_stage(&mut self, name: String, stage: StageRef) {
+        self.stages.insert(name, stage);
+    }
+
     pub fn get_source(&self, name: &str) -> Option<&DataSourceRef> {
         self.sources.get(name)
     }
@@ -67,6 +77,10 @@ impl ModuleRegistry {
 
     pub fn get_sink(&self, name: &str) -> Option<&SinkRef> {
         self.sinks.get(name)
+    }
+
+    pub fn get_stage(&self, name: &str) -> Option<&StageRef> {
+        self.stages.get(name)
     }
 
     pub fn list_sources(&self) -> Vec<String> {
@@ -81,11 +95,16 @@ impl ModuleRegistry {
         self.sinks.keys().cloned().collect()
     }
 
+    pub fn list_stages(&self) -> Vec<String> {
+        self.stages.keys().cloned().collect()
+    }
+
     pub fn list_all_modules(&self) -> HashMap<String, Vec<String>> {
         let mut modules = HashMap::new();
         modules.insert("sources".to_string(), self.list_sources());
         modules.insert("transforms".to_string(), self.list_transforms());
         modules.insert("sinks".to_string(), self.list_sinks());
+        modules.insert("stages".to_string(), self.list_stages());
         modules
     }
 }

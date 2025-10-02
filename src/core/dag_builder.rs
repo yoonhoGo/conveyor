@@ -70,17 +70,18 @@ impl DagPipelineBuilder {
 
     /// Create a stage from configuration
     ///
-    /// Supports three formats:
+    /// Supports four formats:
     /// 1. Built-in: "source.json", "transform.filter", "sink.csv"
-    /// 2. FFI Plugin: "plugin.http" (auto-detects from loaded plugins)
-    /// 3. WASM Plugin: "wasm.echo" (auto-detects from loaded WASM plugins)
+    /// 2. Stage: "stage.pipeline" (special stages like pipeline)
+    /// 3. FFI Plugin: "plugin.http" (auto-detects from loaded plugins)
+    /// 4. WASM Plugin: "wasm.echo" (auto-detects from loaded WASM plugins)
     fn create_stage(&self, stage_config: &StageConfig) -> Result<StageRef> {
         // Parse stage type
         let parts: Vec<&str> = stage_config.stage_type.split('.').collect();
 
         if parts.len() != 2 {
             return Err(ConveyorError::PipelineError(format!(
-                "Invalid stage type format: '{}'. Expected 'category.name' (e.g., 'source.json', 'plugin.http', 'wasm.echo')",
+                "Invalid stage type format: '{}'. Expected 'category.name' (e.g., 'source.json', 'stage.pipeline', 'plugin.http', 'wasm.echo')",
                 stage_config.stage_type
             ))
             .into());
@@ -90,6 +91,20 @@ impl DagPipelineBuilder {
         let type_name = parts[1];
 
         match category {
+            // Special stage types (e.g., pipeline)
+            "stage" => {
+                match type_name {
+                    "pipeline" => {
+                        use crate::modules::stages::PipelineStage;
+                        Ok(Arc::new(PipelineStage::new(Arc::clone(&self.registry))))
+                    }
+                    _ => Err(ConveyorError::ModuleNotFound(format!(
+                        "Stage type '{}' not found",
+                        type_name
+                    ))
+                    .into()),
+                }
+            }
             // Built-in source
             "source" => {
                 let source = self.registry.get_source(type_name).ok_or_else(|| {
@@ -174,7 +189,7 @@ impl DagPipelineBuilder {
             }
 
             _ => Err(ConveyorError::PipelineError(format!(
-                "Invalid stage category: '{}'. Must be 'source', 'transform', 'sink', 'plugin', or 'wasm'",
+                "Invalid stage category: '{}'. Must be 'source', 'transform', 'sink', 'stage', 'plugin', or 'wasm'",
                 category
             ))
             .into()),
