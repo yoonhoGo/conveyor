@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/yoonhoGo/conveyor/actions/workflows/ci.yml/badge.svg)](https://github.com/yoonhoGo/conveyor/actions/workflows/ci.yml)
 [![Release](https://github.com/yoonhoGo/conveyor/actions/workflows/release.yml/badge.svg)](https://github.com/yoonhoGo/conveyor/actions/workflows/release.yml)
-[![npm version](https://badge.fury.io/js/%40conveyor%2Fcli.svg)](https://www.npmjs.com/package/@conveyor/cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-blue.svg)](https://www.rust-lang.org)
 
@@ -55,19 +54,7 @@ This script:
    sudo mv conveyor-* /usr/local/bin/conveyor
    ```
 
-### Option 2: npm
-
-```bash
-# Install globally
-npm install -g @conveyor/cli
-
-# Or use with npx (no installation)
-npx @conveyor/cli --help
-```
-
-The npm package automatically downloads the appropriate binary for your platform (macOS, Linux, Windows).
-
-### Option 3: Build from Source
+### Option 2: Build from Source
 
 **Prerequisites:**
 - Rust 1.70 or higher

@@ -97,8 +97,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache cargo tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-tools-audit
+
       - name: Install cargo-audit
-        run: cargo install cargo-audit
+        run: cargo install cargo-audit --force
 
       - name: Run security audit
         run: cargo audit
@@ -113,8 +119,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-tools-tarpaulin
+
       - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --force
 
       - name: Generate coverage
         run: cargo tarpaulin --workspace --timeout 300 --out Xml
