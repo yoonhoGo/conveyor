@@ -1,0 +1,45 @@
+// Conveyor WASM Plugin Interface
+package conveyor:plugin@0.1.0;
+
+world plugin {
+    /// Data format variants for transferring data between host and plugin
+    variant data-format {
+        /// Arrow IPC serialized DataFrame (Polars)
+        arrow-ipc(list<u8>),
+        /// JSON serialized records
+        json-records(list<u8>),
+        /// Raw bytes
+        raw(list<u8>),
+    }
+
+    /// Plugin error variants
+    variant plugin-error {
+        config-error(string),
+        runtime-error(string),
+        io-error(string),
+        serialization-error(string),
+    }
+
+    /// Plugin metadata
+    record plugin-metadata {
+        name: string,
+        version: string,
+        description: string,
+        api-version: u32,
+    }
+
+    /// Get plugin metadata
+    export get-metadata: func() -> plugin-metadata;
+
+    /// Read data from source (optional - return error if not supported)
+    export read: func(config: list<tuple<string, string>>) -> result<data-format, plugin-error>;
+
+    /// Write data to sink (optional - return error if not supported)
+    export write: func(data: data-format, config: list<tuple<string, string>>) -> result<_, plugin-error>;
+
+    /// Transform data (optional - return error if not supported)
+    export transform: func(data: data-format, config: list<tuple<string, string>>) -> result<data-format, plugin-error>;
+
+    /// Validate configuration
+    export validate-config: func(config: list<tuple<string, string>>) -> result<_, plugin-error>;
+}

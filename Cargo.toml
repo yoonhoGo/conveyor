@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "conveyor-plugin-api",
+    "conveyor-wasm-plugin-api",
     "plugins/conveyor-plugin-test",
     "plugins/conveyor-plugin-http",
     "plugins/conveyor-plugin-mongodb",
@@ -30,7 +31,12 @@ tracing = "0.1"
 
 # Plugin API
 conveyor-plugin-api = { path = "conveyor-plugin-api" }
+conveyor-wasm-plugin-api = { path = "conveyor-wasm-plugin-api" }
 abi_stable = "0.11"
+
+# WASM runtime
+wasmtime = "28.0"
+wit-bindgen = "0.39"
 
 
 # HTTP client

@@ -1,0 +1,18 @@
+[package]
+name = "conveyor-wasm-plugin-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["Yoonho Go"]
+description = "WASM plugin API for Conveyor - guest-side library for building WASM plugins"
+license = "MIT"
+
+[dependencies]
+# WIT bindgen for generating Rust code from WIT files (latest version)
+wit-bindgen = { version = "0.46", default-features = false, features = ["macros", "realloc"] }
+
+# Serialization for data conversion
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
