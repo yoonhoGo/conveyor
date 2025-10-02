@@ -1,0 +1,37 @@
+# HTTP Plugin Example
+# This example demonstrates using the HTTP plugin to fetch data from a REST API
+
+[pipeline]
+name = "http_plugin_example"
+version = "1.0.0"
+description = "Example pipeline using HTTP plugin"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 2
+timeout_seconds = 60
+plugins = ["http"]  # Load HTTP plugin dynamically
+
+# Fetch users from JSONPlaceholder API
+[[sources]]
+name = "api_users"
+type = "http"
+
+[sources.config]
+url = "https://jsonplaceholder.typicode.com/users"
+method = "GET"
+format = "json"
+timeout = 30
+
+# Output to JSON file
+[[sinks]]
+name = "json_output"
+type = "json"
+
+[sinks.config]
+path = "output/users_from_plugin.json"
+format = "records"
+pretty = true
+
+[error_handling]
+strategy = "stop"

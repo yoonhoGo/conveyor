@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use crate::core::registry::ModuleRegistry;
 
-pub fn list_modules(module_type: Option<String>) -> Result<()> {
-    let registry = ModuleRegistry::with_defaults();
+pub async fn list_modules(module_type: Option<String>) -> Result<()> {
+    let registry = ModuleRegistry::with_defaults().await?;
     let modules = registry.list_all_modules();
 
     if let Some(filter_type) = module_type {

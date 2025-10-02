@@ -10,6 +10,7 @@ description = "Fetch JSON data from HTTP API and process it"
 log_level = "info"
 max_parallel_tasks = 2
 timeout_seconds = 300
+plugins = ["http"]  # Load HTTP plugin dynamically
 
 # HTTP Source - Fetch data from JSONPlaceholder API
 [[sources]]

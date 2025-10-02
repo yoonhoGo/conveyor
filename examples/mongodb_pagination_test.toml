@@ -10,6 +10,7 @@ description = "Test cursor-based pagination with MongoDB"
 log_level = "info"
 max_parallel_tasks = 2
 timeout_seconds = 600
+plugins = ["mongodb"]  # Load MongoDB plugin dynamically
 
 # MongoDB Source - Page 1 (batch_size = 8)
 [[sources]]

@@ -7,6 +7,7 @@ use tracing_subscriber::FmtSubscriber;
 mod cli;
 mod core;
 mod modules;
+mod plugin_loader;
 mod utils;
 
 use crate::core::pipeline::Pipeline;
@@ -99,7 +100,7 @@ async fn main() -> Result<()> {
 
         Commands::List { module_type } => {
             info!("Listing available modules");
-            cli::list_modules(module_type)?;
+            cli::list_modules(module_type).await?;
         }
 
         Commands::Generate { output } => {

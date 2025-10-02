@@ -1,0 +1,19 @@
+[package]
+name = "conveyor-plugin-http"
+version = "0.1.0"
+edition = "2021"
+authors = ["Yoonho Go"]
+description = "HTTP plugin for Conveyor - provides HTTP source and sink"
+license = "MIT"
+
+[dependencies]
+conveyor-plugin-api = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+anyhow = { workspace = true }
+
+[lib]
+crate-type = ["cdylib"]

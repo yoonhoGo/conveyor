@@ -210,17 +210,17 @@ impl StageValidator {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_stage_executor_creation() {
-        let registry = Arc::new(ModuleRegistry::with_defaults());
+    #[tokio::test]
+    async fn test_stage_executor_creation() {
+        let registry = Arc::new(ModuleRegistry::with_defaults().await.unwrap());
         let strategy = ErrorStrategy::Stop;
         let _executor = StageExecutor::new(registry, strategy);
         // Just verify it compiles
     }
 
-    #[test]
-    fn test_stage_validator_creation() {
-        let registry = Arc::new(ModuleRegistry::with_defaults());
+    #[tokio::test]
+    async fn test_stage_validator_creation() {
+        let registry = Arc::new(ModuleRegistry::with_defaults().await.unwrap());
         let _validator = StageValidator::new(registry);
         // Just verify it compiles
     }

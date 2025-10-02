@@ -11,6 +11,7 @@ description = "Extract from MongoDB with cursor pagination and transform data"
 log_level = "info"
 max_parallel_tasks = 2
 timeout_seconds = 600
+plugins = ["mongodb"]  # Load MongoDB plugin dynamically
 
 # MongoDB Source - First Page with Cursor Pagination
 [[sources]]

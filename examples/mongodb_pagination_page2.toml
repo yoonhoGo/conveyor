@@ -10,6 +10,7 @@ description = "Test cursor-based pagination - page 2"
 log_level = "info"
 max_parallel_tasks = 2
 timeout_seconds = 600
+plugins = ["mongodb"]  # Load MongoDB plugin dynamically
 
 # MongoDB Source - Page 2 (starting after first 8 documents)
 [[sources]]

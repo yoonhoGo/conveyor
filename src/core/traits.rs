@@ -140,18 +140,43 @@ pub type SinkRef = Arc<dyn Sink>;
 
 #[async_trait]
 pub trait Plugin: Send + Sync {
+    /// Plugin name (unique identifier)
     fn name(&self) -> &str;
 
+    /// Plugin version (semantic versioning recommended)
     fn version(&self) -> &str;
 
+    /// Plugin description
+    fn description(&self) -> &str {
+        ""
+    }
+
+    /// Plugin author
+    fn author(&self) -> &str {
+        ""
+    }
+
+    /// Lifecycle hook: called when plugin is loaded
+    async fn on_load(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Lifecycle hook: called when plugin is unloaded
+    async fn on_unload(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Register data sources provided by this plugin
     async fn register_sources(&self) -> Vec<(&str, DataSourceRef)> {
         vec![]
     }
 
+    /// Register transforms provided by this plugin
     async fn register_transforms(&self) -> Vec<(&str, TransformRef)> {
         vec![]
     }
 
+    /// Register sinks provided by this plugin
     async fn register_sinks(&self) -> Vec<(&str, SinkRef)> {
         vec![]
     }

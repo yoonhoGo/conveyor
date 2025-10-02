@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::collections::HashMap;
 
 use crate::core::traits::{DataSourceRef, TransformRef, SinkRef};
@@ -18,13 +19,13 @@ impl ModuleRegistry {
         }
     }
 
-    pub fn with_defaults() -> Self {
+    pub async fn with_defaults() -> Result<Self> {
         let mut registry = Self::new();
-        registry.register_default_modules();
-        registry
+        registry.register_default_modules().await?;
+        Ok(registry)
     }
 
-    pub fn register_default_modules(&mut self) {
+    pub async fn register_default_modules(&mut self) -> Result<()> {
         // Register built-in sources
         self.sources.extend(sources::register_sources());
 
@@ -40,6 +41,8 @@ impl ModuleRegistry {
             self.transforms.len(),
             self.sinks.len()
         );
+
+        Ok(())
     }
 
     pub fn register_source(&mut self, name: String, source: DataSourceRef) {
@@ -99,9 +102,9 @@ mod tests {
         assert_eq!(registry.list_sinks().len(), 0);
     }
 
-    #[test]
-    fn test_registry_with_defaults() {
-        let registry = ModuleRegistry::with_defaults();
+    #[tokio::test]
+    async fn test_registry_with_defaults() {
+        let registry = ModuleRegistry::with_defaults().await.unwrap();
 
         // Check that built-in modules are registered
         assert!(registry.list_sources().len() > 0);
@@ -117,9 +120,9 @@ mod tests {
         assert!(registry.get_sink("json").is_some());
     }
 
-    #[test]
-    fn test_registry_list_all_modules() {
-        let registry = ModuleRegistry::with_defaults();
+    #[tokio::test]
+    async fn test_registry_list_all_modules() {
+        let registry = ModuleRegistry::with_defaults().await.unwrap();
         let modules = registry.list_all_modules();
 
         assert!(modules.contains_key("sources"));

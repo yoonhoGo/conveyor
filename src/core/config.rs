@@ -47,6 +47,10 @@ pub struct GlobalConfig {
 
     #[serde(default = "default_timeout_seconds")]
     pub timeout_seconds: u64,
+
+    /// List of plugins to load (e.g., ["http", "mongodb"])
+    #[serde(default)]
+    pub plugins: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +131,7 @@ impl Default for GlobalConfig {
             log_level: default_log_level(),
             max_parallel_tasks: default_max_parallel_tasks(),
             timeout_seconds: default_timeout_seconds(),
+            plugins: Vec::new(),
         }
     }
 }

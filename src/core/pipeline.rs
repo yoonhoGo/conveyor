@@ -11,21 +11,32 @@ use crate::core::error::ConveyorError;
 use crate::core::executor::{StageExecutor, StageValidator};
 use crate::core::registry::ModuleRegistry;
 use crate::core::traits::DataFormat;
+use crate::plugin_loader::PluginLoader;
 
 pub struct Pipeline {
     config: PipelineConfig,
     registry: Arc<ModuleRegistry>,
+    #[allow(dead_code)]
+    plugin_loader: PluginLoader,
 }
 
 impl Pipeline {
     pub async fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let config = PipelineConfig::from_file(path).await?;
-        Ok(Self::new(config))
+        Self::new(config).await
     }
 
-    pub fn new(config: PipelineConfig) -> Self {
-        let registry = Arc::new(ModuleRegistry::with_defaults());
-        Self { config, registry }
+    pub async fn new(config: PipelineConfig) -> Result<Self> {
+        let registry = Arc::new(ModuleRegistry::with_defaults().await?);
+
+        // Load plugins specified in config
+        let mut plugin_loader = PluginLoader::new();
+        if !config.global.plugins.is_empty() {
+            info!("Loading {} plugin(s): {:?}", config.global.plugins.len(), config.global.plugins);
+            plugin_loader.load_plugins(&config.global.plugins)?;
+        }
+
+        Ok(Self { config, registry, plugin_loader })
     }
 
     pub async fn validate(&self) -> Result<()> {
