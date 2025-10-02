@@ -22,7 +22,40 @@ A high-performance, TOML-based ETL (Extract, Transform, Load) CLI tool built in 
 
 ## Installation
 
-### Option 1: npm (Recommended for End Users)
+### Option 1: Install Binary (Recommended)
+
+**One-line installation script:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yoonhoGo/conveyor/main/install.sh | bash
+```
+
+This script:
+- Detects your platform (macOS, Linux, Windows)
+- Downloads the appropriate binary from the latest GitHub Release
+- Installs to `/usr/local/bin` or `~/.local/bin`
+- Verifies installation
+
+**Manual installation:**
+
+1. Download the latest release for your platform from [Releases](https://github.com/yoonhoGo/conveyor/releases)
+   - macOS (Intel): `conveyor-darwin-x64`
+   - macOS (Apple Silicon): `conveyor-darwin-arm64`
+   - Linux (x64): `conveyor-linux-x64`
+   - Linux (ARM64): `conveyor-linux-arm64`
+   - Windows (x64): `conveyor-win32-x64.exe`
+
+2. Make it executable (macOS/Linux):
+   ```bash
+   chmod +x conveyor-*
+   ```
+
+3. Move to a directory in your PATH:
+   ```bash
+   sudo mv conveyor-* /usr/local/bin/conveyor
+   ```
+
+### Option 2: npm
 
 ```bash
 # Install globally
@@ -34,7 +67,7 @@ npx @conveyor/cli --help
 
 The npm package automatically downloads the appropriate binary for your platform (macOS, Linux, Windows).
 
-### Option 2: Build from Source
+### Option 3: Build from Source
 
 **Prerequisites:**
 - Rust 1.70 or higher
