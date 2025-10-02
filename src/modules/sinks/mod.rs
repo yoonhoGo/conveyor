@@ -1,4 +1,5 @@
 pub mod csv;
+pub mod http;
 pub mod json;
 pub mod stdout;
 
@@ -10,6 +11,7 @@ pub fn register_sinks() -> HashMap<String, SinkRef> {
     let mut sinks = HashMap::new();
 
     sinks.insert("csv".to_string(), Arc::new(csv::CsvSink) as SinkRef);
+    sinks.insert("http".to_string(), Arc::new(http::HttpSink) as SinkRef);
     sinks.insert("json".to_string(), Arc::new(json::JsonSink) as SinkRef);
     sinks.insert("stdout".to_string(), Arc::new(stdout::StdoutSink) as SinkRef);
 

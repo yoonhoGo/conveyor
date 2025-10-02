@@ -1,0 +1,61 @@
+# HTTP ETL Pipeline Example
+# This pipeline fetches data from a public API, transforms it, and outputs to JSON
+
+[pipeline]
+name = "http_data_processing"
+version = "1.0.0"
+description = "Fetch JSON data from HTTP API and process it"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 2
+timeout_seconds = 300
+
+# HTTP Source - Fetch data from JSONPlaceholder API
+[[sources]]
+name = "users_api"
+type = "http"
+
+[sources.config]
+url = "https://jsonplaceholder.typicode.com/users"
+method = "GET"
+format = "json"
+timeout = 30
+
+# Transformations
+[[transforms]]
+name = "validate_data"
+function = "validate_schema"
+
+[transforms.config]
+required_fields = ["id", "name", "email"]
+non_nullable = ["id", "name"]
+
+# Output to JSON file
+[[sinks]]
+name = "output_json"
+type = "json"
+
+[sinks.config]
+path = "output/http_users.json"
+format = "records"
+pretty = true
+
+# Also output to stdout for preview
+[[sinks]]
+name = "preview"
+type = "stdout"
+
+[sinks.config]
+format = "table"
+limit = 5
+
+# Error Handling
+[error_handling]
+strategy = "continue"
+max_retries = 3
+retry_delay_seconds = 5
+
+[error_handling.dead_letter_queue]
+enabled = true
+path = "errors/http_errors/"
