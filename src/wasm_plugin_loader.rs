@@ -109,14 +109,12 @@ impl WasmPluginLoader {
     /// Load a WASM plugin by name
     pub async fn load_plugin(&mut self, name: &str) -> Result<()> {
         // Construct plugin path
-        let plugin_path = self.plugin_dir.join(format!("conveyor_plugin_{}.wasm", name));
+        let plugin_path = self
+            .plugin_dir
+            .join(format!("conveyor_plugin_{}.wasm", name));
 
         if !plugin_path.exists() {
-            anyhow::bail!(
-                "WASM plugin '{}' not found at {:?}",
-                name,
-                plugin_path
-            );
+            anyhow::bail!("WASM plugin '{}' not found at {:?}", name, plugin_path);
         }
 
         tracing::info!("Loading WASM plugin '{}' from {:?}", name, plugin_path);
@@ -251,7 +249,14 @@ impl WasmPluginLoader {
         plugin
             .call_execute(&mut store, stage_name, &context)
             .await?
-            .map_err(|e| anyhow::anyhow!("WASM plugin '{}' stage '{}' error: {:?}", plugin_name, stage_name, e))
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "WASM plugin '{}' stage '{}' error: {:?}",
+                    plugin_name,
+                    stage_name,
+                    e
+                )
+            })
     }
 
     /// Validate plugin configuration for a stage
@@ -292,7 +297,14 @@ impl WasmPluginLoader {
         plugin
             .call_validate_config(&mut store, stage_name, &config)
             .await?
-            .map_err(|e| anyhow::anyhow!("WASM plugin '{}' stage '{}' config validation error: {:?}", plugin_name, stage_name, e))
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "WASM plugin '{}' stage '{}' config validation error: {:?}",
+                    plugin_name,
+                    stage_name,
+                    e
+                )
+            })
     }
 }
 

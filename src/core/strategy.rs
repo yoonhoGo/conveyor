@@ -100,11 +100,7 @@ impl ErrorStrategy {
 
 // Legacy support: convert from old string-based config
 impl ErrorStrategy {
-    pub fn from_legacy(
-        strategy: &str,
-        max_retries: u32,
-        retry_delay_seconds: u64,
-    ) -> Result<Self> {
+    pub fn from_legacy(strategy: &str, max_retries: u32, retry_delay_seconds: u64) -> Result<Self> {
         match strategy {
             "stop" => Ok(ErrorStrategy::Stop),
             "continue" => Ok(ErrorStrategy::Continue),

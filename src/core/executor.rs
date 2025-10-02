@@ -71,18 +71,19 @@ impl StageExecutor {
         config: &TransformConfig,
         data: DataFormat,
     ) -> Result<DataFormat> {
-        let function_name = config.function.split('.').next().unwrap_or(&config.function);
+        let function_name = config
+            .function
+            .split('.')
+            .next()
+            .unwrap_or(&config.function);
 
         let operation = || async {
-            let transform = self
-                .registry
-                .get_transform(function_name)
-                .ok_or_else(|| {
-                    ConveyorError::ModuleNotFound(format!(
-                        "Transform function '{}' not found",
-                        function_name
-                    ))
-                })?;
+            let transform = self.registry.get_transform(function_name).ok_or_else(|| {
+                ConveyorError::ModuleNotFound(format!(
+                    "Transform function '{}' not found",
+                    function_name
+                ))
+            })?;
 
             // Validate configuration
             transform.validate_config(&config.config).await?;
@@ -179,28 +180,26 @@ impl StageValidator {
     }
 
     pub async fn validate_transform(&self, config: &TransformConfig) -> Result<()> {
-        let function_name = config.function.split('.').next().unwrap_or(&config.function);
+        let function_name = config
+            .function
+            .split('.')
+            .next()
+            .unwrap_or(&config.function);
 
-        let transform = self
-            .registry
-            .get_transform(function_name)
-            .ok_or_else(|| {
-                ConveyorError::ModuleNotFound(format!(
-                    "Transform function '{}' not found",
-                    function_name
-                ))
-            })?;
+        let transform = self.registry.get_transform(function_name).ok_or_else(|| {
+            ConveyorError::ModuleNotFound(format!(
+                "Transform function '{}' not found",
+                function_name
+            ))
+        })?;
 
         transform.validate_config(&config.config).await
     }
 
     pub async fn validate_sink(&self, config: &SinkConfig) -> Result<()> {
-        let sink = self
-            .registry
-            .get_sink(&config.sink_type)
-            .ok_or_else(|| {
-                ConveyorError::ModuleNotFound(format!("Sink type '{}' not found", config.sink_type))
-            })?;
+        let sink = self.registry.get_sink(&config.sink_type).ok_or_else(|| {
+            ConveyorError::ModuleNotFound(format!("Sink type '{}' not found", config.sink_type))
+        })?;
 
         sink.validate_config(&config.config).await
     }

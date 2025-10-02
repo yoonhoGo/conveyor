@@ -5,10 +5,8 @@
 //! Version 2 supports unified FfiStage interface with input-aware execution.
 
 use anyhow::{anyhow, Context, Result};
-use conveyor_plugin_api::{
-    PluginCapability, PluginDeclaration, PLUGIN_API_VERSION, RBox,
-};
 use conveyor_plugin_api::traits::{FfiStage_TO, StageFactory};
+use conveyor_plugin_api::{PluginCapability, PluginDeclaration, RBox, PLUGIN_API_VERSION};
 use libloading::{Library, Symbol};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -61,10 +59,8 @@ impl LoadedPlugin {
             let mut symbol_name = capability.factory_symbol.as_str().to_string();
             symbol_name.push('\0');
 
-            let factory: Symbol<StageFactory> = self
-                .library
-                .get(symbol_name.as_bytes())
-                .with_context(|| {
+            let factory: Symbol<StageFactory> =
+                self.library.get(symbol_name.as_bytes()).with_context(|| {
                     format!(
                         "Failed to load factory symbol '{}' for stage '{}'",
                         capability.factory_symbol, stage_name
@@ -132,10 +128,7 @@ impl PluginLoader {
 
         // Check if plugin file exists
         if !library_path.exists() {
-            return Err(anyhow!(
-                "Plugin library not found at {:?}",
-                library_path
-            ));
+            return Err(anyhow!("Plugin library not found at {:?}", library_path));
         }
 
         // Load the library with panic isolation
@@ -163,10 +156,7 @@ impl PluginLoader {
         let capabilities: Vec<PluginCapability> = capabilities.into();
 
         if capabilities.is_empty() {
-            return Err(anyhow!(
-                "Plugin '{}' provides no stages",
-                name
-            ));
+            return Err(anyhow!("Plugin '{}' provides no stages", name));
         }
 
         tracing::info!(
@@ -202,9 +192,7 @@ impl PluginLoader {
         name: &str,
     ) -> Result<(Library, &'static PluginDeclaration)> {
         // Catch panics during loading
-        let result = std::panic::catch_unwind(|| {
-            self.load_library_internal(library_path)
-        });
+        let result = std::panic::catch_unwind(|| self.load_library_internal(library_path));
 
         match result {
             Ok(Ok(lib_and_decl)) => Ok(lib_and_decl),
@@ -281,7 +269,11 @@ impl PluginLoader {
     /// Searches all loaded plugins for a stage with the given name.
     pub fn create_stage(&self, stage_name: &str) -> Result<FfiStage_TO<'static, RBox<()>>> {
         for plugin in self.plugins.values() {
-            if plugin.capabilities.iter().any(|c| c.name.as_str() == stage_name) {
+            if plugin
+                .capabilities
+                .iter()
+                .any(|c| c.name.as_str() == stage_name)
+            {
                 return plugin.create_stage(stage_name);
             }
         }
@@ -294,9 +286,12 @@ impl PluginLoader {
 
     /// Find which plugin provides a stage
     pub fn find_plugin_for_stage(&self, stage_name: &str) -> Option<&LoadedPlugin> {
-        self.plugins
-            .values()
-            .find(|plugin| plugin.capabilities.iter().any(|c| c.name.as_str() == stage_name))
+        self.plugins.values().find(|plugin| {
+            plugin
+                .capabilities
+                .iter()
+                .any(|c| c.name.as_str() == stage_name)
+        })
     }
 }
 

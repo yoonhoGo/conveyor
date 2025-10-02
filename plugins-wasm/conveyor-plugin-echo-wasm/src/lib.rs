@@ -22,12 +22,13 @@ fn get_config_value<'a>(config: &'a [(String, String)], key: &str) -> Option<&'a
         .map(|(_, v)| v.as_str())
 }
 
-fn data_format_from_json<T: serde::Serialize>(
-    records: &T,
-) -> Result<DataFormat, PluginError> {
+fn data_format_from_json<T: serde::Serialize>(records: &T) -> Result<DataFormat, PluginError> {
     match serde_json::to_vec(records) {
         Ok(bytes) => Ok(DataFormat::JsonRecords(bytes)),
-        Err(e) => Err(PluginError::SerializationError(format!("Failed to serialize JSON: {}", e))),
+        Err(e) => Err(PluginError::SerializationError(format!(
+            "Failed to serialize JSON: {}",
+            e
+        ))),
     }
 }
 
@@ -100,7 +101,10 @@ impl Guest for EchoPlugin {
     }
 
     /// Validate configuration for a stage
-    fn validate_config(stage_name: String, _config: Vec<(String, String)>) -> Result<(), PluginError> {
+    fn validate_config(
+        stage_name: String,
+        _config: Vec<(String, String)>,
+    ) -> Result<(), PluginError> {
         // Verify stage name
         if stage_name != "echo" {
             return Err(PluginError::ConfigError(format!(
@@ -117,14 +121,22 @@ impl Guest for EchoPlugin {
 /// Execute as source (generate test data)
 fn execute_source(config: &[(String, String)]) -> Result<DataFormat, PluginError> {
     // Get message from config, or use default
-    let message = get_config_value(config, "message")
-        .unwrap_or("Hello from WASM Echo Plugin!");
+    let message = get_config_value(config, "message").unwrap_or("Hello from WASM Echo Plugin!");
 
     // Create a simple JSON record
     let mut record = HashMap::new();
-    record.insert("message".to_string(), serde_json::Value::String(message.to_string()));
-    record.insert("plugin".to_string(), serde_json::Value::String("echo-wasm".to_string()));
-    record.insert("type".to_string(), serde_json::Value::String("source".to_string()));
+    record.insert(
+        "message".to_string(),
+        serde_json::Value::String(message.to_string()),
+    );
+    record.insert(
+        "plugin".to_string(),
+        serde_json::Value::String("echo-wasm".to_string()),
+    );
+    record.insert(
+        "type".to_string(),
+        serde_json::Value::String("source".to_string()),
+    );
 
     let records = vec![record];
     data_format_from_json(&records)
@@ -136,9 +148,9 @@ fn execute_transform(
     config: &[(String, String)],
 ) -> Result<DataFormat, PluginError> {
     // Get the first input (echo transform works on single input)
-    let input_data = inputs
-        .first()
-        .ok_or_else(|| PluginError::RuntimeError("Transform requires at least one input".to_string()))?;
+    let input_data = inputs.first().ok_or_else(|| {
+        PluginError::RuntimeError("Transform requires at least one input".to_string())
+    })?;
 
     // Check if we should add metadata
     let add_metadata = get_config_value(config, "add_metadata")
@@ -153,8 +165,9 @@ fn execute_transform(
             DataFormat::JsonRecords(_) => {
                 // Parse and add metadata
                 let mut records: Vec<HashMap<String, serde_json::Value>> =
-                    serde_json::from_slice(bytes)
-                        .map_err(|e| PluginError::SerializationError(format!("Failed to parse JSON: {}", e)))?;
+                    serde_json::from_slice(bytes).map_err(|e| {
+                        PluginError::SerializationError(format!("Failed to parse JSON: {}", e))
+                    })?;
 
                 // Add echo metadata to each record
                 for record in &mut records {

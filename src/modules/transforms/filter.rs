@@ -67,10 +67,9 @@ impl Transform for FilterTransform {
                 if let Some(pattern) = value.as_str() {
                     // Filter manually by checking if the string contains the pattern
                     let column_data = df.column(column)?.str()?;
-                    let mask: BooleanChunked = column_data.into_iter()
-                        .map(|opt_s| {
-                            opt_s.map(|s| s.contains(pattern)).unwrap_or(false)
-                        })
+                    let mask: BooleanChunked = column_data
+                        .into_iter()
+                        .map(|opt_s| opt_s.map(|s| s.contains(pattern)).unwrap_or(false))
                         .collect();
                     df.filter(&mask)?
                 } else {
@@ -91,7 +90,9 @@ impl Transform for FilterTransform {
                         masks.push(col(column).eq(lit(val.clone())));
                     }
 
-                    let combined = masks.into_iter().reduce(|acc, mask| acc.or(mask))
+                    let combined = masks
+                        .into_iter()
+                        .reduce(|acc, mask| acc.or(mask))
                         .unwrap_or_else(|| lit(false));
 
                     df.lazy().filter(combined).collect()?
@@ -119,7 +120,9 @@ impl Transform for FilterTransform {
         }
 
         if let Some(operator) = config.get("operator").and_then(|v| v.as_str()) {
-            let valid_operators = ["==", "=", "!=", "<>", ">", ">=", "<", "<=", "contains", "in"];
+            let valid_operators = [
+                "==", "=", "!=", "<>", ">", ">=", "<", "<=", "contains", "in",
+            ];
             if !valid_operators.contains(&operator) {
                 anyhow::bail!(
                     "Invalid filter operator: {}. Must be one of: {:?}",

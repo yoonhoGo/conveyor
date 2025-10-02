@@ -17,11 +17,7 @@ impl Sink for JsonSink {
         "json"
     }
 
-    async fn write(
-        &self,
-        data: DataFormat,
-        config: &HashMap<String, toml::Value>,
-    ) -> Result<()> {
+    async fn write(&self, data: DataFormat, config: &HashMap<String, toml::Value>) -> Result<()> {
         let path = config
             .get("path")
             .and_then(|v| v.as_str())
@@ -81,11 +77,7 @@ impl Sink for JsonSink {
                         DataType::Int64 => {
                             let s = column.i64()?;
                             (0..column.len())
-                                .map(|i| {
-                                    s.get(i)
-                                        .map(|v| json!(v))
-                                        .unwrap_or(JsonValue::Null)
-                                })
+                                .map(|i| s.get(i).map(|v| json!(v)).unwrap_or(JsonValue::Null))
                                 .collect()
                         }
                         DataType::Float64 => {
@@ -93,7 +85,9 @@ impl Sink for JsonSink {
                             (0..column.len())
                                 .map(|i| {
                                     s.get(i)
-                                        .and_then(|v| serde_json::Number::from_f64(v).map(JsonValue::Number))
+                                        .and_then(|v| {
+                                            serde_json::Number::from_f64(v).map(JsonValue::Number)
+                                        })
                                         .unwrap_or(JsonValue::Null)
                                 })
                                 .collect()
@@ -101,11 +95,7 @@ impl Sink for JsonSink {
                         DataType::Boolean => {
                             let s = column.bool()?;
                             (0..column.len())
-                                .map(|i| {
-                                    s.get(i)
-                                        .map(JsonValue::Bool)
-                                        .unwrap_or(JsonValue::Null)
-                                })
+                                .map(|i| s.get(i).map(JsonValue::Bool).unwrap_or(JsonValue::Null))
                                 .collect()
                         }
                         _ => vec![JsonValue::Null; column.len()],
@@ -119,7 +109,10 @@ impl Sink for JsonSink {
                     serde_json::to_string(&result)?
                 }
             }
-            _ => anyhow::bail!("Unknown JSON format: {}. Use 'records', 'jsonl', or 'dataframe'", format),
+            _ => anyhow::bail!(
+                "Unknown JSON format: {}. Use 'records', 'jsonl', or 'dataframe'",
+                format
+            ),
         };
 
         let mut file = fs::File::create(&path_buf).await?;

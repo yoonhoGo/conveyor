@@ -3,12 +3,12 @@
 //! Provides MongoDB source and sink functionality as a unified stage.
 //! Supports database reads and writes with query filtering.
 
-use conveyor_plugin_api::{
-    FfiDataFormat, PluginCapability, PluginDeclaration, StageType, PLUGIN_API_VERSION,
-    RBox, RBoxError, RHashMap, RResult, RString, RVec, rstr, ROk, RErr,
-};
-use conveyor_plugin_api::traits::{FfiExecutionContext, FfiStage, FfiStage_TO};
 use conveyor_plugin_api::sabi_trait::prelude::*;
+use conveyor_plugin_api::traits::{FfiExecutionContext, FfiStage, FfiStage_TO};
+use conveyor_plugin_api::{
+    rstr, FfiDataFormat, PluginCapability, PluginDeclaration, RBox, RBoxError, RErr, RHashMap, ROk,
+    RResult, RString, RVec, StageType, PLUGIN_API_VERSION,
+};
 use mongodb::{
     bson::{doc, Document},
     options::{ClientOptions, FindOptions},
@@ -29,39 +29,62 @@ impl MongoDbStage {
     }
 
     /// Execute as MongoDB source (read data from MongoDB)
-    async fn execute_source_async(&self, config: &HashMap<String, String>) -> RResult<FfiDataFormat, RBoxError> {
+    async fn execute_source_async(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
         // Get MongoDB URI
         let uri = match config.get("uri") {
             Some(u) => u,
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'uri' configuration"))),
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing required 'uri' configuration"
+                )))
+            }
         };
 
         // Get database name
         let database = match config.get("database") {
             Some(d) => d,
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'database' configuration"))),
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing required 'database' configuration"
+                )))
+            }
         };
 
         // Get collection name
         let collection_name = match config.get("collection") {
             Some(c) => c,
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'collection' configuration"))),
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing required 'collection' configuration"
+                )))
+            }
         };
 
         // Parse limit (default: no limit)
-        let limit: Option<i64> = config
-            .get("limit")
-            .and_then(|l| l.parse().ok());
+        let limit: Option<i64> = config.get("limit").and_then(|l| l.parse().ok());
 
         // Connect to MongoDB
         let client_options = match ClientOptions::parse(uri).await {
             Ok(opts) => opts,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to parse MongoDB URI: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Failed to parse MongoDB URI: {}",
+                    e
+                )))
+            }
         };
 
         let client = match Client::with_options(client_options) {
             Ok(c) => c,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create MongoDB client: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Failed to create MongoDB client: {}",
+                    e
+                )))
+            }
         };
 
         let db = client.database(database);
@@ -94,7 +117,12 @@ impl MongoDbStage {
         // Execute query
         let mut cursor = match collection.find(filter).with_options(find_options).await {
             Ok(c) => c,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("MongoDB query failed: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "MongoDB query failed: {}",
+                    e
+                )))
+            }
         };
 
         // Collect results
@@ -103,15 +131,18 @@ impl MongoDbStage {
         use futures::stream::TryStreamExt;
         while let Some(doc) = match cursor.try_next().await {
             Ok(d) => d,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to fetch document: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Failed to fetch document: {}",
+                    e
+                )))
+            }
         } {
             if let Ok(json_str) = serde_json::to_string(&doc) {
                 if let Ok(json_val) = serde_json::from_str::<Value>(&json_str) {
                     if let Some(obj) = json_val.as_object() {
-                        let record: HashMap<String, Value> = obj
-                            .iter()
-                            .map(|(k, v)| (k.clone(), v.clone()))
-                            .collect();
+                        let record: HashMap<String, Value> =
+                            obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                         records.push(record);
                     }
                 }
@@ -122,34 +153,60 @@ impl MongoDbStage {
     }
 
     /// Execute as MongoDB sink (write data to MongoDB)
-    async fn execute_sink_async(&self, input_data: &FfiDataFormat, config: &HashMap<String, String>) -> RResult<FfiDataFormat, RBoxError> {
+    async fn execute_sink_async(
+        &self,
+        input_data: &FfiDataFormat,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
         // Get MongoDB URI
         let uri = match config.get("uri") {
             Some(u) => u,
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'uri' configuration"))),
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing required 'uri' configuration"
+                )))
+            }
         };
 
         // Get database name
         let database = match config.get("database") {
             Some(d) => d,
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'database' configuration"))),
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing required 'database' configuration"
+                )))
+            }
         };
 
         // Get collection name
         let collection_name = match config.get("collection") {
             Some(c) => c,
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'collection' configuration"))),
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing required 'collection' configuration"
+                )))
+            }
         };
 
         // Connect to MongoDB
         let client_options = match ClientOptions::parse(uri).await {
             Ok(opts) => opts,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to parse MongoDB URI: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Failed to parse MongoDB URI: {}",
+                    e
+                )))
+            }
         };
 
         let client = match Client::with_options(client_options) {
             Ok(c) => c,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create MongoDB client: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Failed to create MongoDB client: {}",
+                    e
+                )))
+            }
         };
 
         let db = client.database(database);
@@ -186,7 +243,10 @@ impl MongoDbStage {
         // Insert documents
         match collection.insert_many(documents).await {
             Ok(_) => ROk(input_data.clone()),
-            Err(e) => RErr(RBoxError::from_fmt(&format_args!("MongoDB insert failed: {}", e))),
+            Err(e) => RErr(RBoxError::from_fmt(&format_args!(
+                "MongoDB insert failed: {}",
+                e
+            ))),
         }
     }
 }
@@ -202,14 +262,21 @@ impl FfiStage for MongoDbStage {
 
     fn execute(&self, context: FfiExecutionContext) -> RResult<FfiDataFormat, RBoxError> {
         // Convert config to HashMap
-        let config: HashMap<String, String> = context.config.into_iter()
+        let config: HashMap<String, String> = context
+            .config
+            .into_iter()
             .map(|tuple| (tuple.0.to_string(), tuple.1.to_string()))
             .collect();
 
         // Use tokio runtime to execute async code
         let runtime = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create runtime: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Failed to create runtime: {}",
+                    e
+                )))
+            }
         };
 
         runtime.block_on(async {
@@ -223,14 +290,18 @@ impl FfiStage for MongoDbStage {
                     // Get input data (should have exactly one input)
                     let input_data = match context.inputs.into_iter().next() {
                         Some(tuple) => tuple.1,
-                        None => return RErr(RBoxError::from_fmt(&format_args!("MongoDB sink requires input data"))),
+                        None => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "MongoDB sink requires input data"
+                            )))
+                        }
                     };
 
                     self.execute_sink_async(&input_data, &config).await
                 }
-                StageType::Transform => {
-                    RErr(RBoxError::from_fmt(&format_args!("MongoDB transform not supported in this plugin")))
-                }
+                StageType::Transform => RErr(RBoxError::from_fmt(&format_args!(
+                    "MongoDB transform not supported in this plugin"
+                ))),
             }
         })
     }
@@ -238,15 +309,21 @@ impl FfiStage for MongoDbStage {
     fn validate_config(&self, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
         // Check required fields
         if !config.contains_key("uri") {
-            return RErr(RBoxError::from_fmt(&format_args!("Missing required 'uri' configuration")));
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "Missing required 'uri' configuration"
+            )));
         }
 
         if !config.contains_key("database") {
-            return RErr(RBoxError::from_fmt(&format_args!("Missing required 'database' configuration")));
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "Missing required 'database' configuration"
+            )));
         }
 
         if !config.contains_key("collection") {
-            return RErr(RBoxError::from_fmt(&format_args!("Missing required 'collection' configuration")));
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "Missing required 'collection' configuration"
+            )));
         }
 
         ROk(())
@@ -287,12 +364,18 @@ fn json_to_bson(value: &Value) -> Option<mongodb::bson::Bson> {
 // Factory functions
 #[no_mangle]
 pub extern "C" fn create_mongodb_source() -> FfiStage_TO<'static, RBox<()>> {
-    FfiStage_TO::from_value(MongoDbStage::new("mongodb".to_string(), StageType::Source), TD_Opaque)
+    FfiStage_TO::from_value(
+        MongoDbStage::new("mongodb".to_string(), StageType::Source),
+        TD_Opaque,
+    )
 }
 
 #[no_mangle]
 pub extern "C" fn create_mongodb_sink() -> FfiStage_TO<'static, RBox<()>> {
-    FfiStage_TO::from_value(MongoDbStage::new("mongodb".to_string(), StageType::Sink), TD_Opaque)
+    FfiStage_TO::from_value(
+        MongoDbStage::new("mongodb".to_string(), StageType::Sink),
+        TD_Opaque,
+    )
 }
 
 // Plugin capabilities
@@ -310,7 +393,8 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
             description: RString::from("MongoDB sink - write data to MongoDB collections"),
             factory_symbol: RString::from("create_mongodb_sink"),
         },
-    ].into()
+    ]
+    .into()
 }
 
 // Plugin declaration
@@ -361,7 +445,10 @@ mod tests {
         assert!(stage.validate_config(config.clone()).is_err());
 
         // With only URI should still fail
-        config.insert(RString::from("uri"), RString::from("mongodb://localhost:27017"));
+        config.insert(
+            RString::from("uri"),
+            RString::from("mongodb://localhost:27017"),
+        );
         assert!(stage.validate_config(config.clone()).is_err());
 
         // With URI and database should still fail
@@ -382,7 +469,10 @@ mod tests {
         assert!(stage.validate_config(config.clone()).is_err());
 
         // With only URI should still fail
-        config.insert(RString::from("uri"), RString::from("mongodb://localhost:27017"));
+        config.insert(
+            RString::from("uri"),
+            RString::from("mongodb://localhost:27017"),
+        );
         assert!(stage.validate_config(config.clone()).is_err());
 
         // With URI and database should still fail
@@ -400,15 +490,24 @@ mod tests {
 
         // Test null
         let val = json!(null);
-        assert!(matches!(json_to_bson(&val), Some(mongodb::bson::Bson::Null)));
+        assert!(matches!(
+            json_to_bson(&val),
+            Some(mongodb::bson::Bson::Null)
+        ));
 
         // Test boolean
         let val = json!(true);
-        assert!(matches!(json_to_bson(&val), Some(mongodb::bson::Bson::Boolean(true))));
+        assert!(matches!(
+            json_to_bson(&val),
+            Some(mongodb::bson::Bson::Boolean(true))
+        ));
 
         // Test number
         let val = json!(42);
-        assert!(matches!(json_to_bson(&val), Some(mongodb::bson::Bson::Int64(42))));
+        assert!(matches!(
+            json_to_bson(&val),
+            Some(mongodb::bson::Bson::Int64(42))
+        ));
 
         // Test string
         let val = json!("hello");

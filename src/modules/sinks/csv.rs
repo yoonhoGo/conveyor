@@ -14,11 +14,7 @@ impl Sink for CsvSink {
         "csv"
     }
 
-    async fn write(
-        &self,
-        data: DataFormat,
-        config: &HashMap<String, toml::Value>,
-    ) -> Result<()> {
+    async fn write(&self, data: DataFormat, config: &HashMap<String, toml::Value>) -> Result<()> {
         let path = config
             .get("path")
             .and_then(|v| v.as_str())

@@ -43,12 +43,9 @@ impl DataSource for CsvSource {
         }
 
         let file = std::fs::File::open(&path_buf)?;
-        let reader_builder = CsvReadOptions::default()
-            .with_has_header(has_headers);
+        let reader_builder = CsvReadOptions::default().with_has_header(has_headers);
 
-        let df = reader_builder
-            .into_reader_with_file_handle(file)
-            .finish()?;
+        let df = reader_builder.into_reader_with_file_handle(file).finish()?;
 
         Ok(DataFormat::DataFrame(df))
     }
@@ -86,7 +83,10 @@ mod tests {
         writeln!(temp_file, "2,Bob,200").unwrap();
 
         let mut config = HashMap::new();
-        config.insert("path".to_string(), toml::Value::String(temp_file.path().to_string_lossy().to_string()));
+        config.insert(
+            "path".to_string(),
+            toml::Value::String(temp_file.path().to_string_lossy().to_string()),
+        );
         config.insert("headers".to_string(), toml::Value::Boolean(true));
 
         let source = CsvSource;
@@ -109,7 +109,10 @@ mod tests {
 
         // Valid config
         let mut valid_config = HashMap::new();
-        valid_config.insert("path".to_string(), toml::Value::String("test.csv".to_string()));
+        valid_config.insert(
+            "path".to_string(),
+            toml::Value::String("test.csv".to_string()),
+        );
         assert!(source.validate_config(&valid_config).await.is_ok());
 
         // Invalid config - missing path

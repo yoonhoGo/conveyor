@@ -35,11 +35,19 @@ impl Pipeline {
         // Load plugins specified in config
         let mut plugin_loader = PluginLoader::new();
         if !config.global.plugins.is_empty() {
-            info!("Loading {} plugin(s): {:?}", config.global.plugins.len(), config.global.plugins);
+            info!(
+                "Loading {} plugin(s): {:?}",
+                config.global.plugins.len(),
+                config.global.plugins
+            );
             plugin_loader.load_plugins(&config.global.plugins)?;
         }
 
-        Ok(Self { config, registry, plugin_loader })
+        Ok(Self {
+            config,
+            registry,
+            plugin_loader,
+        })
     }
 
     pub async fn validate(&self) -> Result<()> {
@@ -76,7 +84,10 @@ impl Pipeline {
 
         match result {
             Ok(Ok(())) => {
-                info!("Pipeline '{}' completed successfully", self.config.pipeline.name);
+                info!(
+                    "Pipeline '{}' completed successfully",
+                    self.config.pipeline.name
+                );
                 Ok(())
             }
             Ok(Err(e)) => {
@@ -84,13 +95,15 @@ impl Pipeline {
                 Err(e)
             }
             Err(_) => {
-                error!("Pipeline '{}' timed out after {} seconds",
-                    self.config.pipeline.name,
-                    self.config.global.timeout_seconds
+                error!(
+                    "Pipeline '{}' timed out after {} seconds",
+                    self.config.pipeline.name, self.config.global.timeout_seconds
                 );
-                Err(ConveyorError::PipelineError(
-                    format!("Pipeline timed out after {} seconds", self.config.global.timeout_seconds)
-                ).into())
+                Err(ConveyorError::PipelineError(format!(
+                    "Pipeline timed out after {} seconds",
+                    self.config.global.timeout_seconds
+                ))
+                .into())
             }
         }
     }
@@ -161,7 +174,6 @@ impl Pipeline {
 
         Ok(())
     }
-
 }
 
 // ============================================================================
@@ -265,7 +277,9 @@ impl DagPipeline {
 }
 
 /// Factory function to create the appropriate pipeline type
-pub async fn create_pipeline_from_file<P: AsRef<Path>>(path: P) -> Result<Box<dyn PipelineExecutor>> {
+pub async fn create_pipeline_from_file<P: AsRef<Path>>(
+    path: P,
+) -> Result<Box<dyn PipelineExecutor>> {
     let content = tokio::fs::read_to_string(path.as_ref()).await?;
 
     // Try DAG format first

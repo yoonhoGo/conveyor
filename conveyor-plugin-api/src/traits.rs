@@ -3,11 +3,7 @@
 //! This module defines the core FfiStage trait that plugins must implement.
 //! All traits are FFI-safe using the #[sabi_trait] attribute.
 
-use crate::{
-    data::FfiDataFormat,
-    sabi_trait,
-    RBoxError, RHashMap, RResult, RStr, RString,
-};
+use crate::{data::FfiDataFormat, sabi_trait, RBoxError, RHashMap, RResult, RStr, RString};
 
 /// FFI-safe execution context
 ///

@@ -50,8 +50,7 @@ impl DataSource for StdinSource {
                     .and_then(|s| s.chars().next())
                     .unwrap_or(',') as u8;
 
-                let reader_builder = CsvReadOptions::default()
-                    .with_has_header(has_headers);
+                let reader_builder = CsvReadOptions::default().with_has_header(has_headers);
 
                 let df = reader_builder
                     .into_reader_with_file_handle(cursor)
@@ -59,10 +58,11 @@ impl DataSource for StdinSource {
 
                 Ok(DataFormat::DataFrame(df))
             }
-            "raw" => {
-                Ok(DataFormat::Raw(buffer.into_bytes()))
-            }
-            _ => anyhow::bail!("Unknown stdin format: {}. Use 'json', 'jsonl', 'csv', or 'raw'", format),
+            "raw" => Ok(DataFormat::Raw(buffer.into_bytes())),
+            _ => anyhow::bail!(
+                "Unknown stdin format: {}. Use 'json', 'jsonl', 'csv', or 'raw'",
+                format
+            ),
         }
     }
 

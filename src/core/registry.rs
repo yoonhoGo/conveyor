@@ -1,9 +1,9 @@
 use anyhow::Result;
 use std::collections::HashMap;
 
-use crate::core::traits::{DataSourceRef, TransformRef, SinkRef};
 use crate::core::stage::StageRef;
-use crate::modules::{sources, transforms, sinks};
+use crate::core::traits::{DataSourceRef, SinkRef, TransformRef};
+use crate::modules::{sinks, sources, transforms};
 
 pub struct ModuleRegistry {
     sources: HashMap<String, DataSourceRef>,

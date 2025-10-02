@@ -53,11 +53,7 @@ impl DataFormat {
                         let value = match col.dtype() {
                             DataType::String => {
                                 let s = col.str()?;
-                                JsonValue::String(
-                                    s.get(i)
-                                        .unwrap_or("")
-                                        .to_string(),
-                                )
+                                JsonValue::String(s.get(i).unwrap_or("").to_string())
                             }
                             DataType::Int64 => {
                                 let s = col.i64()?;
@@ -69,16 +65,13 @@ impl DataFormat {
                                 let s = col.f64()?;
                                 s.get(i)
                                     .and_then(|v| {
-                                        serde_json::Number::from_f64(v)
-                                            .map(JsonValue::Number)
+                                        serde_json::Number::from_f64(v).map(JsonValue::Number)
                                     })
                                     .unwrap_or(JsonValue::Null)
                             }
                             DataType::Boolean => {
                                 let s = col.bool()?;
-                                s.get(i)
-                                    .map(JsonValue::Bool)
-                                    .unwrap_or(JsonValue::Null)
+                                s.get(i).map(JsonValue::Bool).unwrap_or(JsonValue::Null)
                             }
                             _ => JsonValue::Null,
                         };
@@ -125,11 +118,7 @@ pub trait Transform: Send + Sync {
 pub trait Sink: Send + Sync {
     async fn name(&self) -> &str;
 
-    async fn write(
-        &self,
-        data: DataFormat,
-        config: &HashMap<String, toml::Value>,
-    ) -> Result<()>;
+    async fn write(&self, data: DataFormat, config: &HashMap<String, toml::Value>) -> Result<()>;
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()>;
 }

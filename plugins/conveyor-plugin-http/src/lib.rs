@@ -3,12 +3,12 @@
 //! Provides HTTP source and sink functionality as a unified stage.
 //! Supports multiple HTTP methods and data formats.
 
-use conveyor_plugin_api::{
-    FfiDataFormat, PluginCapability, PluginDeclaration, StageType, PLUGIN_API_VERSION,
-    RBox, RBoxError, RHashMap, RResult, RString, RVec, rstr, ROk, RErr,
-};
-use conveyor_plugin_api::traits::{FfiExecutionContext, FfiStage, FfiStage_TO};
 use conveyor_plugin_api::sabi_trait::prelude::*;
+use conveyor_plugin_api::traits::{FfiExecutionContext, FfiStage, FfiStage_TO};
+use conveyor_plugin_api::{
+    rstr, FfiDataFormat, PluginCapability, PluginDeclaration, RBox, RBoxError, RErr, RHashMap, ROk,
+    RResult, RString, RVec, StageType, PLUGIN_API_VERSION,
+};
 use reqwest::{Client, Method};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -26,16 +26,24 @@ impl HttpStage {
     }
 
     /// Execute as HTTP source (fetch data from URL)
-    async fn execute_source_async(&self, config: &HashMap<String, String>) -> RResult<FfiDataFormat, RBoxError> {
+    async fn execute_source_async(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
         // Get configuration
         let url = match config.get("url") {
             Some(u) => u,
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'url' configuration"))),
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing required 'url' configuration"
+                )))
+            }
         };
 
         let method = config.get("method").map(|s| s.as_str()).unwrap_or("GET");
         let format = config.get("format").map(|s| s.as_str()).unwrap_or("json");
-        let timeout_secs: u64 = config.get("timeout_seconds")
+        let timeout_secs: u64 = config
+            .get("timeout_seconds")
             .and_then(|s| s.parse().ok())
             .unwrap_or(30);
 
@@ -45,13 +53,23 @@ impl HttpStage {
             .build()
         {
             Ok(c) => c,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create HTTP client: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Failed to create HTTP client: {}",
+                    e
+                )))
+            }
         };
 
         // Parse method
         let method_enum = match method.parse::<Method>() {
             Ok(m) => m,
-            Err(_) => return RErr(RBoxError::from_fmt(&format_args!("Invalid HTTP method: {}", method))),
+            Err(_) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Invalid HTTP method: {}",
+                    method
+                )))
+            }
         };
 
         // Build request
@@ -73,7 +91,12 @@ impl HttpStage {
         // Execute request
         let response = match request.send().await {
             Ok(r) => r,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("HTTP request failed: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "HTTP request failed: {}",
+                    e
+                )))
+            }
         };
 
         if !response.status().is_success() {
@@ -88,17 +111,28 @@ impl HttpStage {
             "json" => {
                 let response_text = match response.text().await {
                     Ok(t) => t,
-                    Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to read response: {}", e))),
+                    Err(e) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "Failed to read response: {}",
+                            e
+                        )))
+                    }
                 };
 
                 let json: Value = match serde_json::from_str(&response_text) {
                     Ok(v) => v,
-                    Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to parse JSON response: {}", e))),
+                    Err(e) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "Failed to parse JSON response: {}",
+                            e
+                        )))
+                    }
                 };
 
                 // Convert to records
                 let records = if let Some(array) = json.as_array() {
-                    array.iter()
+                    array
+                        .iter()
                         .filter_map(|v| {
                             if let Some(obj) = v.as_object() {
                                 let mut map = HashMap::new();
@@ -126,7 +160,12 @@ impl HttpStage {
             "jsonl" => {
                 let text = match response.text().await {
                     Ok(t) => t,
-                    Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to read response text: {}", e))),
+                    Err(e) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "Failed to read response text: {}",
+                            e
+                        )))
+                    }
                 };
 
                 let records: Result<Vec<HashMap<String, Value>>, _> = text
@@ -137,31 +176,51 @@ impl HttpStage {
 
                 match records {
                     Ok(r) => FfiDataFormat::from_json_records(&r),
-                    Err(e) => RErr(RBoxError::from_fmt(&format_args!("Failed to parse JSONL: {}", e))),
+                    Err(e) => RErr(RBoxError::from_fmt(&format_args!(
+                        "Failed to parse JSONL: {}",
+                        e
+                    ))),
                 }
             }
             "raw" => {
                 let bytes = match response.bytes().await {
                     Ok(b) => b.to_vec(),
-                    Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to read response bytes: {}", e))),
+                    Err(e) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "Failed to read response bytes: {}",
+                            e
+                        )))
+                    }
                 };
 
                 ROk(FfiDataFormat::from_raw(bytes))
             }
-            _ => RErr(RBoxError::from_fmt(&format_args!("Unsupported format: {}", format))),
+            _ => RErr(RBoxError::from_fmt(&format_args!(
+                "Unsupported format: {}",
+                format
+            ))),
         }
     }
 
     /// Execute as HTTP sink (send data to URL)
-    async fn execute_sink_async(&self, input_data: &FfiDataFormat, config: &HashMap<String, String>) -> RResult<FfiDataFormat, RBoxError> {
+    async fn execute_sink_async(
+        &self,
+        input_data: &FfiDataFormat,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
         // Get configuration
         let url = match config.get("url") {
             Some(u) => u,
-            None => return RErr(RBoxError::from_fmt(&format_args!("Missing required 'url' configuration"))),
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing required 'url' configuration"
+                )))
+            }
         };
 
         let method = config.get("method").map(|s| s.as_str()).unwrap_or("POST");
-        let timeout_secs: u64 = config.get("timeout_seconds")
+        let timeout_secs: u64 = config
+            .get("timeout_seconds")
             .and_then(|s| s.parse().ok())
             .unwrap_or(30);
 
@@ -171,7 +230,12 @@ impl HttpStage {
             .build()
         {
             Ok(c) => c,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create HTTP client: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Failed to create HTTP client: {}",
+                    e
+                )))
+            }
         };
 
         // Convert data to JSON records
@@ -187,17 +251,25 @@ impl HttpStage {
         let body = match format {
             "json" => match serde_json::to_string(&records) {
                 Ok(s) => s,
-                Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to serialize JSON: {}", e))),
+                Err(e) => {
+                    return RErr(RBoxError::from_fmt(&format_args!(
+                        "Failed to serialize JSON: {}",
+                        e
+                    )))
+                }
             },
             "jsonl" => {
-                let lines: Result<Vec<String>, _> = records
-                    .iter()
-                    .map(|r| serde_json::to_string(r))
-                    .collect();
+                let lines: Result<Vec<String>, _> =
+                    records.iter().map(|r| serde_json::to_string(r)).collect();
 
                 match lines {
                     Ok(l) => l.join("\n"),
-                    Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to serialize JSONL: {}", e))),
+                    Err(e) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "Failed to serialize JSONL: {}",
+                            e
+                        )))
+                    }
                 }
             }
             _ => {
@@ -211,11 +283,17 @@ impl HttpStage {
         // Parse method
         let method_enum = match method.parse::<Method>() {
             Ok(m) => m,
-            Err(_) => return RErr(RBoxError::from_fmt(&format_args!("Invalid HTTP method: {}", method))),
+            Err(_) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Invalid HTTP method: {}",
+                    method
+                )))
+            }
         };
 
         // Build request
-        let mut request = client.request(method_enum, url)
+        let mut request = client
+            .request(method_enum, url)
             .header("Content-Type", "application/json")
             .body(body);
 
@@ -230,7 +308,12 @@ impl HttpStage {
         // Send request
         let response = match request.send().await {
             Ok(r) => r,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("HTTP request failed: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "HTTP request failed: {}",
+                    e
+                )))
+            }
         };
 
         if !response.status().is_success() {
@@ -256,14 +339,21 @@ impl FfiStage for HttpStage {
 
     fn execute(&self, context: FfiExecutionContext) -> RResult<FfiDataFormat, RBoxError> {
         // Convert config to HashMap
-        let config: HashMap<String, String> = context.config.into_iter()
+        let config: HashMap<String, String> = context
+            .config
+            .into_iter()
             .map(|tuple| (tuple.0.to_string(), tuple.1.to_string()))
             .collect();
 
         // Use tokio runtime to execute async code
         let runtime = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
-            Err(e) => return RErr(RBoxError::from_fmt(&format_args!("Failed to create runtime: {}", e))),
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Failed to create runtime: {}",
+                    e
+                )))
+            }
         };
 
         runtime.block_on(async {
@@ -277,14 +367,18 @@ impl FfiStage for HttpStage {
                     // Get input data (should have exactly one input)
                     let input_data = match context.inputs.into_iter().next() {
                         Some(tuple) => tuple.1,
-                        None => return RErr(RBoxError::from_fmt(&format_args!("HTTP sink requires input data"))),
+                        None => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "HTTP sink requires input data"
+                            )))
+                        }
                     };
 
                     self.execute_sink_async(&input_data, &config).await
                 }
-                StageType::Transform => {
-                    RErr(RBoxError::from_fmt(&format_args!("HTTP transform not supported in this plugin")))
-                }
+                StageType::Transform => RErr(RBoxError::from_fmt(&format_args!(
+                    "HTTP transform not supported in this plugin"
+                ))),
             }
         })
     }
@@ -292,7 +386,9 @@ impl FfiStage for HttpStage {
     fn validate_config(&self, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
         // Check required fields
         if !config.contains_key("url") {
-            return RErr(RBoxError::from_fmt(&format_args!("Missing required 'url' configuration")));
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "Missing required 'url' configuration"
+            )));
         }
 
         // Validate method if provided
@@ -300,13 +396,21 @@ impl FfiStage for HttpStage {
             let method_str = method.as_str().to_uppercase();
             match self.stage_type {
                 StageType::Source => {
-                    if !["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"].contains(&method_str.as_str()) {
-                        return RErr(RBoxError::from_fmt(&format_args!("Invalid HTTP method: {}", method_str)));
+                    if !["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"]
+                        .contains(&method_str.as_str())
+                    {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "Invalid HTTP method: {}",
+                            method_str
+                        )));
                     }
                 }
                 StageType::Sink => {
                     if !["POST", "PUT", "PATCH"].contains(&method_str.as_str()) {
-                        return RErr(RBoxError::from_fmt(&format_args!("Invalid HTTP method for sink: {}", method_str)));
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "Invalid HTTP method for sink: {}",
+                            method_str
+                        )));
                     }
                 }
                 _ => {}
@@ -317,7 +421,10 @@ impl FfiStage for HttpStage {
         if let Some(format) = config.get("format") {
             let format_str = format.as_str();
             if !["json", "jsonl", "raw"].contains(&format_str) {
-                return RErr(RBoxError::from_fmt(&format_args!("Invalid format: {}", format_str)));
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Invalid format: {}",
+                    format_str
+                )));
             }
         }
 
@@ -328,12 +435,18 @@ impl FfiStage for HttpStage {
 // Factory functions
 #[no_mangle]
 pub extern "C" fn create_http_source() -> FfiStage_TO<'static, RBox<()>> {
-    FfiStage_TO::from_value(HttpStage::new("http".to_string(), StageType::Source), TD_Opaque)
+    FfiStage_TO::from_value(
+        HttpStage::new("http".to_string(), StageType::Source),
+        TD_Opaque,
+    )
 }
 
 #[no_mangle]
 pub extern "C" fn create_http_sink() -> FfiStage_TO<'static, RBox<()>> {
-    FfiStage_TO::from_value(HttpStage::new("http".to_string(), StageType::Sink), TD_Opaque)
+    FfiStage_TO::from_value(
+        HttpStage::new("http".to_string(), StageType::Sink),
+        TD_Opaque,
+    )
 }
 
 // Plugin capabilities
@@ -351,7 +464,8 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
             description: RString::from("HTTP sink - send data to REST APIs"),
             factory_symbol: RString::from("create_http_sink"),
         },
-    ].into()
+    ]
+    .into()
 }
 
 // Plugin declaration
@@ -402,7 +516,10 @@ mod tests {
         assert!(stage.validate_config(config.clone()).is_err());
 
         // With URL should succeed
-        config.insert(RString::from("url"), RString::from("https://api.example.com"));
+        config.insert(
+            RString::from("url"),
+            RString::from("https://api.example.com"),
+        );
         assert!(stage.validate_config(config.clone()).is_ok());
 
         // Invalid method should fail
@@ -419,7 +536,10 @@ mod tests {
         assert!(stage.validate_config(config.clone()).is_err());
 
         // With URL should succeed
-        config.insert(RString::from("url"), RString::from("https://api.example.com"));
+        config.insert(
+            RString::from("url"),
+            RString::from("https://api.example.com"),
+        );
         assert!(stage.validate_config(config.clone()).is_ok());
 
         // GET method should fail for sink

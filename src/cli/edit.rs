@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dialoguer::{Select, Confirm};
+use dialoguer::{Confirm, Select};
 use std::path::PathBuf;
 
 pub async fn edit_pipeline_interactive(pipeline_file: PathBuf) -> Result<()> {
@@ -33,8 +33,14 @@ pub async fn edit_pipeline_interactive(pipeline_file: PathBuf) -> Result<()> {
             println!("  (no stages defined)");
         } else {
             for (idx, stage) in stages.iter().enumerate() {
-                let id = stage.get("id").and_then(|i| i.as_str()).unwrap_or("unknown");
-                let stage_type = stage.get("type").and_then(|t| t.as_str()).unwrap_or("unknown");
+                let id = stage
+                    .get("id")
+                    .and_then(|i| i.as_str())
+                    .unwrap_or("unknown");
+                let stage_type = stage
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("unknown");
                 let inputs = stage
                     .get("inputs")
                     .and_then(|i| i.as_array())
@@ -87,7 +93,8 @@ pub async fn edit_pipeline_interactive(pipeline_file: PathBuf) -> Result<()> {
                     .iter()
                     .map(|s| {
                         let id = s.get("id").and_then(|i| i.as_str()).unwrap_or("unknown");
-                        let stage_type = s.get("type").and_then(|t| t.as_str()).unwrap_or("unknown");
+                        let stage_type =
+                            s.get("type").and_then(|t| t.as_str()).unwrap_or("unknown");
                         format!("{} ({})", id, stage_type)
                     })
                     .collect();
@@ -103,7 +110,9 @@ pub async fn edit_pipeline_interactive(pipeline_file: PathBuf) -> Result<()> {
                     .interact()?;
 
                 if confirm {
-                    if let Some(stages_array) = config.get_mut("stages").and_then(|s| s.as_array_mut()) {
+                    if let Some(stages_array) =
+                        config.get_mut("stages").and_then(|s| s.as_array_mut())
+                    {
                         stages_array.remove(remove_idx);
                         let updated_content = toml::to_string_pretty(&config)?;
                         std::fs::write(&pipeline_file, updated_content)?;
@@ -123,7 +132,8 @@ pub async fn edit_pipeline_interactive(pipeline_file: PathBuf) -> Result<()> {
                     .iter()
                     .map(|s| {
                         let id = s.get("id").and_then(|i| i.as_str()).unwrap_or("unknown");
-                        let stage_type = s.get("type").and_then(|t| t.as_str()).unwrap_or("unknown");
+                        let stage_type =
+                            s.get("type").and_then(|t| t.as_str()).unwrap_or("unknown");
                         format!("{} ({})", id, stage_type)
                     })
                     .collect();
@@ -155,7 +165,8 @@ pub async fn edit_pipeline_interactive(pipeline_file: PathBuf) -> Result<()> {
                     .enumerate()
                     .map(|(idx, s)| {
                         let id = s.get("id").and_then(|i| i.as_str()).unwrap_or("unknown");
-                        let stage_type = s.get("type").and_then(|t| t.as_str()).unwrap_or("unknown");
+                        let stage_type =
+                            s.get("type").and_then(|t| t.as_str()).unwrap_or("unknown");
                         format!("{}. {} ({})", idx + 1, id, stage_type)
                     })
                     .collect();
@@ -173,11 +184,15 @@ pub async fn edit_pipeline_interactive(pipeline_file: PathBuf) -> Result<()> {
                 };
 
                 if !can_move {
-                    println!("\n✗ Cannot move stage {} (already at boundary)", if move_up { "up" } else { "down" });
+                    println!(
+                        "\n✗ Cannot move stage {} (already at boundary)",
+                        if move_up { "up" } else { "down" }
+                    );
                     continue;
                 }
 
-                if let Some(stages_array) = config.get_mut("stages").and_then(|s| s.as_array_mut()) {
+                if let Some(stages_array) = config.get_mut("stages").and_then(|s| s.as_array_mut())
+                {
                     let new_idx = if move_up { move_idx - 1 } else { move_idx + 1 };
                     stages_array.swap(move_idx, new_idx);
                     let updated_content = toml::to_string_pretty(&config)?;
@@ -190,7 +205,10 @@ pub async fn edit_pipeline_interactive(pipeline_file: PathBuf) -> Result<()> {
                 // Save and exit
                 println!("\n✓ Pipeline saved to {:?}", pipeline_file);
                 println!("\nNext steps:");
-                println!("  1. Validate with 'conveyor validate -c {:?}'", pipeline_file);
+                println!(
+                    "  1. Validate with 'conveyor validate -c {:?}'",
+                    pipeline_file
+                );
                 println!("  2. Run with 'conveyor run -c {:?}'", pipeline_file);
                 break;
             }

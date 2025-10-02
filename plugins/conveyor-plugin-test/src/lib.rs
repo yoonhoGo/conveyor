@@ -2,12 +2,12 @@
 //!
 //! A minimal plugin to verify the FFI plugin system works correctly.
 
-use conveyor_plugin_api::{
-    FfiDataFormat, PluginCapability, PluginDeclaration, StageType, PLUGIN_API_VERSION,
-    RBox, RBoxError, RHashMap, RResult, RString, RVec, rstr, ROk, RErr,
-};
-use conveyor_plugin_api::traits::{FfiExecutionContext, FfiStage, FfiStage_TO};
 use conveyor_plugin_api::sabi_trait::prelude::*;
+use conveyor_plugin_api::traits::{FfiExecutionContext, FfiStage, FfiStage_TO};
+use conveyor_plugin_api::{
+    rstr, FfiDataFormat, PluginCapability, PluginDeclaration, RBox, RBoxError, RErr, RHashMap, ROk,
+    RResult, RString, RVec, StageType, PLUGIN_API_VERSION,
+};
 
 /// Simple test stage
 pub struct TestStage {
@@ -41,7 +41,11 @@ impl FfiStage for TestStage {
                 // Pass through first input
                 let input_data = match context.inputs.into_iter().next() {
                     Some(tuple) => tuple.1,
-                    None => return RErr(RBoxError::from_fmt(&format_args!("Test transform requires input data"))),
+                    None => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "Test transform requires input data"
+                        )))
+                    }
                 };
                 ROk(input_data)
             }
@@ -49,7 +53,11 @@ impl FfiStage for TestStage {
                 // Validate input exists
                 let input_data = match context.inputs.into_iter().next() {
                     Some(tuple) => tuple.1,
-                    None => return RErr(RBoxError::from_fmt(&format_args!("Test sink requires input data"))),
+                    None => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "Test sink requires input data"
+                        )))
+                    }
                 };
                 ROk(input_data)
             }
@@ -64,17 +72,26 @@ impl FfiStage for TestStage {
 // Factory functions
 #[no_mangle]
 pub extern "C" fn create_test_source() -> FfiStage_TO<'static, RBox<()>> {
-    FfiStage_TO::from_value(TestStage::new("test".to_string(), StageType::Source), TD_Opaque)
+    FfiStage_TO::from_value(
+        TestStage::new("test".to_string(), StageType::Source),
+        TD_Opaque,
+    )
 }
 
 #[no_mangle]
 pub extern "C" fn create_test_transform() -> FfiStage_TO<'static, RBox<()>> {
-    FfiStage_TO::from_value(TestStage::new("test".to_string(), StageType::Transform), TD_Opaque)
+    FfiStage_TO::from_value(
+        TestStage::new("test".to_string(), StageType::Transform),
+        TD_Opaque,
+    )
 }
 
 #[no_mangle]
 pub extern "C" fn create_test_sink() -> FfiStage_TO<'static, RBox<()>> {
-    FfiStage_TO::from_value(TestStage::new("test".to_string(), StageType::Sink), TD_Opaque)
+    FfiStage_TO::from_value(
+        TestStage::new("test".to_string(), StageType::Sink),
+        TD_Opaque,
+    )
 }
 
 // Plugin capabilities
@@ -98,7 +115,8 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
             description: RString::from("Test sink - validates data"),
             factory_symbol: RString::from("create_test_sink"),
         },
-    ].into()
+    ]
+    .into()
 }
 
 /// Plugin declaration export

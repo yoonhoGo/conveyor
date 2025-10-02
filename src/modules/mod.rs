@@ -1,4 +1,4 @@
-pub mod sources;
-pub mod transforms;
 pub mod sinks;
+pub mod sources;
 pub mod stages;
+pub mod transforms;

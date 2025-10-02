@@ -222,16 +222,12 @@ format = "records"
     );
 
     // Use DagPipeline which should auto-convert legacy format
-    let pipeline = DagPipeline::from_file(
-        temp_dir.path().join("pipeline.toml")
-    ).await;
+    let pipeline = DagPipeline::from_file(temp_dir.path().join("pipeline.toml")).await;
 
     // First save the config
     fs::write(temp_dir.path().join("pipeline.toml"), config_str)?;
 
-    let pipeline = DagPipeline::from_file(
-        temp_dir.path().join("pipeline.toml")
-    ).await?;
+    let pipeline = DagPipeline::from_file(temp_dir.path().join("pipeline.toml")).await?;
 
     pipeline.validate()?;
     pipeline.execute().await?;

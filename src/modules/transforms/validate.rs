@@ -89,7 +89,10 @@ impl Transform for ValidateSchemaTransform {
                                 DataType::String => {
                                     // Try to parse as date - this is a validation check
                                     // In a real implementation, you might want to actually convert
-                                    tracing::warn!("Field '{}' is string but expected to be date", field);
+                                    tracing::warn!(
+                                        "Field '{}' is string but expected to be date",
+                                        field
+                                    );
                                 }
                                 _ => {
                                     anyhow::bail!("Field '{}' is not a valid date field", field);
@@ -144,7 +147,9 @@ fn validate_type(actual: &DataType, expected: &str) -> Result<bool> {
             actual,
             DataType::Int8 | DataType::Int16 | DataType::Int32 | DataType::Int64
         ),
-        "float" | "double" | "f64" | "float64" => matches!(actual, DataType::Float32 | DataType::Float64),
+        "float" | "double" | "f64" | "float64" => {
+            matches!(actual, DataType::Float32 | DataType::Float64)
+        }
         "bool" | "boolean" => matches!(actual, DataType::Boolean),
         "date" => matches!(actual, DataType::Date),
         "datetime" | "timestamp" => matches!(actual, DataType::Datetime(_, _)),

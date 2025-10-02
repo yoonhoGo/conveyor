@@ -13,11 +13,7 @@ impl Sink for StdoutSink {
         "stdout"
     }
 
-    async fn write(
-        &self,
-        data: DataFormat,
-        config: &HashMap<String, toml::Value>,
-    ) -> Result<()> {
+    async fn write(&self, data: DataFormat, config: &HashMap<String, toml::Value>) -> Result<()> {
         let format = config
             .get("format")
             .and_then(|v| v.as_str())
@@ -90,7 +86,10 @@ impl Sink for StdoutSink {
 
                 print!("{}", String::from_utf8(buffer)?);
             }
-            _ => anyhow::bail!("Unknown stdout format: {}. Use 'table', 'json', 'jsonl', or 'csv'", format),
+            _ => anyhow::bail!(
+                "Unknown stdout format: {}. Use 'table', 'json', 'jsonl', or 'csv'",
+                format
+            ),
         }
 
         Ok(())

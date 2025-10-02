@@ -1,5 +1,5 @@
 use anyhow::Result;
-use dialoguer::{Input, Select, Confirm};
+use dialoguer::{Confirm, Input, Select};
 use std::path::PathBuf;
 
 pub fn scaffold_pipeline(output: Option<PathBuf>, interactive: bool) -> Result<()> {
@@ -23,7 +23,11 @@ pub fn scaffold_pipeline(output: Option<PathBuf>, interactive: bool) -> Result<(
         (name, version, description)
     } else {
         // Non-interactive mode: use defaults
-        ("my_pipeline".to_string(), "1.0.0".to_string(), "A data processing pipeline".to_string())
+        (
+            "my_pipeline".to_string(),
+            "1.0.0".to_string(),
+            "A data processing pipeline".to_string(),
+        )
     };
 
     let template = format!(
@@ -102,8 +106,7 @@ retry_delay_seconds = 5
 # enabled = true
 # path = "errors/"
 "#,
-        name, version, description,
-        name, version, description
+        name, version, description, name, version, description
     );
 
     if let Some(path) = output {
@@ -120,7 +123,10 @@ retry_delay_seconds = 5
                     return Ok(());
                 }
             } else {
-                anyhow::bail!("File {:?} already exists. Use --force to overwrite or run in interactive mode", path);
+                anyhow::bail!(
+                    "File {:?} already exists. Use --force to overwrite or run in interactive mode",
+                    path
+                );
             }
         }
 
@@ -133,7 +139,10 @@ retry_delay_seconds = 5
         println!("✓ Scaffolded pipeline configuration written to: {:?}", path);
         println!("\nNext steps:");
         println!("  1. Edit the configuration file to add your stages");
-        println!("  2. Or use 'conveyor add-stage {:?}' to add stages interactively", path);
+        println!(
+            "  2. Or use 'conveyor add-stage {:?}' to add stages interactively",
+            path
+        );
         println!("  3. Validate with 'conveyor validate -c {:?}'", path);
         println!("  4. Run with 'conveyor run -c {:?}'", path);
     } else {

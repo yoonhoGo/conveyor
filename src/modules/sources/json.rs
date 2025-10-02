@@ -57,7 +57,10 @@ impl DataSource for JsonSource {
                 let df = JsonReader::new(cursor).finish()?;
                 Ok(DataFormat::DataFrame(df))
             }
-            _ => anyhow::bail!("Unknown JSON format: {}. Use 'records', 'jsonl', or 'dataframe'", format),
+            _ => anyhow::bail!(
+                "Unknown JSON format: {}. Use 'records', 'jsonl', or 'dataframe'",
+                format
+            ),
         }
     }
 
@@ -88,17 +91,27 @@ impl DataSource for JsonSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[tokio::test]
     async fn test_json_source_read_records() {
         let mut temp_file = NamedTempFile::new().unwrap();
-        writeln!(temp_file, r#"[{{"id": 1, "name": "Alice"}}, {{"id": 2, "name": "Bob"}}]"#).unwrap();
+        writeln!(
+            temp_file,
+            r#"[{{"id": 1, "name": "Alice"}}, {{"id": 2, "name": "Bob"}}]"#
+        )
+        .unwrap();
 
         let mut config = HashMap::new();
-        config.insert("path".to_string(), toml::Value::String(temp_file.path().to_string_lossy().to_string()));
-        config.insert("format".to_string(), toml::Value::String("records".to_string()));
+        config.insert(
+            "path".to_string(),
+            toml::Value::String(temp_file.path().to_string_lossy().to_string()),
+        );
+        config.insert(
+            "format".to_string(),
+            toml::Value::String("records".to_string()),
+        );
 
         let source = JsonSource;
         let result = source.read(&config).await;
@@ -119,7 +132,10 @@ mod tests {
 
         // Valid config
         let mut valid_config = HashMap::new();
-        valid_config.insert("path".to_string(), toml::Value::String("test.json".to_string()));
+        valid_config.insert(
+            "path".to_string(),
+            toml::Value::String("test.json".to_string()),
+        );
         assert!(source.validate_config(&valid_config).await.is_ok());
 
         // Invalid config - missing path

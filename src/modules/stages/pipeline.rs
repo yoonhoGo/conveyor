@@ -200,7 +200,10 @@ mod tests {
         assert!(stage.validate_config(&config).await.is_err());
 
         // Test with file
-        config.insert("file".to_string(), toml::Value::String("test.toml".to_string()));
+        config.insert(
+            "file".to_string(),
+            toml::Value::String("test.toml".to_string()),
+        );
         // This will fail because file doesn't exist, but that's ok for validation
         let _ = stage.validate_config(&config).await;
 

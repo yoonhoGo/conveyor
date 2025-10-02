@@ -76,7 +76,9 @@ impl FfiDataFormat {
     }
 
     /// Convert to JSON records (Vec<HashMap<String, Value>>)
-    pub fn to_json_records(&self) -> RResult<Vec<std::collections::HashMap<String, serde_json::Value>>, RBoxError> {
+    pub fn to_json_records(
+        &self,
+    ) -> RResult<Vec<std::collections::HashMap<String, serde_json::Value>>, RBoxError> {
         match self {
             Self::JsonRecords(bytes) => {
                 match serde_json::from_slice(bytes.as_slice()) {
@@ -125,8 +127,14 @@ mod tests {
         }
 
         let records = vec![
-            Record { id: 1, name: "Alice".to_string() },
-            Record { id: 2, name: "Bob".to_string() },
+            Record {
+                id: 1,
+                name: "Alice".to_string(),
+            },
+            Record {
+                id: 2,
+                name: "Bob".to_string(),
+            },
         ];
 
         let format = match FfiDataFormat::from_json_records(&records) {

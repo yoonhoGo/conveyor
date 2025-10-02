@@ -42,14 +42,16 @@ impl DagExecutor {
         config: HashMap<String, toml::Value>,
     ) -> Result<()> {
         if self.node_map.contains_key(&id) {
-            return Err(ConveyorError::PipelineError(format!(
-                "Stage '{}' already exists",
-                id
-            ))
-            .into());
+            return Err(
+                ConveyorError::PipelineError(format!("Stage '{}' already exists", id)).into(),
+            );
         }
 
-        let node = StageNode { id: id.clone(), stage, config };
+        let node = StageNode {
+            id: id.clone(),
+            stage,
+            config,
+        };
         let node_index = self.graph.add_node(node);
         self.node_map.insert(id, node_index);
 
@@ -59,10 +61,9 @@ impl DagExecutor {
     /// Add a dependency edge from `from_id` to `to_id`
     /// (to_id depends on from_id)
     pub fn add_dependency(&mut self, from_id: &str, to_id: &str) -> Result<()> {
-        let from_index = self
-            .node_map
-            .get(from_id)
-            .ok_or_else(|| ConveyorError::PipelineError(format!("Stage '{}' not found", from_id)))?;
+        let from_index = self.node_map.get(from_id).ok_or_else(|| {
+            ConveyorError::PipelineError(format!("Stage '{}' not found", from_id))
+        })?;
 
         let to_index = self
             .node_map
@@ -121,7 +122,9 @@ impl DagExecutor {
 
                 // Collect inputs from predecessor stages
                 let mut inputs = HashMap::new();
-                let predecessors = self.graph.neighbors_directed(node_index, petgraph::Direction::Incoming);
+                let predecessors = self
+                    .graph
+                    .neighbors_directed(node_index, petgraph::Direction::Incoming);
 
                 for pred_idx in predecessors {
                     let pred_id = &self.graph[pred_idx].id;
@@ -130,7 +133,10 @@ impl DagExecutor {
                         inputs.insert(pred_id.clone(), data.clone());
                         info!("Stage '{}': found input from '{}'", id, pred_id);
                     } else {
-                        warn!("Stage '{}': input from '{}' not found in outputs", id, pred_id);
+                        warn!(
+                            "Stage '{}': input from '{}' not found in outputs",
+                            id, pred_id
+                        );
                     }
                 }
 
@@ -152,7 +158,7 @@ impl DagExecutor {
                             info!("Stage '{}' completed successfully", id_clone);
                             Ok(data)
                         }
-                        Err(e) => Err(e)
+                        Err(e) => Err(e),
                     };
 
                     let final_result = match result {
@@ -160,7 +166,10 @@ impl DagExecutor {
                         Err(e) => {
                             if error_strategy.should_continue_on_error() {
                                 warn!("Stage '{}' failed: {}. Continuing...", id, e);
-                                Ok((id, DataFormat::DataFrame(polars::prelude::DataFrame::empty())))
+                                Ok((
+                                    id,
+                                    DataFormat::DataFrame(polars::prelude::DataFrame::empty()),
+                                ))
                             } else {
                                 Err(e)
                             }
@@ -210,15 +219,17 @@ impl DagExecutor {
 
         for &node_index in sorted {
             // Find the maximum level of all predecessors
-            let predecessors = self.graph.neighbors_directed(node_index, petgraph::Direction::Incoming);
+            let predecessors = self
+                .graph
+                .neighbors_directed(node_index, petgraph::Direction::Incoming);
 
             let max_pred_level = predecessors
                 .filter_map(|pred_idx| level_map.get(&pred_idx))
                 .max();
 
             let current_level = match max_pred_level {
-                Some(&level) => level + 1,  // Predecessor exists, place at level + 1
-                None => 0,  // No predecessor, place at level 0
+                Some(&level) => level + 1, // Predecessor exists, place at level + 1
+                None => 0,                 // No predecessor, place at level 0
             };
 
             // Ensure we have enough levels
@@ -237,7 +248,7 @@ impl DagExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::stage::{Stage, SourceStageAdapter};
+    use crate::core::stage::{SourceStageAdapter, Stage};
     use crate::core::traits::DataSource;
     use async_trait::async_trait;
     use polars::prelude::DataFrame;

@@ -48,11 +48,7 @@ impl DagPipelineBuilder {
         // Create stages and add to executor
         for stage_config in &config.stages {
             let stage = self.create_stage(stage_config)?;
-            executor.add_stage(
-                stage_config.id.clone(),
-                stage,
-                stage_config.config.clone(),
-            )?;
+            executor.add_stage(stage_config.id.clone(), stage, stage_config.config.clone())?;
         }
 
         // Add dependencies

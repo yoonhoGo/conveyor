@@ -113,10 +113,7 @@ impl Transform for HttpFetchTransform {
         }
     }
 
-    async fn validate_config(
-        &self,
-        config: &Option<HashMap<String, toml::Value>>,
-    ) -> Result<()> {
+    async fn validate_config(&self, config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
         let config = config
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("http_fetch requires configuration"))?;
@@ -177,7 +174,10 @@ impl HttpFetchTransform {
             };
 
             // Make HTTP request
-            match self.make_request(&url, method, body.as_deref(), headers).await {
+            match self
+                .make_request(&url, method, body.as_deref(), headers)
+                .await
+            {
                 Ok(response_data) => {
                     // Clone the original record and add the result
                     let mut new_record = record.clone();
@@ -230,7 +230,9 @@ impl HttpFetchTransform {
         };
 
         // Make single request
-        let response_data = self.make_request(&url, method, body.as_deref(), headers).await?;
+        let response_data = self
+            .make_request(&url, method, body.as_deref(), headers)
+            .await?;
 
         // Add result to all records
         let mut result_records = records.clone();
@@ -280,8 +282,8 @@ impl HttpFetchTransform {
 
         // Parse response as JSON
         let text = response.text().await?;
-        let json: JsonValue = serde_json::from_str(&text)
-            .unwrap_or_else(|_| JsonValue::String(text));
+        let json: JsonValue =
+            serde_json::from_str(&text).unwrap_or_else(|_| JsonValue::String(text));
 
         Ok(json)
     }
@@ -301,7 +303,10 @@ mod tests {
 
         // Valid config
         let mut config = HashMap::new();
-        config.insert("url".to_string(), toml::Value::String("http://example.com".to_string()));
+        config.insert(
+            "url".to_string(),
+            toml::Value::String("http://example.com".to_string()),
+        );
         assert!(transform.validate_config(&Some(config)).await.is_ok());
     }
 

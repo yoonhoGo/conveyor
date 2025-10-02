@@ -90,11 +90,7 @@ pub fn get_config_value<'a>(config: &'a [(String, String)], key: &str) -> Option
 
 /// Get input data by stage ID from execution context
 pub fn get_input<'a>(context: &'a ExecutionContext, id: &str) -> Option<&'a DataFormat> {
-    context
-        .inputs
-        .iter()
-        .find(|(k, _)| k == id)
-        .map(|(_, v)| v)
+    context.inputs.iter().find(|(k, _)| k == id).map(|(_, v)| v)
 }
 
 /// Get the first input from execution context (for single-input transforms)
@@ -123,12 +119,13 @@ pub fn serialization_error(msg: impl Into<String>) -> PluginError {
 }
 
 /// Create DataFormat from JSON records
-pub fn data_format_from_json<T: serde::Serialize>(
-    records: &T,
-) -> Result<DataFormat, PluginError> {
+pub fn data_format_from_json<T: serde::Serialize>(records: &T) -> Result<DataFormat, PluginError> {
     match serde_json::to_vec(records) {
         Ok(bytes) => Ok(DataFormat::JsonRecords(bytes)),
-        Err(e) => Err(serialization_error(format!("Failed to serialize JSON: {}", e))),
+        Err(e) => Err(serialization_error(format!(
+            "Failed to serialize JSON: {}",
+            e
+        ))),
     }
 }
 
@@ -155,9 +152,7 @@ pub fn data_format_to_json<T: serde::de::DeserializeOwned>(
         DataFormat::JsonRecords(b) => b,
         DataFormat::Raw(b) => b,
         DataFormat::ArrowIpc(_) => {
-            return Err(runtime_error(
-                "Cannot convert ArrowIpc to JSON directly",
-            ))
+            return Err(runtime_error("Cannot convert ArrowIpc to JSON directly"))
         }
     };
 
@@ -175,7 +170,10 @@ pub fn data_format_to_bytes(data: &DataFormat) -> &[u8] {
 }
 
 /// Helper to create a source stage capability
-pub fn source_capability(name: impl Into<String>, description: impl Into<String>) -> StageCapability {
+pub fn source_capability(
+    name: impl Into<String>,
+    description: impl Into<String>,
+) -> StageCapability {
     StageCapability {
         name: name.into(),
         stage_type: StageType::Source,
@@ -184,7 +182,10 @@ pub fn source_capability(name: impl Into<String>, description: impl Into<String>
 }
 
 /// Helper to create a transform stage capability
-pub fn transform_capability(name: impl Into<String>, description: impl Into<String>) -> StageCapability {
+pub fn transform_capability(
+    name: impl Into<String>,
+    description: impl Into<String>,
+) -> StageCapability {
     StageCapability {
         name: name.into(),
         stage_type: StageType::Transform,

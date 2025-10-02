@@ -4,9 +4,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::core::traits::{DataFormat, DataSource, Sink, Transform};
+use crate::wasm_plugin_loader::{
+    DataFormat as WasmDataFormat, ExecutionContext as WasmExecutionContext, WasmPluginLoader,
+};
 use conveyor_plugin_api::traits::FfiStage_TO;
 use conveyor_plugin_api::{FfiDataFormat, FfiExecutionContext, RBox, RHashMap, RString};
-use crate::wasm_plugin_loader::{WasmPluginLoader, DataFormat as WasmDataFormat, ExecutionContext as WasmExecutionContext};
 
 /// Unified Stage trait - represents any processing unit in the pipeline
 /// This allows sources, transforms, and sinks to be treated uniformly in a DAG
@@ -103,7 +105,9 @@ impl Stage for TransformStageAdapter {
         let input_data = inputs
             .values()
             .next()
-            .ok_or_else(|| anyhow::anyhow!("Transform '{}' requires at least one input", self.name))?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Transform '{}' requires at least one input", self.name)
+            })?
             .clone();
 
         let config_opt = if config.is_empty() {
@@ -182,7 +186,11 @@ pub struct FfiPluginStageAdapter {
 }
 
 impl FfiPluginStageAdapter {
-    pub fn new(name: String, stage_name: String, stage_instance: FfiStage_TO<'static, RBox<()>>) -> Self {
+    pub fn new(
+        name: String,
+        stage_name: String,
+        stage_instance: FfiStage_TO<'static, RBox<()>>,
+    ) -> Self {
         Self {
             name,
             stage_name,
@@ -224,9 +232,11 @@ impl Stage for FfiPluginStageAdapter {
                 let data = ffi_to_dataformat(&ffi_data)?;
                 Ok(data)
             }
-            conveyor_plugin_api::RErr(e) => {
-                Err(anyhow::anyhow!("FFI plugin '{}' error: {:?}", self.stage_name, e))
-            }
+            conveyor_plugin_api::RErr(e) => Err(anyhow::anyhow!(
+                "FFI plugin '{}' error: {:?}",
+                self.stage_name,
+                e
+            )),
         }
     }
 
@@ -235,9 +245,11 @@ impl Stage for FfiPluginStageAdapter {
 
         match self.stage_instance.validate_config(ffi_config) {
             conveyor_plugin_api::ROk(_) => Ok(()),
-            conveyor_plugin_api::RErr(e) => {
-                Err(anyhow::anyhow!("FFI plugin '{}' config validation error: {:?}", self.stage_name, e))
-            }
+            conveyor_plugin_api::RErr(e) => Err(anyhow::anyhow!(
+                "FFI plugin '{}' config validation error: {:?}",
+                self.stage_name,
+                e
+            )),
         }
     }
 }
@@ -255,7 +267,12 @@ pub struct WasmPluginStageAdapter {
 }
 
 impl WasmPluginStageAdapter {
-    pub fn new(name: String, plugin_name: String, stage_name: String, loader: Arc<WasmPluginLoader>) -> Self {
+    pub fn new(
+        name: String,
+        plugin_name: String,
+        stage_name: String,
+        loader: Arc<WasmPluginLoader>,
+    ) -> Self {
         Self {
             name,
             plugin_name,
@@ -293,7 +310,10 @@ impl Stage for WasmPluginStageAdapter {
         };
 
         // Execute WASM stage (async)
-        let wasm_result = self.loader.execute(&self.plugin_name, &self.stage_name, context).await?;
+        let wasm_result = self
+            .loader
+            .execute(&self.plugin_name, &self.stage_name, context)
+            .await?;
 
         // Convert result back
         let data = wasm_to_dataformat(&wasm_result)?;
@@ -329,7 +349,9 @@ fn dataformat_to_ffi(data: &DataFormat) -> Result<FfiDataFormat> {
             // Serialize records to JSON
             match FfiDataFormat::from_json_records(records) {
                 conveyor_plugin_api::ROk(ffi_data) => Ok(ffi_data),
-                conveyor_plugin_api::RErr(e) => Err(anyhow::anyhow!("Failed to serialize records: {:?}", e)),
+                conveyor_plugin_api::RErr(e) => {
+                    Err(anyhow::anyhow!("Failed to serialize records: {:?}", e))
+                }
             }
         }
         DataFormat::Raw(bytes) => Ok(FfiDataFormat::from_raw(bytes.clone())),
@@ -350,7 +372,8 @@ fn ffi_to_dataformat(ffi_data: &FfiDataFormat) -> Result<DataFormat> {
         }
         FfiDataFormat::JsonRecords(bytes) => {
             // Deserialize JSON to records
-            let records: Vec<HashMap<String, serde_json::Value>> = serde_json::from_slice(bytes.as_slice())?;
+            let records: Vec<HashMap<String, serde_json::Value>> =
+                serde_json::from_slice(bytes.as_slice())?;
             Ok(DataFormat::RecordBatch(records))
         }
         FfiDataFormat::Raw(bytes) => Ok(DataFormat::Raw(bytes.to_vec())),

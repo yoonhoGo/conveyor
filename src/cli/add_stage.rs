@@ -1,7 +1,7 @@
 use anyhow::Result;
-use dialoguer::{Input, Select, MultiSelect};
-use std::path::PathBuf;
+use dialoguer::{Input, MultiSelect, Select};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 pub async fn add_stage_to_pipeline(pipeline_file: PathBuf) -> Result<()> {
     // Read existing pipeline
@@ -14,9 +14,7 @@ pub async fn add_stage_to_pipeline(pipeline_file: PathBuf) -> Result<()> {
         .and_then(|s| s.as_array())
         .map(|arr| {
             arr.iter()
-                .filter_map(|stage| {
-                    stage.get("id").and_then(|id| id.as_str()).map(String::from)
-                })
+                .filter_map(|stage| stage.get("id").and_then(|id| id.as_str()).map(String::from))
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -90,11 +88,17 @@ pub async fn add_stage_to_pipeline(pipeline_file: PathBuf) -> Result<()> {
     // Create new stage
     let mut new_stage = toml::map::Map::new();
     new_stage.insert("id".to_string(), toml::Value::String(stage_id.clone()));
-    new_stage.insert("type".to_string(), toml::Value::String(stage_type.to_string()));
+    new_stage.insert(
+        "type".to_string(),
+        toml::Value::String(stage_type.to_string()),
+    );
     new_stage.insert(
         "inputs".to_string(),
         toml::Value::Array(
-            inputs.iter().map(|s| toml::Value::String(s.clone())).collect()
+            inputs
+                .iter()
+                .map(|s| toml::Value::String(s.clone()))
+                .collect(),
         ),
     );
 
@@ -107,7 +111,8 @@ pub async fn add_stage_to_pipeline(pipeline_file: PathBuf) -> Result<()> {
         stages_array.push(toml::Value::Table(new_stage));
     } else {
         // Create stages array if it doesn't exist
-        config.as_table_mut()
+        config
+            .as_table_mut()
             .ok_or_else(|| anyhow::anyhow!("Invalid TOML structure"))?
             .insert(
                 "stages".to_string(),
@@ -119,11 +124,20 @@ pub async fn add_stage_to_pipeline(pipeline_file: PathBuf) -> Result<()> {
     let updated_content = toml::to_string_pretty(&config)?;
     std::fs::write(&pipeline_file, updated_content)?;
 
-    println!("\n✓ Stage '{}' added successfully to {:?}", stage_id, pipeline_file);
+    println!(
+        "\n✓ Stage '{}' added successfully to {:?}",
+        stage_id, pipeline_file
+    );
     println!("\nNext steps:");
     println!("  1. Review the configuration file");
-    println!("  2. Add more stages with 'conveyor add-stage {:?}'", pipeline_file);
-    println!("  3. Validate with 'conveyor validate -c {:?}'", pipeline_file);
+    println!(
+        "  2. Add more stages with 'conveyor add-stage {:?}'",
+        pipeline_file
+    );
+    println!(
+        "  3. Validate with 'conveyor validate -c {:?}'",
+        pipeline_file
+    );
 
     Ok(())
 }
@@ -133,9 +147,7 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
 
     match stage_type {
         "source.csv" => {
-            let path: String = Input::new()
-                .with_prompt("CSV file path")
-                .interact_text()?;
+            let path: String = Input::new().with_prompt("CSV file path").interact_text()?;
             config.insert("path".to_string(), toml::Value::String(path));
 
             let headers: bool = dialoguer::Confirm::new()
@@ -152,9 +164,7 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
         }
 
         "source.json" => {
-            let path: String = Input::new()
-                .with_prompt("JSON file path")
-                .interact_text()?;
+            let path: String = Input::new().with_prompt("JSON file path").interact_text()?;
             config.insert("path".to_string(), toml::Value::String(path));
 
             let format_options = vec!["records", "jsonl", "dataframe"];
@@ -163,7 +173,10 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
                 .items(&format_options)
                 .default(0)
                 .interact()?;
-            config.insert("format".to_string(), toml::Value::String(format_options[format_idx].to_string()));
+            config.insert(
+                "format".to_string(),
+                toml::Value::String(format_options[format_idx].to_string()),
+            );
         }
 
         "source.stdin" => {
@@ -173,7 +186,10 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
                 .items(&format_options)
                 .default(0)
                 .interact()?;
-            config.insert("format".to_string(), toml::Value::String(format_options[format_idx].to_string()));
+            config.insert(
+                "format".to_string(),
+                toml::Value::String(format_options[format_idx].to_string()),
+            );
         }
 
         "transform.filter" => {
@@ -188,7 +204,10 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
                 .items(&operators)
                 .default(0)
                 .interact()?;
-            config.insert("operator".to_string(), toml::Value::String(operators[op_idx].to_string()));
+            config.insert(
+                "operator".to_string(),
+                toml::Value::String(operators[op_idx].to_string()),
+            );
 
             let value: String = Input::new()
                 .with_prompt("Value to compare")
@@ -215,7 +234,10 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
             let output_column: String = Input::new()
                 .with_prompt("Output column name")
                 .interact_text()?;
-            config.insert("output_column".to_string(), toml::Value::String(output_column));
+            config.insert(
+                "output_column".to_string(),
+                toml::Value::String(output_column),
+            );
         }
 
         "transform.validate_schema" => {
@@ -241,7 +263,10 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
                 .items(&method_options)
                 .default(0)
                 .interact()?;
-            config.insert("method".to_string(), toml::Value::String(method_options[method_idx].to_string()));
+            config.insert(
+                "method".to_string(),
+                toml::Value::String(method_options[method_idx].to_string()),
+            );
 
             let mode_options = vec!["per_row", "batch"];
             let mode_idx = Select::new()
@@ -249,13 +274,19 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
                 .items(&mode_options)
                 .default(0)
                 .interact()?;
-            config.insert("mode".to_string(), toml::Value::String(mode_options[mode_idx].to_string()));
+            config.insert(
+                "mode".to_string(),
+                toml::Value::String(mode_options[mode_idx].to_string()),
+            );
 
             let result_field: String = Input::new()
                 .with_prompt("Result field name")
                 .default("result".to_string())
                 .interact_text()?;
-            config.insert("result_field".to_string(), toml::Value::String(result_field));
+            config.insert(
+                "result_field".to_string(),
+                toml::Value::String(result_field),
+            );
         }
 
         "sink.csv" => {
@@ -283,7 +314,10 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
                 .items(&format_options)
                 .default(0)
                 .interact()?;
-            config.insert("format".to_string(), toml::Value::String(format_options[format_idx].to_string()));
+            config.insert(
+                "format".to_string(),
+                toml::Value::String(format_options[format_idx].to_string()),
+            );
 
             let pretty: bool = dialoguer::Confirm::new()
                 .with_prompt("Pretty print?")
@@ -299,7 +333,10 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
                 .items(&format_options)
                 .default(0)
                 .interact()?;
-            config.insert("format".to_string(), toml::Value::String(format_options[format_idx].to_string()));
+            config.insert(
+                "format".to_string(),
+                toml::Value::String(format_options[format_idx].to_string()),
+            );
         }
 
         "stage.pipeline" => {

@@ -3,13 +3,13 @@ use std::path::PathBuf;
 
 use crate::core::registry::ModuleRegistry;
 
-pub mod scaffold;
 pub mod add_stage;
 pub mod edit;
+pub mod scaffold;
 
-pub use scaffold::scaffold_pipeline;
 pub use add_stage::add_stage_to_pipeline;
 pub use edit::edit_pipeline_interactive;
+pub use scaffold::scaffold_pipeline;
 
 pub async fn list_modules(module_type: Option<String>) -> Result<()> {
     let registry = ModuleRegistry::with_defaults().await?;

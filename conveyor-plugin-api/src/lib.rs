@@ -58,8 +58,7 @@ use serde::{Deserialize, Serialize};
 // Re-export abi_stable types for convenience
 pub use abi_stable::{
     marker_type::ErasedObject,
-    rstr,
-    sabi_trait,
+    rstr, sabi_trait,
     std_types::{RBox, RBoxError, RErr, RHashMap, ROk, ROption, RResult, RStr, RString, RVec},
     StableAbi,
 };
@@ -85,7 +84,11 @@ pub struct PluginMetadata {
 }
 
 impl PluginMetadata {
-    pub fn new(name: impl Into<String>, version: impl Into<String>, description: impl Into<String>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        version: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             version: version.into(),

@@ -269,7 +269,6 @@ type = "csv"
         let config: PipelineConfig = toml::from_str(invalid_config).unwrap();
         assert!(config.validate().is_err());
     }
-
 }
 
 // ============================================================================

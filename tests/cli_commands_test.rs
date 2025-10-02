@@ -102,8 +102,14 @@ fn test_generated_pipeline_has_correct_metadata() -> Result<()> {
 
     // Check pipeline metadata
     let pipeline = parsed.get("pipeline").unwrap();
-    assert_eq!(pipeline.get("name").and_then(|v| v.as_str()), Some("my_pipeline"));
-    assert_eq!(pipeline.get("version").and_then(|v| v.as_str()), Some("1.0.0"));
+    assert_eq!(
+        pipeline.get("name").and_then(|v| v.as_str()),
+        Some("my_pipeline")
+    );
+    assert_eq!(
+        pipeline.get("version").and_then(|v| v.as_str()),
+        Some("1.0.0")
+    );
     assert_eq!(
         pipeline.get("description").and_then(|v| v.as_str()),
         Some("A data processing pipeline")
@@ -111,8 +117,16 @@ fn test_generated_pipeline_has_correct_metadata() -> Result<()> {
 
     // Check global config
     let global = parsed.get("global").unwrap();
-    assert_eq!(global.get("log_level").and_then(|v| v.as_str()), Some("info"));
-    assert_eq!(global.get("max_parallel_tasks").and_then(|v| v.as_integer()), Some(4));
+    assert_eq!(
+        global.get("log_level").and_then(|v| v.as_str()),
+        Some("info")
+    );
+    assert_eq!(
+        global
+            .get("max_parallel_tasks")
+            .and_then(|v| v.as_integer()),
+        Some(4)
+    );
 
     // Cleanup
     fs::remove_file(path)?;

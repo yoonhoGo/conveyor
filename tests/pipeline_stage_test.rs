@@ -1,9 +1,9 @@
 use anyhow::Result;
-use std::sync::Arc;
 use conveyor::core::config::DagPipelineConfig;
 use conveyor::core::dag_builder::DagPipelineBuilder;
 use conveyor::core::registry::ModuleRegistry;
 use conveyor::core::stage::Stage;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_pipeline_stage_inline() -> Result<()> {
@@ -12,18 +12,25 @@ async fn test_pipeline_stage_inline() -> Result<()> {
 
     // Create a temporary JSON file for main pipeline
     let mut temp_file1 = NamedTempFile::new()?;
-    writeln!(temp_file1, r#"[{{"id": 1, "name": "Alice"}}, {{"id": 2, "name": "Bob"}}]"#)?;
+    writeln!(
+        temp_file1,
+        r#"[{{"id": 1, "name": "Alice"}}, {{"id": 2, "name": "Bob"}}]"#
+    )?;
     let temp_path1 = temp_file1.path().to_string_lossy().to_string();
 
     // Create a temporary JSON file for sub-pipeline
     let mut temp_file2 = NamedTempFile::new()?;
-    writeln!(temp_file2, r#"[{{"id": 3, "value": 100}}, {{"id": 4, "value": 200}}]"#)?;
+    writeln!(
+        temp_file2,
+        r#"[{{"id": 3, "value": 100}}, {{"id": 4, "value": 200}}]"#
+    )?;
     let temp_path2 = temp_file2.path().to_string_lossy().to_string();
 
     // Escape the path for inline TOML (replace backslashes with double backslashes on Windows)
     let escaped_path2 = temp_path2.replace("\\", "\\\\");
 
-    let config_str = format!(r#"
+    let config_str = format!(
+        r#"
 [pipeline]
 name = "test-pipeline-stage"
 version = "1.0"
@@ -79,7 +86,9 @@ inputs = ["sub_pipeline"]
 
 [stages.config]
 format = "json"
-"#, temp_path1, escaped_path2);
+"#,
+        temp_path1, escaped_path2
+    );
 
     let config = DagPipelineConfig::from_str(&config_str)?;
     let registry = Arc::new(ModuleRegistry::with_defaults().await?);
@@ -116,11 +125,17 @@ format = "records"
 content = "[]"
 "#;
 
-    config.insert("inline".to_string(), toml::Value::String(inline_config.to_string()));
+    config.insert(
+        "inline".to_string(),
+        toml::Value::String(inline_config.to_string()),
+    );
     assert!(stage.validate_config(&config).await.is_ok());
 
     // Test: both file and inline (should fail)
-    config.insert("file".to_string(), toml::Value::String("test.toml".to_string()));
+    config.insert(
+        "file".to_string(),
+        toml::Value::String("test.toml".to_string()),
+    );
     assert!(stage.validate_config(&config).await.is_err());
 
     Ok(())
@@ -133,17 +148,24 @@ async fn test_nested_pipeline() -> Result<()> {
 
     // Create a temporary JSON file for main pipeline
     let mut temp_file1 = NamedTempFile::new()?;
-    writeln!(temp_file1, r#"[{{"value": 10}}, {{"value": 20}}, {{"value": 30}}]"#)?;
+    writeln!(
+        temp_file1,
+        r#"[{{"value": 10}}, {{"value": 20}}, {{"value": 30}}]"#
+    )?;
     let temp_path1 = temp_file1.path().to_string_lossy().to_string();
 
     // Create a temporary JSON file for sub-pipeline
     let mut temp_file2 = NamedTempFile::new()?;
-    writeln!(temp_file2, r#"[{{"value": 15}}, {{"value": 25}}, {{"value": 35}}]"#)?;
+    writeln!(
+        temp_file2,
+        r#"[{{"value": 15}}, {{"value": 25}}, {{"value": 35}}]"#
+    )?;
     let temp_path2 = temp_file2.path().to_string_lossy().to_string();
     let escaped_path2 = temp_path2.replace("\\", "\\\\");
 
     // Create a more complex nested pipeline
-    let config_str = format!(r#"
+    let config_str = format!(
+        r#"
 [pipeline]
 name = "nested-test"
 version = "1.0"
@@ -199,7 +221,9 @@ inputs = ["process"]
 
 [stages.config]
 format = "table"
-"#, temp_path1, escaped_path2);
+"#,
+        temp_path1, escaped_path2
+    );
 
     let config = DagPipelineConfig::from_str(&config_str)?;
     let registry = Arc::new(ModuleRegistry::with_defaults().await?);

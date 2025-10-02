@@ -8,8 +8,8 @@ mod cli;
 mod core;
 mod modules;
 mod plugin_loader;
-mod wasm_plugin_loader;
 mod utils;
+mod wasm_plugin_loader;
 
 use crate::core::pipeline::Pipeline;
 
@@ -91,9 +91,7 @@ async fn main() -> Result<()> {
 
     // Initialize logging
     let log_level = cli.log_level.unwrap_or(Level::INFO);
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(log_level)
-        .finish();
+    let subscriber = FmtSubscriber::builder().with_max_level(log_level).finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
     match cli.command {
@@ -129,7 +127,10 @@ async fn main() -> Result<()> {
         }
 
         Commands::Stage { command } => match command {
-            StageCommands::New { output, interactive } => {
+            StageCommands::New {
+                output,
+                interactive,
+            } => {
                 info!("Creating new DAG pipeline");
                 cli::scaffold_pipeline(output.clone(), interactive)?;
             }
@@ -143,7 +144,7 @@ async fn main() -> Result<()> {
                 info!("Opening interactive pipeline editor: {:?}", pipeline);
                 cli::edit_pipeline_interactive(pipeline.clone()).await?;
             }
-        }
+        },
     }
 
     Ok(())

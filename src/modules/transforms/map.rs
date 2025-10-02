@@ -98,8 +98,16 @@ impl Transform for MapTransform {
                     // Column / column
                     let col1 = parts[0].trim();
                     let col2 = parts[1].trim();
-                    let s1 = df.column(col1)?.cast(&DataType::Float64)?.as_materialized_series().clone();
-                    let s2 = df.column(col2)?.cast(&DataType::Float64)?.as_materialized_series().clone();
+                    let s1 = df
+                        .column(col1)?
+                        .cast(&DataType::Float64)?
+                        .as_materialized_series()
+                        .clone();
+                    let s2 = df
+                        .column(col2)?
+                        .cast(&DataType::Float64)?
+                        .as_materialized_series()
+                        .clone();
                     (&s1 / &s2)?
                 }
             } else {
@@ -118,7 +126,11 @@ impl Transform for MapTransform {
         let new_column = new_column.with_name(output_column.into());
 
         let output_col_name: &str = output_column;
-        if df.get_column_names().iter().any(|name| name.as_str() == output_col_name) {
+        if df
+            .get_column_names()
+            .iter()
+            .any(|name| name.as_str() == output_col_name)
+        {
             df.replace(output_column, new_column)?;
         } else {
             df.with_column(new_column)?;

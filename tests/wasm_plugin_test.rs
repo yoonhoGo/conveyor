@@ -15,7 +15,11 @@ async fn test_load_echo_plugin() {
         .with_plugin_dir("target/wasm32-wasip2/release");
 
     let result = loader.load_plugin("echo").await;
-    assert!(result.is_ok(), "Failed to load echo plugin: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to load echo plugin: {:?}",
+        result.err()
+    );
 }
 
 #[tokio::test]
@@ -24,7 +28,10 @@ async fn test_echo_plugin_metadata() {
         .expect("Failed to create loader")
         .with_plugin_dir("target/wasm32-wasip2/release");
 
-    loader.load_plugin("echo").await.expect("Failed to load plugin");
+    loader
+        .load_plugin("echo")
+        .await
+        .expect("Failed to load plugin");
 
     let metadata = loader.get_plugin_metadata("echo");
     assert!(metadata.is_some(), "No metadata found for echo plugin");
@@ -46,9 +53,16 @@ async fn test_list_loaded_plugins() {
         .expect("Failed to create loader")
         .with_plugin_dir("target/wasm32-wasip2/release");
 
-    assert_eq!(loader.list_plugins().len(), 0, "Should start with no plugins");
+    assert_eq!(
+        loader.list_plugins().len(),
+        0,
+        "Should start with no plugins"
+    );
 
-    loader.load_plugin("echo").await.expect("Failed to load plugin");
+    loader
+        .load_plugin("echo")
+        .await
+        .expect("Failed to load plugin");
 
     let plugins = loader.list_plugins();
     assert_eq!(plugins.len(), 1, "Should have 1 plugin loaded");
@@ -74,7 +88,14 @@ async fn test_multiple_plugins() {
     // Load multiple plugins (if they exist)
     let plugins = vec!["echo".to_string()];
     let result = loader.load_plugins(&plugins).await;
-    assert!(result.is_ok(), "Loading multiple plugins failed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Loading multiple plugins failed: {:?}",
+        result.err()
+    );
 
-    assert!(loader.list_plugins().len() >= 1, "Should have at least 1 plugin");
+    assert!(
+        loader.list_plugins().len() >= 1,
+        "Should have at least 1 plugin"
+    );
 }
