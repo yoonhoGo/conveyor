@@ -782,6 +782,41 @@ async fn main() -> Result<()> {
 
    **Status**: ✅ Production-ready, enables modular pipeline architecture
 
+11. **CLI Stage Management Commands** ⭐ NEW (January 2025) ✅ Production-ready
+   - **Architecture**: Interactive CLI tools for pipeline development
+   - **Stage Subcommand Group**: Organized commands under `conveyor stage`
+   - **Dialoguer Integration**: User-friendly prompts and menus
+   - **TOML Manipulation**: Safe modification of existing pipeline files
+
+   **Core Commands**:
+   - ✅ `stage new`: Create new DAG-based pipeline templates
+   - ✅ `stage add`: Interactively add stages to existing pipelines
+   - ✅ `stage edit`: Full-featured interactive pipeline editor
+   - ✅ Interactive/non-interactive modes for automation support
+   - ✅ Input validation and dependency checking
+
+   **Features**:
+   - **Template Generation**: Creates valid DAG pipeline structure
+   - **13 Stage Types**: Full support for all built-in and plugin stages
+   - **Dependency Management**: Automatic validation of stage dependencies
+   - **Live Editing**: Add, remove, reorder, view stages
+   - **Configuration Prompts**: Context-aware config collection per stage type
+   - **TOML Preservation**: Safely updates existing files without data loss
+
+   **Implementation**:
+   - `scaffold.rs` (177 lines): Pipeline template generation
+   - `add_stage.rs` (354 lines): Interactive stage addition
+   - `edit.rs` (179 lines): Full pipeline editor with menu system
+   - `dialoguer` dependency for CLI interaction
+   - Complete integration with existing DAG pipeline system
+
+   **Testing**:
+   - 5 unit tests passing (tests/cli_commands_test.rs)
+   - Template generation, TOML validity, metadata verification
+   - Output path handling and default value testing
+
+   **Status**: ✅ Production-ready, simplifies pipeline development workflow
+
 ### Short Term
 
 1. **WASM Plugin Expansion**:
@@ -1011,14 +1046,18 @@ conveyor/
 │   ├── wasm_plugin_test.rs        # WASM plugin tests (~80 lines)
 │   ├── dag_pipeline_test.rs       # DAG pipeline tests
 │   ├── http_fetch_test.rs         # HTTP fetch transform tests
-│   └── pipeline_stage_test.rs     # Pipeline stage tests (~172 lines)
+│   ├── pipeline_stage_test.rs     # Pipeline stage tests (~172 lines)
+│   └── cli_commands_test.rs       # CLI commands tests (~122 lines)
 └── src/                           # Main application
     ├── main.rs                    # CLI entry point
     ├── lib.rs                     # Library exports
     ├── plugin_loader.rs           # FFI plugin loader (150 lines)
     ├── wasm_plugin_loader.rs      # WASM plugin loader (280 lines)
     ├── cli/
-    │   └── mod.rs                 # CLI helpers (list, generate)
+    │   ├── mod.rs                 # CLI module exports
+    │   ├── scaffold.rs            # Pipeline template generator (~177 lines)
+    │   ├── add_stage.rs           # Interactive stage addition (~354 lines)
+    │   └── edit.rs                # Interactive pipeline editor (~179 lines)
     ├── core/
     │   ├── mod.rs                 # Core module exports
     │   ├── config.rs              # Configuration types (240 lines)
@@ -1051,14 +1090,15 @@ conveyor/
 ```
 
 **Total Lines of Code**:
-- Main binary: ~2,520 lines (including WASM loader and pipeline stage)
+- Main binary: ~3,230 lines (including WASM loader, pipeline stage, CLI commands)
+  - CLI commands: ~710 lines (scaffold, add_stage, edit)
 - FFI Plugin API: ~100 lines
 - WASM Plugin API: ~100 lines
 - HTTP plugin (FFI): ~300 lines
 - MongoDB plugin (FFI): ~400 lines
 - Echo plugin (WASM): ~75 lines
-- Tests: ~400 lines (FFI + WASM + DAG + HTTP Fetch + Pipeline Stage integration tests)
-- **Total**: ~3,900 lines (excluding tests: ~3,500 lines)
+- Tests: ~522 lines (FFI + WASM + DAG + HTTP Fetch + Pipeline Stage + CLI tests)
+- **Total**: ~4,732 lines (excluding tests: ~4,210 lines)
 
 **Key Organization Principles**:
 - **Dual Plugin Systems**: FFI for performance, WASM for security/portability

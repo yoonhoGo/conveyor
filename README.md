@@ -377,13 +377,7 @@ conveyor list
 conveyor list --module-type sources
 ```
 
-#### Generate Sample Configuration
-
-```bash
-conveyor generate --output sample-pipeline.toml
-```
-
-#### Stage Management Commands (NEW!)
+#### Stage Management Commands
 
 Manage pipeline stages with interactive commands:
 
