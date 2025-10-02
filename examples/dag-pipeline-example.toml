@@ -1,0 +1,58 @@
+# DAG-based Pipeline Example
+# Demonstrates the new flexible stage-based architecture
+
+[pipeline]
+name = "user-posts-dag-pipeline"
+version = "1.0"
+description = "Example DAG pipeline: fetch users, filter active users, fetch their posts"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 300
+
+# Stage 1: Load user data from JSON file
+[[stages]]
+id = "load_users"
+type = "source.json"
+inputs = []  # No inputs - this is a source
+
+[stages.config]
+path = "data/users.json"
+format = "records"
+
+# Stage 2: Filter only active users
+[[stages]]
+id = "filter_active_users"
+type = "transform.filter"
+inputs = ["load_users"]  # Depends on load_users stage
+
+[stages.config]
+column = "status"
+operator = "=="
+value = "active"
+
+# Stage 3: Save filtered users to a file
+[[stages]]
+id = "save_active_users"
+type = "sink.json"
+inputs = ["filter_active_users"]
+
+[stages.config]
+path = "output/active_users.json"
+format = "records"
+
+# Stage 4: Also display filtered users to console
+[[stages]]
+id = "display_users"
+type = "sink.stdout"
+inputs = ["filter_active_users"]  # Same input as save_active_users - branching!
+
+[stages.config]
+format = "table"
+limit = 10
+
+# Note: In a real scenario, you could add more stages here:
+# - An HTTP source stage that takes filtered users and fetches their posts
+# - Transform stages to process the posts
+# - Multiple sink stages to save results in different formats

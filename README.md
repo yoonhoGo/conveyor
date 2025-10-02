@@ -11,12 +11,14 @@ A high-performance, TOML-based ETL (Extract, Transform, Load) CLI tool built in 
 ## Features
 
 - **📋 TOML Configuration**: Simple, declarative pipeline definitions
+- **🔀 DAG-Based Pipelines**: NEW! Flexible stage composition with automatic dependency resolution
 - **⚡ High Performance**: Built with Rust and Polars for fast data processing (10-100x faster than Python)
 - **🔌 Dynamic Plugin System**: Load plugins on-demand with version checking and panic isolation
-- **🔄 Async Processing**: Built on Tokio for efficient concurrent operations
+- **🔄 Async Processing**: Built on Tokio for efficient concurrent operations with parallel stage execution
 - **🛡️ Type-Safe**: Rust's type system ensures reliability and safety
 - **📊 Multiple Data Formats**: Support for CSV, JSON, HTTP APIs, and more
 - **🏗️ Workspace Architecture**: Modular crate structure for maintainability
+- **🔁 Backward Compatible**: Seamlessly converts legacy pipelines to DAG format
 
 ## Installation
 
@@ -131,6 +133,186 @@ pretty = true
 ```bash
 conveyor run -c pipeline.toml
 ```
+
+## DAG-Based Pipelines (New!)
+
+Conveyor now supports flexible DAG-based pipelines where you can compose stages in any order, with automatic dependency resolution and parallel execution.
+
+### Why DAG Pipelines?
+
+- **Flexible Composition**: Use sources, transforms, and sinks anywhere in the pipeline
+- **Branching**: Send the same data to multiple stages (e.g., save to file AND display to console)
+- **Sequential Chaining**: Source → Transform → HTTP Source (fetch related data) → Transform → Sink
+- **Automatic Parallelization**: Independent stages execute concurrently
+- **Cycle Detection**: Validates pipeline structure before execution
+
+### DAG Pipeline Format
+
+```toml
+[pipeline]
+name = "user-posts-pipeline"
+version = "1.0"
+
+[[stages]]
+id = "load_users"           # Unique identifier
+type = "source.json"        # Stage type: category.name
+inputs = []                 # No inputs (this is a source)
+
+[stages.config]
+path = "users.json"
+
+[[stages]]
+id = "filter_active"
+type = "transform.filter"
+inputs = ["load_users"]     # Depends on load_users
+
+[stages.config]
+column = "status"
+operator = "=="
+value = "active"
+
+# Branching: Same data goes to two different stages
+[[stages]]
+id = "save_to_file"
+type = "sink.json"
+inputs = ["filter_active"]
+
+[stages.config]
+path = "output.json"
+
+[[stages]]
+id = "display"
+type = "sink.stdout"
+inputs = ["filter_active"]  # Same input!
+
+[stages.config]
+format = "table"
+```
+
+### Key Differences from Legacy Format
+
+| Feature | Legacy Format | DAG Format |
+|---------|--------------|------------|
+| Stage definition | Separate `[[sources]]`, `[[transforms]]`, `[[sinks]]` | Unified `[[stages]]` |
+| Execution order | Fixed: sources → transforms → sinks | Flexible: based on `inputs` dependencies |
+| Branching | Not supported | ✅ Multiple stages can use same input |
+| Parallel execution | Sequential only | ✅ Automatic for independent stages |
+| Type specification | `type = "json"` | `type = "source.json"` (category.name) |
+
+### Backward Compatibility
+
+**Old pipelines work automatically!** Conveyor converts legacy format to DAG format internally:
+
+```toml
+# This still works!
+[[sources]]
+name = "data"
+type = "csv"
+
+[[transforms]]
+name = "process"
+function = "filter"
+
+[[sinks]]
+name = "output"
+type = "json"
+```
+
+The pipeline will be automatically converted to DAG format and execute the same way.
+
+## HTTP Fetch Transform (New!)
+
+The `http_fetch` transform enables dynamic HTTP API calls within your pipeline, using previous stage data as context.
+
+### Key Features
+
+- **Template-based URLs**: Use Handlebars templates to create dynamic URLs from row data
+- **Per-row Mode**: Make individual API calls for each data row
+- **Batch Mode**: Send all data in a single API request
+- **Custom Headers**: Add authentication and custom headers
+- **Error Handling**: Gracefully handles failed requests with null values
+
+### Example: Fetch Related Data
+
+```toml
+# Stage 1: Load users
+[[stages]]
+id = "load_users"
+type = "source.json"
+inputs = []
+
+[stages.config]
+path = "users.json"
+
+# Stage 2: Filter active users
+[[stages]]
+id = "filter_active"
+type = "transform.filter"
+inputs = ["load_users"]
+
+[stages.config]
+column = "status"
+operator = "=="
+value = "active"
+
+# Stage 3: Fetch posts for each user via API
+[[stages]]
+id = "fetch_posts"
+type = "transform.http_fetch"
+inputs = ["filter_active"]
+
+[stages.config]
+url = "https://api.example.com/users/{{ id }}/posts"
+method = "GET"
+mode = "per_row"  # Call API for each row
+result_field = "posts"
+
+[stages.config.headers]
+Authorization = "Bearer YOUR_TOKEN"
+```
+
+**Result**: Each user record gets a new `posts` field with the API response.
+
+### Configuration Options
+
+| Option | Required | Default | Description |
+|--------|----------|---------|-------------|
+| `url` | ✅ Yes | - | URL template (supports `{{ field }}` syntax) |
+| `method` | No | `GET` | HTTP method (GET, POST, PUT, PATCH, DELETE) |
+| `mode` | No | `per_row` | `per_row` (N calls) or `batch` (1 call) |
+| `result_field` | No | `http_result` | Field name for storing API response |
+| `body` | No | - | Request body template (for POST/PUT/PATCH) |
+| `headers` | No | - | Custom HTTP headers |
+
+### Batch Mode Example
+
+```toml
+[[stages]]
+id = "batch_request"
+type = "transform.http_fetch"
+inputs = ["data"]
+
+[stages.config]
+url = "https://api.example.com/batch"
+method = "POST"
+mode = "batch"
+
+# Template has access to all records
+body = '''
+{
+  "ids": [{{#each records}}{{ this.id }}{{#unless @last}},{{/unless}}{{/each}}]
+}
+'''
+```
+
+### Use Cases
+
+1. **Enrich Data**: Add related information from APIs
+2. **Validation**: Check data against external services
+3. **Multi-step Pipelines**: Load → Filter → API → Transform → Save
+4. **Data Aggregation**: Collect data from multiple endpoints
+
+See `examples/http-chaining-example.toml` for a complete example.
 
 ## Plugin System
 

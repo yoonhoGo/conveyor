@@ -620,6 +620,95 @@ async fn main() -> Result<()> {
 
    **Status**: ✅ Production-ready, ready for real-world plugins
 
+8. **DAG-Based Pipeline System** ⭐ NEW (January 2025) ✅ Production-ready
+   - **Architecture**: Directed Acyclic Graph (DAG) execution engine with `petgraph`
+   - **Unified Stage Concept**: Sources, Transforms, and Sinks as composable stages
+   - **Flexible Composition**: Any stage can be used anywhere in the pipeline
+   - **Automatic Parallelization**: Independent stages execute concurrently
+
+   **Core Components**:
+   - ✅ `Stage` trait: Unified interface for all pipeline components
+   - ✅ Stage adapters: Convert existing Source/Transform/Sink to Stage
+   - ✅ DAG executor: Topological sort and level-based parallel execution
+   - ✅ Cycle detection: Validates pipeline structure before execution
+   - ✅ Legacy converter: Automatic conversion from old format
+
+   **Key Features**:
+   - **Branching**: Send same data to multiple stages (e.g., file + stdout)
+   - **Chaining**: Source → Transform → HTTP Source (fetch related) → Transform → Sink
+   - **Parallel Execution**: Stages in same level execute concurrently
+   - **Backward Compatible**: Old pipelines automatically converted to DAG format
+
+   **Configuration Format**:
+   ```toml
+   [[stages]]
+   id = "load_users"
+   type = "source.json"
+   inputs = []
+
+   [[stages]]
+   id = "filter_active"
+   type = "transform.filter"
+   inputs = ["load_users"]
+
+   [[stages]]
+   id = "save_file"
+   type = "sink.json"
+   inputs = ["filter_active"]
+
+   [[stages]]
+   id = "display"
+   type = "sink.stdout"
+   inputs = ["filter_active"]  # Branching!
+   ```
+
+   **Testing**:
+   - 4 integration tests passing (tests/dag_pipeline_test.rs)
+   - Basic pipeline, branching, cycle detection, legacy conversion verified
+   - Automatic level calculation and parallel execution tested
+
+   **Status**: ✅ Production-ready, enables functional pipeline composition
+
+9. **HTTP Fetch Transform** ⭐ NEW (January 2025) ✅ Production-ready
+   - **Architecture**: Input-aware HTTP transform using Handlebars templates
+   - **Dynamic API Calls**: Use previous stage data as context for HTTP requests
+   - **Flexible Modes**: Per-row (N calls) or batch (1 call) execution
+   - **Template Engine**: Handlebars for URL and body generation
+
+   **Core Features**:
+   - ✅ Template-based URL generation: `{{ field }}` syntax
+   - ✅ Per-row mode: Individual API call for each data row
+   - ✅ Batch mode: Single API call with all data
+   - ✅ Custom headers: Authentication and API key support
+   - ✅ Error handling: Graceful degradation with null values
+
+   **Configuration**:
+   ```toml
+   [[stages]]
+   id = "fetch_posts"
+   type = "transform.http_fetch"
+   inputs = ["users"]
+
+   [stages.config]
+   url = "https://api.example.com/users/{{ id }}/posts"
+   method = "GET"
+   mode = "per_row"
+   result_field = "posts"
+   ```
+
+   **Use Cases**:
+   - Data enrichment: Add related information from APIs
+   - Multi-step pipelines: Load → Filter → HTTP Fetch → Transform → Save
+   - Validation: Check data against external services
+   - Aggregation: Collect data from multiple endpoints
+
+   **Testing**:
+   - 3 integration tests passing (tests/http_fetch_test.rs)
+   - Template rendering, per-row mode, config validation verified
+   - Real API integration tested with JSONPlaceholder
+
+   **Status**: ✅ Production-ready, enables API-driven data pipelines
+
 ### Short Term
 
 1. **WASM Plugin Expansion**:

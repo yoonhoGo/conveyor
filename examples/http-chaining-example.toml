@@ -1,0 +1,100 @@
+# HTTP Chaining Example - DAG Pipeline
+# Demonstrates fetching related data using HTTP in the middle of a pipeline
+
+[pipeline]
+name = "user-posts-chaining"
+version = "1.0"
+description = "Load users, filter active ones, fetch their posts via API, transform and save"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 300
+
+# Stage 1: Load user data from local JSON file
+[[stages]]
+id = "load_users"
+type = "source.json"
+inputs = []
+
+[stages.config]
+path = "data/users.json"
+format = "records"
+
+# Stage 2: Filter only active users
+[[stages]]
+id = "filter_active"
+type = "transform.filter"
+inputs = ["load_users"]
+
+[stages.config]
+column = "status"
+operator = "=="
+value = "active"
+
+# Stage 3: Fetch posts for each active user from HTTP API
+# This is the key stage - it uses data from previous stage to make API calls
+[[stages]]
+id = "fetch_user_posts"
+type = "transform.http_fetch"
+inputs = ["filter_active"]
+
+[stages.config]
+url = "https://jsonplaceholder.typicode.com/users/{{ id }}/posts"
+method = "GET"
+mode = "per_row"  # Call API for each user
+result_field = "posts"
+
+[stages.config.headers]
+Accept = "application/json"
+
+# Stage 4: Transform the data (example: count posts)
+[[stages]]
+id = "process_posts"
+type = "transform.map"
+inputs = ["fetch_user_posts"]
+
+[stages.config]
+# Note: In a real implementation, you'd add a custom transform to count posts
+# For now, this is a placeholder showing where processing would happen
+
+# Stage 5: Save results to file
+[[stages]]
+id = "save_to_file"
+type = "sink.json"
+inputs = ["fetch_user_posts"]
+
+[stages.config]
+path = "output/users_with_posts.json"
+format = "records"
+pretty = true
+
+# Stage 6: Also display to console (branching from same source)
+[[stages]]
+id = "display_results"
+type = "sink.stdout"
+inputs = ["fetch_user_posts"]
+
+[stages.config]
+format = "json"
+limit = 5
+
+# Example input data (data/users.json):
+# [
+#   {"id": 1, "name": "Alice", "status": "active"},
+#   {"id": 2, "name": "Bob", "status": "inactive"},
+#   {"id": 3, "name": "Charlie", "status": "active"}
+# ]
+#
+# Pipeline flow:
+# 1. Load users.json
+# 2. Filter status == "active" → [Alice, Charlie]
+# 3. For each user, call API: GET /users/{id}/posts
+# 4. Process the posts data
+# 5. Save to file AND display to console (branching)
+#
+# Result: users_with_posts.json contains:
+# [
+#   {"id": 1, "name": "Alice", "status": "active", "posts": [...]},
+#   {"id": 3, "name": "Charlie", "status": "active", "posts": [...]}
+# ]

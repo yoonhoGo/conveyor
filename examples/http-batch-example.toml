@@ -1,0 +1,69 @@
+# HTTP Batch Request Example
+# Demonstrates sending all data in a single API request
+
+[pipeline]
+name = "batch-api-request"
+version = "1.0"
+description = "Collect user IDs and send them in a single batch API request"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 300
+
+# Stage 1: Load user data
+[[stages]]
+id = "load_users"
+type = "source.json"
+inputs = []
+
+[stages.config]
+path = "data/users.json"
+format = "records"
+
+# Stage 2: Fetch data for all users in a single batch request
+[[stages]]
+id = "batch_fetch"
+type = "transform.http_fetch"
+inputs = ["load_users"]
+
+[stages.config]
+# URL can use template with all records
+url = "https://api.example.com/batch/users"
+method = "POST"
+mode = "batch"  # Single request with all data
+result_field = "api_response"
+
+# Body template has access to all records via {{ records }}
+body = '''
+{
+  "user_ids": [
+    {{#each records}}
+    {{ this.id }}{{#unless @last}},{{/unless}}
+    {{/each}}
+  ]
+}
+'''
+
+[stages.config.headers]
+Content-Type = "application/json"
+Authorization = "Bearer YOUR_API_KEY"
+
+# Stage 3: Save results
+[[stages]]
+id = "save_results"
+type = "sink.json"
+inputs = ["batch_fetch"]
+
+[stages.config]
+path = "output/batch_results.json"
+format = "records"
+
+# Key difference from per_row mode:
+# - per_row: N API calls (one per row)
+# - batch: 1 API call (all rows in request body)
+#
+# Use batch mode when:
+# - API supports batch operations
+# - You want to minimize API calls
+# - All data fits in a single request

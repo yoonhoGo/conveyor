@@ -30,6 +30,12 @@ thiserror = "2.0"
 # Logging
 tracing = "0.1"
 
+# Graph data structures
+petgraph = "0.6"
+
+# Template engine
+handlebars = "6.2"
+
 # Plugin API
 conveyor-plugin-api = { path = "conveyor-plugin-api" }
 conveyor-wasm-plugin-api = { path = "conveyor-wasm-plugin-api" }
@@ -79,6 +85,12 @@ anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# Graph data structures
+petgraph = { workspace = true }
+
+# Template engine
+handlebars = { workspace = true }
+
 # Plugin system (FFI)
 libloading = "0.8"
 conveyor-plugin-api = { workspace = true }
@@ -93,6 +105,9 @@ regex = "1.11"
 indexmap = "2.11"
 base64 = "0.22.1"
 futures = { workspace = true }
+
+# HTTP client (for http_fetch transform)
+reqwest = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.10"
