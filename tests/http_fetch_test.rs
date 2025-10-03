@@ -5,6 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 #[tokio::test]
+#[ignore] // Requires external API access, may be unstable in CI
 async fn test_http_fetch_transform_with_dag_pipeline() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let input_path = temp_dir.path().join("users.json");
