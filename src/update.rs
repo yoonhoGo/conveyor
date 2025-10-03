@@ -219,18 +219,17 @@ fn is_newer_version(current: &str, latest: &str) -> bool {
     }
 }
 
-/// Get platform information for binary selection
+/// Get platform information for binary selection (macOS only)
 fn get_platform_info() -> Result<(&'static str, &'static str)> {
-    let os = match env::consts::OS {
-        "macos" => "darwin",
-        "linux" => "linux",
-        "windows" => "windows",
-        other => return Err(anyhow!("Unsupported OS: {}", other)),
-    };
+    if env::consts::OS != "macos" {
+        return Err(anyhow!("This binary only supports macOS"));
+    }
+
+    let os = "darwin";
 
     let arch = match env::consts::ARCH {
-        "x86_64" => "x86_64",
-        "aarch64" => "aarch64",
+        "x86_64" => "x64",
+        "aarch64" => "arm64",
         other => return Err(anyhow!("Unsupported architecture: {}", other)),
     };
 
@@ -252,9 +251,17 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn test_platform_info() {
         let (os, arch) = get_platform_info().unwrap();
-        assert!(!os.is_empty());
-        assert!(!arch.is_empty());
+        assert_eq!(os, "darwin");
+        assert!(arch == "x64" || arch == "arm64");
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn test_platform_info_unsupported() {
+        let result = get_platform_info();
+        assert!(result.is_err());
     }
 }

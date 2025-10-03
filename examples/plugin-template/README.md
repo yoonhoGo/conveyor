@@ -161,8 +161,6 @@ fn test_source() {
 
 2. The compiled plugin will be at:
    - macOS: `target/release/libconveyor_plugin_yourname.dylib`
-   - Linux: `target/release/libconveyor_plugin_yourname.so`
-   - Windows: `target/release/conveyor_plugin_yourname.dll`
 
 3. Load it in your pipeline:
    ```toml

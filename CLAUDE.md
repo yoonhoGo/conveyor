@@ -224,8 +224,6 @@ struct PluginHandle {
 
 2. **Dynamic Library Loading**: Plugins are `cdylib` crates compiled to:
    - macOS: `libconveyor_plugin_*.dylib`
-   - Linux: `libconveyor_plugin_*.so`
-   - Windows: `conveyor_plugin_*.dll`
 
 3. **Zero Overhead**: Unused plugins are never loaded into memory, reducing binary size and startup time
 
@@ -508,7 +506,7 @@ Conveyor supports two plugin architectures:
 - Shared process memory (plugins not sandboxed)
 
 **Constraints:**
-- Platform-specific binaries required (.dylib/.so/.dll)
+- macOS-only support (.dylib)
 - Same or compatible Rust compiler version
 - Potential for version mismatches
 

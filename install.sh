@@ -12,26 +12,19 @@ NC='\033[0m' # No Color
 REPO="yoonho-go/conveyor"
 BINARY_NAME="conveyor"
 
-# Detect OS and architecture
+# Detect OS and architecture (macOS only)
 detect_platform() {
     local os=$(uname -s | tr '[:upper:]' '[:lower:]')
     local arch=$(uname -m)
 
-    case "$os" in
-        linux*)
-            OS="linux"
-            ;;
-        darwin*)
-            OS="darwin"
-            ;;
-        msys*|mingw*|cygwin*)
-            OS="win32"
-            ;;
-        *)
-            echo -e "${RED}Unsupported operating system: $os${NC}"
-            exit 1
-            ;;
-    esac
+    # Check if running on macOS
+    if [[ "$os" != "darwin"* ]]; then
+        echo -e "${RED}This installer only supports macOS${NC}"
+        echo -e "${YELLOW}For other platforms, please build from source${NC}"
+        exit 1
+    fi
+
+    OS="darwin"
 
     case "$arch" in
         x86_64|amd64)
@@ -65,10 +58,6 @@ get_latest_version() {
 # Download binary
 download_binary() {
     local binary_name="${BINARY_NAME}-${PLATFORM}"
-    if [ "$OS" = "win32" ]; then
-        binary_name="${binary_name}.exe"
-    fi
-
     local download_url="https://github.com/${REPO}/releases/download/${VERSION}/${binary_name}"
     local temp_file="/tmp/${binary_name}"
 

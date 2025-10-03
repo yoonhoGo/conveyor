@@ -8,30 +8,15 @@ Guide for developing and contributing to Conveyor.
 - **Cargo**: Latest version
 - **Git**: For version control
 
-### Platform-Specific Requirements
+### Platform Requirements
 
-**macOS:**
+**macOS only:**
 ```bash
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Install Xcode Command Line Tools
 xcode-select --install
-```
-
-**Linux:**
-```bash
-# Install Rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Install build dependencies (Ubuntu/Debian)
-sudo apt-get install build-essential pkg-config libssl-dev
-```
-
-**Windows:**
-```bash
-# Install Rust from: https://rustup.rs
-# Install Visual Studio Build Tools
 ```
 
 ## Getting Started
@@ -540,19 +525,9 @@ cargo publish -p conveyor
 
 ### Build Errors
 
-**OpenSSL missing:**
+**OpenSSL missing (macOS):**
 ```bash
-# macOS
 brew install openssl
-
-# Ubuntu
-sudo apt-get install libssl-dev
-```
-
-**Linker errors:**
-```bash
-# Install build tools
-sudo apt-get install build-essential
 ```
 
 ### Test Failures

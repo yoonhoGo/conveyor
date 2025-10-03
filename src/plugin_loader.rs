@@ -301,22 +301,9 @@ impl Default for PluginLoader {
     }
 }
 
-/// Get platform-specific library name
+/// Get platform-specific library name (macOS only)
 fn get_library_name(plugin_name: &str) -> String {
-    #[cfg(target_os = "macos")]
-    {
-        format!("libconveyor_plugin_{}.dylib", plugin_name)
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        format!("libconveyor_plugin_{}.so", plugin_name)
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        format!("conveyor_plugin_{}.dll", plugin_name)
-    }
+    format!("libconveyor_plugin_{}.dylib", plugin_name)
 }
 
 #[cfg(test)]
@@ -325,14 +312,7 @@ mod tests {
 
     #[test]
     fn test_library_name() {
-        #[cfg(target_os = "macos")]
         assert_eq!(get_library_name("http"), "libconveyor_plugin_http.dylib");
-
-        #[cfg(target_os = "linux")]
-        assert_eq!(get_library_name("http"), "libconveyor_plugin_http.so");
-
-        #[cfg(target_os = "windows")]
-        assert_eq!(get_library_name("http"), "conveyor_plugin_http.dll");
     }
 
     #[test]

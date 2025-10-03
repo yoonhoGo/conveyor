@@ -13,10 +13,9 @@ env:
 jobs:
   test:
     name: Test Suite
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
 
     steps:
@@ -31,7 +30,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ runner.os }}-${{ matrix.rust }}
+          key: macos-${{ matrix.rust }}
 
       - name: Build plugins for tests
         run: |
@@ -68,7 +67,7 @@ jobs:
 
   wasm-build:
     name: WASM Plugin Build
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +92,7 @@ jobs:
 
   security-audit:
     name: Security Audit
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -108,7 +107,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-tools-audit
+          key: macos-cargo-tools-audit
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --force
@@ -119,7 +118,7 @@ jobs:
 
   coverage:
     name: Code Coverage
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -134,7 +133,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-tools-tarpaulin
+          key: macos-cargo-tools-tarpaulin
 
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin --force
