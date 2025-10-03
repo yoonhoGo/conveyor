@@ -57,8 +57,7 @@ inputs = ["filter_active"]
 path = "{}"
 format = "records"
 "#,
-        input_path_str,
-        output_path_str
+        input_path_str, output_path_str
     );
 
     let config = DagPipelineConfig::from_str(&config_str)?;
@@ -130,9 +129,7 @@ inputs = ["load_data"]
 path = "{}"
 format = "records"
 "#,
-        input_path_str,
-        output1_path_str,
-        output2_path_str
+        input_path_str, output1_path_str, output2_path_str
     );
 
     let config = DagPipelineConfig::from_str(&config_str)?;
