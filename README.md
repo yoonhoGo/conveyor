@@ -10,669 +10,283 @@ A high-performance, TOML-based ETL (Extract, Transform, Load) CLI tool built in 
 ## Features
 
 - **📋 TOML Configuration**: Simple, declarative pipeline definitions
-- **🔀 DAG-Based Pipelines**: NEW! Flexible stage composition with automatic dependency resolution
+- **🔀 DAG-Based Pipelines**: Flexible stage composition with automatic dependency resolution
 - **⚡ High Performance**: Built with Rust and Polars for fast data processing (10-100x faster than Python)
 - **🔌 Dynamic Plugin System**: Load plugins on-demand with version checking and panic isolation
-- **🔄 Async Processing**: Built on Tokio for efficient concurrent operations with parallel stage execution
+- **🔄 Async Processing**: Built on Tokio for efficient concurrent operations
 - **🛡️ Type-Safe**: Rust's type system ensures reliability and safety
 - **📊 Multiple Data Formats**: Support for CSV, JSON, HTTP APIs, and more
-- **🏗️ Workspace Architecture**: Modular crate structure for maintainability
-- **🔁 Backward Compatible**: Seamlessly converts legacy pipelines to DAG format
 
-## Installation
+## Quick Start
 
-### Option 1: Install Binary (Recommended)
+### Installation
 
-**One-line installation script:**
+**One-line installation:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/yoonhoGo/conveyor/main/install.sh | bash
 ```
 
-This script:
-- Detects your platform (macOS, Linux, Windows)
-- Downloads the appropriate binary from the latest GitHub Release
-- Installs to `/usr/local/bin` or `~/.local/bin`
-- Verifies installation
+Or [download the latest release](https://github.com/yoonhoGo/conveyor/releases) for your platform.
 
-**Manual installation:**
-
-1. Download the latest release for your platform from [Releases](https://github.com/yoonhoGo/conveyor/releases)
-   - macOS (Intel): `conveyor-darwin-x64`
-   - macOS (Apple Silicon): `conveyor-darwin-arm64`
-   - Linux (x64): `conveyor-linux-x64`
-   - Linux (ARM64): `conveyor-linux-arm64`
-   - Windows (x64): `conveyor-win32-x64.exe`
-
-2. Make it executable (macOS/Linux):
-   ```bash
-   chmod +x conveyor-*
-   ```
-
-3. Move to a directory in your PATH:
-   ```bash
-   sudo mv conveyor-* /usr/local/bin/conveyor
-   ```
-
-### Option 2: Build from Source
-
-**Prerequisites:**
-- Rust 1.70 or higher
-- Cargo
+**Build from source:**
 
 ```bash
 git clone https://github.com/yoonhoGo/conveyor.git
 cd conveyor
-cargo build --release --all
+cargo build --release
 ```
 
-The binary will be available at `target/release/conveyor`.
-Plugin libraries will be in `target/release/` as `libconveyor_plugin_*.dylib` (macOS) or `.so` (Linux).
+### Basic Pipeline
 
-## Quick Start
-
-### 1. Basic Pipeline (No Plugins)
-
-Create a file named `pipeline.toml`:
+Create `pipeline.toml`:
 
 ```toml
 [pipeline]
 name = "my_first_pipeline"
 version = "1.0.0"
-description = "A simple CSV to JSON transformation"
 
 [global]
 log_level = "info"
-max_parallel_tasks = 4
-timeout_seconds = 300
-# plugins = []  # No plugins needed for basic operations
 
-[[sources]]
-name = "input_data"
-type = "csv"
+# Stage 1: Load CSV data
+[[stages]]
+id = "load_data"
+type = "source.csv"
+inputs = []
 
-[sources.config]
+[stages.config]
 path = "data/input.csv"
-headers = true
-delimiter = ","
 
-[[transforms]]
-name = "filter_data"
-function = "filter"
+# Stage 2: Filter data
+[[stages]]
+id = "filter"
+type = "transform.filter"
+inputs = ["load_data"]
 
-[transforms.config]
+[stages.config]
 column = "amount"
 operator = ">="
 value = 100.0
 
-[[sinks]]
-name = "output_json"
-type = "json"
+# Stage 3: Save to JSON
+[[stages]]
+id = "save"
+type = "sink.json"
+inputs = ["filter"]
 
-[sinks.config]
+[stages.config]
 path = "output/result.json"
-format = "records"
-pretty = true
-
-[error_handling]
-strategy = "stop"
-```
-
-### 2. Pipeline with HTTP Plugin
-
-```toml
-[pipeline]
-name = "api_pipeline"
-version = "1.0.0"
-
-[global]
-log_level = "info"
-plugins = ["http"]  # Load HTTP plugin dynamically
-
-[[sources]]
-name = "api_data"
-type = "http"
-
-[sources.config]
-url = "https://api.example.com/data"
-method = "GET"
-format = "json"
-
-[[sinks]]
-name = "local_file"
-type = "json"
-
-[sinks.config]
-path = "output/api_data.json"
-format = "records"
 pretty = true
 ```
 
-### 3. Run the Pipeline
+Run it:
 
 ```bash
 conveyor run -c pipeline.toml
 ```
 
-## DAG-Based Pipelines (New!)
-
-Conveyor now supports flexible DAG-based pipelines where you can compose stages in any order, with automatic dependency resolution and parallel execution.
-
-### Why DAG Pipelines?
-
-- **Flexible Composition**: Use sources, transforms, and sinks anywhere in the pipeline
-- **Branching**: Send the same data to multiple stages (e.g., save to file AND display to console)
-- **Sequential Chaining**: Source → Transform → HTTP Source (fetch related data) → Transform → Sink
-- **Automatic Parallelization**: Independent stages execute concurrently
-- **Cycle Detection**: Validates pipeline structure before execution
-
-### DAG Pipeline Format
-
-```toml
-[pipeline]
-name = "user-posts-pipeline"
-version = "1.0"
-
-[[stages]]
-id = "load_users"           # Unique identifier
-type = "source.json"        # Stage type: category.name
-inputs = []                 # No inputs (this is a source)
-
-[stages.config]
-path = "users.json"
-
-[[stages]]
-id = "filter_active"
-type = "transform.filter"
-inputs = ["load_users"]     # Depends on load_users
-
-[stages.config]
-column = "status"
-operator = "=="
-value = "active"
-
-# Branching: Same data goes to two different stages
-[[stages]]
-id = "save_to_file"
-type = "sink.json"
-inputs = ["filter_active"]
-
-[stages.config]
-path = "output.json"
-
-[[stages]]
-id = "display"
-type = "sink.stdout"
-inputs = ["filter_active"]  # Same input!
-
-[stages.config]
-format = "table"
-```
-
-### Key Differences from Legacy Format
-
-| Feature | Legacy Format | DAG Format |
-|---------|--------------|------------|
-| Stage definition | Separate `[[sources]]`, `[[transforms]]`, `[[sinks]]` | Unified `[[stages]]` |
-| Execution order | Fixed: sources → transforms → sinks | Flexible: based on `inputs` dependencies |
-| Branching | Not supported | ✅ Multiple stages can use same input |
-| Parallel execution | Sequential only | ✅ Automatic for independent stages |
-| Type specification | `type = "json"` | `type = "source.json"` (category.name) |
-
-### Backward Compatibility
-
-**Old pipelines work automatically!** Conveyor converts legacy format to DAG format internally:
-
-```toml
-# This still works!
-[[sources]]
-name = "data"
-type = "csv"
-
-[[transforms]]
-name = "process"
-function = "filter"
-
-[[sinks]]
-name = "output"
-type = "json"
-```
-
-The pipeline will be automatically converted to DAG format and execute the same way.
-
-## HTTP Fetch Transform (New!)
-
-The `http_fetch` transform enables dynamic HTTP API calls within your pipeline, using previous stage data as context.
-
-### Key Features
-
-- **Template-based URLs**: Use Handlebars templates to create dynamic URLs from row data
-- **Per-row Mode**: Make individual API calls for each data row
-- **Batch Mode**: Send all data in a single API request
-- **Custom Headers**: Add authentication and custom headers
-- **Error Handling**: Gracefully handles failed requests with null values
-
-### Example: Fetch Related Data
-
-```toml
-# Stage 1: Load users
-[[stages]]
-id = "load_users"
-type = "source.json"
-inputs = []
-
-[stages.config]
-path = "users.json"
-
-# Stage 2: Filter active users
-[[stages]]
-id = "filter_active"
-type = "transform.filter"
-inputs = ["load_users"]
-
-[stages.config]
-column = "status"
-operator = "=="
-value = "active"
-
-# Stage 3: Fetch posts for each user via API
-[[stages]]
-id = "fetch_posts"
-type = "transform.http_fetch"
-inputs = ["filter_active"]
-
-[stages.config]
-url = "https://api.example.com/users/{{ id }}/posts"
-method = "GET"
-mode = "per_row"  # Call API for each row
-result_field = "posts"
-
-[stages.config.headers]
-Authorization = "Bearer YOUR_TOKEN"
-```
-
-**Result**: Each user record gets a new `posts` field with the API response.
-
-### Configuration Options
-
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `url` | ✅ Yes | - | URL template (supports `{{ field }}` syntax) |
-| `method` | No | `GET` | HTTP method (GET, POST, PUT, PATCH, DELETE) |
-| `mode` | No | `per_row` | `per_row` (N calls) or `batch` (1 call) |
-| `result_field` | No | `http_result` | Field name for storing API response |
-| `body` | No | - | Request body template (for POST/PUT/PATCH) |
-| `headers` | No | - | Custom HTTP headers |
-
-### Batch Mode Example
-
-```toml
-[[stages]]
-id = "batch_request"
-type = "transform.http_fetch"
-inputs = ["data"]
-
-[stages.config]
-url = "https://api.example.com/batch"
-method = "POST"
-mode = "batch"
-
-# Template has access to all records
-body = '''
-{
-  "ids": [{{#each records}}{{ this.id }}{{#unless @last}},{{/unless}}{{/each}}]
-}
-'''
-```
-
-### Use Cases
-
-1. **Enrich Data**: Add related information from APIs
-2. **Validation**: Check data against external services
-3. **Multi-step Pipelines**: Load → Filter → API → Transform → Save
-4. **Data Aggregation**: Collect data from multiple endpoints
-
-See `examples/http-chaining-example.toml` for a complete example.
-
-## Plugin System
-
-### How It Works
-
-Conveyor uses a **dynamic plugin system** that loads plugins only when needed:
-
-1. **On-Demand Loading**: Plugins specified in `[global].plugins` are loaded at runtime
-2. **Version Checking**: API version compatibility is verified before loading
-3. **Panic Isolation**: Plugin panics are caught and don't crash the host process
-4. **Zero Overhead**: Unused plugins are never loaded into memory
-
-### Available Plugins
-
-| Plugin | Type | Description | Config in TOML |
-|--------|------|-------------|----------------|
-| `http` | Source & Sink | REST API integration | `plugins = ["http"]` |
-| `mongodb` | Source & Sink | MongoDB database (planned) | `plugins = ["mongodb"]` |
-
-### Creating Custom Plugins
-
-Plugins are separate Rust crates compiled as `cdylib`:
-
-```toml
-# Cargo.toml for your plugin
-[package]
-name = "conveyor-plugin-custom"
-
-[dependencies]
-conveyor-plugin-api = { path = "../../conveyor-plugin-api" }
-
-[lib]
-crate-type = ["cdylib"]
-```
-
-See `plugins/conveyor-plugin-http` for a complete example.
-
-## Usage
-
-### Commands
-
-#### Run a Pipeline
-
-```bash
-conveyor run --config <path-to-config.toml>
-```
-
-Options:
-- `--dry-run`: Validate configuration without executing
-- `--continue-on-error`: Continue pipeline execution even if errors occur
-
-#### Validate Configuration
-
-```bash
-conveyor validate --config <path-to-config.toml>
-```
-
-#### List Available Modules
-
-```bash
-conveyor list
-conveyor list --module-type sources
-```
-
-#### Stage Management Commands
-
-Manage pipeline stages with interactive commands:
-
-**Create New Pipeline:**
-
-```bash
-# Non-interactive mode (uses defaults)
-conveyor stage new --output my-pipeline.toml
-
-# Interactive mode (prompts for details)
-conveyor stage new --output my-pipeline.toml --interactive
-```
-
-**Add Stage to Pipeline:**
-
-Interactively add a new stage to an existing pipeline:
-
-```bash
-conveyor stage add my-pipeline.toml
-```
-
-This command will prompt you to:
-1. Enter a unique stage ID
-2. Select the stage type (source, transform, sink, etc.)
-3. Choose input dependencies
-4. Configure stage-specific settings
-
-**Edit Pipeline Interactively:**
-
-Open an interactive editor to manage pipeline stages:
-
-```bash
-conveyor stage edit my-pipeline.toml
-```
-
-Features:
-- Add new stages
-- Remove existing stages
-- View stage details
-- Reorder stages (move up/down)
-- Live validation
-
-## Modules
-
-### Built-in Data Sources
-
-| Module | Description | Configuration |
-|--------|-------------|---------------|
-| `csv` | Read CSV files | `path`, `headers`, `delimiter` |
-| `json` | Read JSON files | `path`, `format` (records/jsonl/dataframe) |
-| `stdin` | Read from standard input | `format` (json/jsonl/csv/raw) |
-
-### Plugin Data Sources
-
-| Module | Plugin | Description | Configuration |
-|--------|--------|-------------|---------------|
-| `http` | http | Fetch data from REST APIs | `url`, `method`, `format`, `headers`, `body` |
-| `mongodb` | mongodb | Read from MongoDB (planned) | `connection_string`, `database`, `collection` |
-
-### Transforms
-
-| Function | Description | Configuration |
-|----------|-------------|---------------|
-| `filter` | Filter rows based on conditions | `column`, `operator`, `value` |
-| `map` | Create or transform columns | `expression`, `output_column` |
-| `validate_schema` | Validate data schema | `required_fields`, `field_types`, `non_nullable` |
-
-### Built-in Sinks
-
-| Module | Description | Configuration |
-|--------|-------------|---------------|
-| `csv` | Write to CSV files | `path`, `headers`, `delimiter` |
-| `json` | Write to JSON files | `path`, `format`, `pretty` |
-| `stdout` | Write to standard output | `format` (table/json/jsonl/csv), `limit` |
-
-### Plugin Sinks
-
-| Module | Plugin | Description | Configuration |
-|--------|--------|-------------|---------------|
-| `http` | http | Send data to REST APIs | `url`, `method`, `format`, `headers` |
-| `mongodb` | mongodb | Write to MongoDB (planned) | `connection_string`, `database`, `collection` |
-
-## Configuration Reference
-
-### Global Section
-
-```toml
-[global]
-log_level = "info"              # trace, debug, info, warn, error
-max_parallel_tasks = 4          # Number of concurrent tasks
-timeout_seconds = 300           # Pipeline timeout
-plugins = ["http", "mongodb"]   # Plugins to load (optional)
-```
-
-### Error Handling
-
-```toml
-[error_handling]
-strategy = "stop"               # stop, continue, retry
-max_retries = 3                 # Number of retry attempts
-retry_delay_seconds = 5         # Delay between retries
-```
+## Documentation
+
+- **[DAG Pipelines](docs/dag-pipelines.md)** - Flexible pipeline composition with branching and parallelism
+- **[HTTP Fetch Transform](docs/http-fetch-transform.md)** - Dynamic API calls within pipelines
+- **[Plugin System](docs/plugin-system.md)** - Create and use plugins (FFI & WASM)
+- **[Modules Reference](docs/modules-reference.md)** - All built-in sources, transforms, and sinks
+- **[Configuration](docs/configuration.md)** - Complete configuration reference
+- **[Architecture](docs/architecture.md)** - System design and internals
+- **[Development](docs/development.md)** - Building and contributing
 
 ## Examples
 
-See the `examples/` directory for complete pipeline configurations:
+### 1. CSV to JSON Transformation
 
-- `simple_pipeline.toml` - Basic CSV to JSON transformation (no plugins)
-- `http_plugin_example.toml` - Fetch data from REST APIs using HTTP plugin
-- `mongodb_pipeline.toml` - MongoDB ETL (when plugin is ready)
+```toml
+[[stages]]
+id = "load"
+type = "source.csv"
+inputs = []
+[stages.config]
+path = "sales.csv"
 
-## Architecture
-
-### Workspace Structure
-
-```
-conveyor/
-├── Cargo.toml                     # Workspace root
-├── conveyor-plugin-api/           # Plugin API crate
-│   ├── src/lib.rs                 # Plugin traits and types
-│   └── Cargo.toml
-├── plugins/                       # Plugin crates
-│   ├── conveyor-plugin-http/
-│   │   ├── src/lib.rs             # HTTP source & sink
-│   │   └── Cargo.toml
-│   └── conveyor-plugin-mongodb/
-│       ├── src/lib.rs             # MongoDB source & sink
-│       └── Cargo.toml
-├── src/                           # Main application
-│   ├── cli/                       # Command-line interface
-│   ├── core/                      # Core pipeline engine
-│   │   ├── config.rs              # Configuration parsing
-│   │   ├── error.rs               # Error types
-│   │   ├── pipeline.rs            # Pipeline executor
-│   │   ├── registry.rs            # Module registry
-│   │   └── traits.rs              # Core traits
-│   ├── modules/                   # Built-in modules
-│   │   ├── sources/               # CSV, JSON, Stdin
-│   │   ├── transforms/            # Filter, Map, Validate
-│   │   └── sinks/                 # CSV, JSON, Stdout
-│   ├── plugin_loader.rs           # Dynamic plugin loader
-│   └── main.rs
-├── examples/                      # Example pipelines
-├── tests/                         # Integration tests
-└── data/                          # Test data
+[[stages]]
+id = "save"
+type = "sink.json"
+inputs = ["load"]
+[stages.config]
+path = "output.json"
 ```
 
-### Key Design Decisions
+### 2. HTTP API Pipeline
 
-1. **Workspace Dependencies**: All common dependencies managed in `[workspace.dependencies]` for version consistency
-2. **Plugin Isolation**: Plugins are separate `cdylib` crates that can be updated independently
-3. **Panic Safety**: Plugin loader catches panics to prevent host process crashes
-4. **Version Checking**: Plugin API version is verified before loading
-5. **Zero-Copy**: Polars and Arrow enable efficient data processing without unnecessary copies
+```toml
+[global]
+plugins = ["http"]
+
+[[stages]]
+id = "fetch"
+type = "plugin.http"
+inputs = []
+[stages.config]
+url = "https://api.example.com/data"
+method = "GET"
+
+[[stages]]
+id = "save"
+type = "sink.json"
+inputs = ["fetch"]
+[stages.config]
+path = "api_data.json"
+```
+
+### 3. Data Enrichment with API
+
+```toml
+[[stages]]
+id = "users"
+type = "source.csv"
+inputs = []
+
+[[stages]]
+id = "fetch_profiles"
+type = "transform.http_fetch"
+inputs = ["users"]
+[stages.config]
+url = "https://api.example.com/users/{{ id }}/profile"
+result_field = "profile"
+
+[[stages]]
+id = "save"
+type = "sink.json"
+inputs = ["fetch_profiles"]
+[stages.config]
+path = "enriched_users.json"
+```
+
+See [examples/](examples/) for more complete pipelines.
+
+## CLI Commands
+
+```bash
+# Run pipeline
+conveyor run -c pipeline.toml
+
+# Validate configuration
+conveyor validate -c pipeline.toml
+
+# List available modules
+conveyor list
+
+# Create new pipeline
+conveyor stage new -o my-pipeline.toml
+
+# Add stage to pipeline
+conveyor stage add pipeline.toml
+
+# Interactive pipeline editor
+conveyor stage edit pipeline.toml
+```
+
+## Available Modules
+
+### Built-in Sources
+- `source.csv` - Read CSV files
+- `source.json` - Read JSON files
+- `source.stdin` - Read from standard input
+
+### Built-in Transforms
+- `transform.filter` - Filter rows by conditions
+- `transform.map` - Transform columns with expressions
+- `transform.validate_schema` - Validate data schema
+- `transform.http_fetch` - Make HTTP requests per row
+
+### Built-in Sinks
+- `sink.csv` - Write to CSV
+- `sink.json` - Write to JSON
+- `sink.stdout` - Display in terminal
+
+### Plugin Modules
+- `plugin.http` - HTTP source & sink (REST APIs)
+- `plugin.mongodb` - MongoDB source & sink
+
+See [Modules Reference](docs/modules-reference.md) for complete documentation.
+
+## Plugin System
+
+Conveyor supports dynamic plugins loaded on-demand:
+
+```toml
+[global]
+plugins = ["http", "mongodb"]  # Load only what you need
+```
+
+**Available Plugins:**
+- **HTTP Plugin**: REST API integration
+- **MongoDB Plugin**: MongoDB database operations
+
+**Create Custom Plugins:**
+- FFI Plugins (Rust cdylib)
+- WASM Plugins (Component Model)
+
+See [Plugin System](docs/plugin-system.md) for plugin development guide.
 
 ## Performance
 
-Conveyor is built with performance in mind:
+Conveyor is built for performance:
 
 - **Rust**: Zero-cost abstractions and memory safety
-- **Polars**: High-performance DataFrame library (10-100x faster than Pandas)
-- **Tokio**: Efficient async runtime for I/O operations
-- **Arrow**: Columnar memory format for optimal data processing
-- **Lazy Evaluation**: Polars optimizes query plans before execution
-
-Benchmark comparisons with Python-based ETL tools show **10-100x performance improvements** for typical workloads.
+- **Polars**: 10-100x faster than Pandas for data processing
+- **Tokio**: Efficient async I/O operations
+- **Arrow**: Columnar memory format for optimal performance
 
 ## Development
 
-### Running Tests
-
 ```bash
-# Run all tests
+# Clone repository
+git clone https://github.com/yoonhoGo/conveyor.git
+cd conveyor
+
+# Build all crates
+cargo build --all
+
+# Run tests
 cargo test --all
 
-# Run only unit tests
-cargo test --lib
-
-# Run with output
-cargo test -- --nocapture
+# Run clippy
+cargo clippy --all-targets --all-features
 ```
 
-**Test Coverage:**
-- 28+ unit tests (config validation, registry, sources, FFI plugin system)
-- 3 FFI plugin integration tests
-- 6 WASM plugin integration tests
-- 4 DAG pipeline tests
-- 3 HTTP fetch transform tests
-- 3 pipeline stage tests
-- 5 CLI commands tests
-- **Total: 52+ tests passing**
-
-### Building Plugins
-
-```bash
-# Build all plugins
-cargo build --all --release
-
-# Build specific plugin
-cargo build -p conveyor-plugin-http --release
-
-# Plugin libraries will be in target/release/
-ls target/release/libconveyor_plugin_*.{dylib,so}
-```
-
-### Project Structure Best Practices
-
-- **Shared dependencies** in `[workspace.dependencies]`
-- **Plugin API** is stable and versioned
-- **Plugins** are independent crates with minimal dependencies
-- **Core** application doesn't depend on plugins
-
-## Roadmap
-
-### Completed ✅
-- [x] Core pipeline engine
-- [x] CSV, JSON data sources
-- [x] Basic transforms (filter, map, validate)
-- [x] File-based sinks
-- [x] HTTP plugin (source & sink)
-- [x] Dynamic plugin loading system
-- [x] Workspace architecture
-- [x] Plugin version checking
-- [x] Panic isolation for plugins
-
-### In Progress 🚧
-- [ ] MongoDB plugin implementation
-- [ ] Plugin API documentation
-- [ ] Plugin developer guide
-
-### Planned 📋
-- [ ] Database connectors (PostgreSQL, MySQL) as plugins
-- [ ] Advanced transforms (aggregate, join, pivot)
-- [ ] Stream processing support
-- [ ] WebAssembly plugin support (for enhanced security)
-- [ ] Web UI for pipeline monitoring
-- [ ] Distributed execution
-
-## Technical Details
-
-### Plugin Safety
-
-The plugin system includes several safety features:
-
-1. **Version Checking**: Plugins are rejected if API version mismatches
-2. **Panic Handling**: `std::panic::catch_unwind` isolates plugin failures
-3. **Capability Verification**: Plugins must provide at least one module type
-4. **Platform-Specific Loading**: Automatic library extension detection (.dylib, .so, .dll)
-
-### Dependencies
-
-#### Workspace-level Dependencies
-
-All common dependencies are managed centrally in `[workspace.dependencies]`:
-
-- `serde`, `serde_json`, `toml` - Serialization
-- `tokio`, `async-trait` - Async runtime
-- `anyhow`, `thiserror` - Error handling
-- `tracing` - Logging
-- `reqwest` - HTTP client (for HTTP plugin)
-- `mongodb` - Database driver (for MongoDB plugin)
-
-This ensures version consistency across all crates.
+See [Development Guide](docs/development.md) for detailed instructions.
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Areas for Contribution
+Contributions are welcome! Areas for contribution:
 
 - **New Plugins**: Database connectors, cloud services, message queues
 - **Transforms**: More data transformation functions
 - **Performance**: Optimizations and benchmarks
-- **Documentation**: Examples, guides, API docs
-- **Testing**: Integration tests, fuzzing, property tests
+- **Documentation**: Examples, guides, tutorials
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Roadmap
+
+### Completed ✅
+- Core DAG pipeline engine
+- CSV, JSON, HTTP data sources
+- Dynamic plugin system (FFI & WASM)
+- HTTP fetch transform
+- CLI with interactive stage management
+
+### In Progress 🚧
+- MongoDB plugin
+- WASM plugin ecosystem
+
+### Planned 📋
+- PostgreSQL, MySQL plugins
+- Advanced transforms (join, aggregate, pivot)
+- Stream processing
+- Web UI for monitoring
+- Distributed execution
 
 ## License
 
@@ -684,13 +298,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Powered by [Polars](https://www.pola.rs/) for data processing
 - Uses [Tokio](https://tokio.rs/) for async runtime
 - CLI built with [Clap](https://docs.rs/clap/)
-- Plugin architecture inspired by Rust community best practices
 
 ## Support
 
-- 📖 [Documentation](https://github.com/yourusername/conveyor/wiki)
-- 🐛 [Issue Tracker](https://github.com/yourusername/conveyor/issues)
-- 💬 [Discussions](https://github.com/yourusername/conveyor/discussions)
+- 📖 [Documentation](docs/)
+- 🐛 [Issue Tracker](https://github.com/yoonhoGo/conveyor/issues)
+- 💬 [Discussions](https://github.com/yoonhoGo/conveyor/discussions)
 
 ---
 
