@@ -1,6 +1,11 @@
+pub mod distinct;
 pub mod filter;
+pub mod group_by;
 pub mod http_fetch;
 pub mod map;
+pub mod reduce;
+pub mod select;
+pub mod sort;
 pub mod validate;
 
 use crate::core::traits::TransformRef;
@@ -25,6 +30,26 @@ pub fn register_transforms() -> HashMap<String, TransformRef> {
     transforms.insert(
         "http_fetch".to_string(),
         Arc::new(http_fetch::HttpFetchTransform::new()) as TransformRef,
+    );
+    transforms.insert(
+        "reduce".to_string(),
+        Arc::new(reduce::ReduceTransform) as TransformRef,
+    );
+    transforms.insert(
+        "group_by".to_string(),
+        Arc::new(group_by::GroupByTransform) as TransformRef,
+    );
+    transforms.insert(
+        "sort".to_string(),
+        Arc::new(sort::SortTransform) as TransformRef,
+    );
+    transforms.insert(
+        "select".to_string(),
+        Arc::new(select::SelectTransform) as TransformRef,
+    );
+    transforms.insert(
+        "distinct".to_string(),
+        Arc::new(distinct::DistinctTransform) as TransformRef,
     );
 
     transforms
