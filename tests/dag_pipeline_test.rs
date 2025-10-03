@@ -19,6 +19,10 @@ async fn test_dag_pipeline_basic() -> Result<()> {
     fs::write(&input_path, input_data)?;
 
     // Create DAG pipeline config
+    // Convert paths to use forward slashes for TOML compatibility on Windows
+    let input_path_str = input_path.to_string_lossy().replace('\\', "/");
+    let output_path_str = output_path.to_string_lossy().replace('\\', "/");
+
     let config_str = format!(
         r#"
 [pipeline]
@@ -53,8 +57,8 @@ inputs = ["filter_active"]
 path = "{}"
 format = "records"
 "#,
-        input_path.display(),
-        output_path.display()
+        input_path_str,
+        output_path_str
     );
 
     let config = DagPipelineConfig::from_str(&config_str)?;
@@ -88,6 +92,11 @@ async fn test_dag_pipeline_branching() -> Result<()> {
     fs::write(&input_path, input_data)?;
 
     // Create DAG pipeline with branching (one source, two sinks)
+    // Convert paths to use forward slashes for TOML compatibility on Windows
+    let input_path_str = input_path.to_string_lossy().replace('\\', "/");
+    let output1_path_str = output1_path.to_string_lossy().replace('\\', "/");
+    let output2_path_str = output2_path.to_string_lossy().replace('\\', "/");
+
     let config_str = format!(
         r#"
 [pipeline]
@@ -121,9 +130,9 @@ inputs = ["load_data"]
 path = "{}"
 format = "records"
 "#,
-        input_path.display(),
-        output1_path.display(),
-        output2_path.display()
+        input_path_str,
+        output1_path_str,
+        output2_path_str
     );
 
     let config = DagPipelineConfig::from_str(&config_str)?;
