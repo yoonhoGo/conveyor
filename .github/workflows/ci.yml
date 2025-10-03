@@ -33,6 +33,12 @@ jobs:
         with:
           key: ${{ runner.os }}-${{ matrix.rust }}
 
+      - name: Build plugins for tests
+        run: |
+          cargo build -p conveyor-plugin-test
+          cargo build -p conveyor-plugin-http
+          cargo build -p conveyor-plugin-mongodb
+
       - name: Run tests
         run: cargo test --all-features --workspace
 
@@ -131,6 +137,12 @@ jobs:
 
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin --force
+
+      - name: Build plugins for coverage
+        run: |
+          cargo build -p conveyor-plugin-test
+          cargo build -p conveyor-plugin-http
+          cargo build -p conveyor-plugin-mongodb
 
       - name: Generate coverage
         run: cargo tarpaulin --workspace --timeout 300 --out Xml
