@@ -17,7 +17,7 @@ async fn test_csv_to_json_pipeline() -> Result<()> {
         "id,name,value\n1,Alice,100\n2,Bob,200\n3,Charlie,150\n",
     )?;
 
-    // Create pipeline configuration
+    // Create pipeline configuration (DAG format)
     let config = format!(
         r#"
 [pipeline]
@@ -30,29 +30,32 @@ log_level = "info"
 max_parallel_tasks = 4
 timeout_seconds = 300
 
-[[sources]]
-name = "csv_input"
-type = "csv"
+[[stages]]
+id = "csv_input"
+type = "source.csv"
+inputs = []
 
-[sources.config]
+[stages.config]
 path = "{}"
 headers = true
 delimiter = ","
 
-[[transforms]]
-name = "filter_high_value"
-function = "filter"
+[[stages]]
+id = "filter_high_value"
+type = "transform.filter"
+inputs = ["csv_input"]
 
-[transforms.config]
+[stages.config]
 column = "value"
 operator = ">="
 value = 150
 
-[[sinks]]
-name = "json_output"
-type = "json"
+[[stages]]
+id = "json_output"
+type = "sink.json"
+inputs = ["filter_high_value"]
 
-[sinks.config]
+[stages.config]
 path = "{}"
 format = "records"
 pretty = true
@@ -110,19 +113,21 @@ log_level = "info"
 max_parallel_tasks = 4
 timeout_seconds = 300
 
-[[sources]]
-name = "test_source"
-type = "csv"
+[[stages]]
+id = "test_source"
+type = "source.csv"
+inputs = []
 
-[sources.config]
+[stages.config]
 path = "test.csv"
 headers = true
 
-[[sinks]]
-name = "test_sink"
-type = "json"
+[[stages]]
+id = "test_sink"
+type = "sink.json"
+inputs = ["test_source"]
 
-[sinks.config]
+[stages.config]
 path = "output.json"
 format = "records"
 
@@ -133,12 +138,11 @@ retry_delay_seconds = 5
 "#;
 
     // Parse config using conveyor's config parser
-    use conveyor::core::config::PipelineConfig;
-    let config: PipelineConfig = toml::from_str(config_str)?;
+    use conveyor::core::config::DagPipelineConfig;
+    let config: DagPipelineConfig = toml::from_str(config_str)?;
 
     assert_eq!(config.pipeline.name, "test");
-    assert_eq!(config.sources.len(), 1);
-    assert_eq!(config.sinks.len(), 1);
+    assert_eq!(config.stages.len(), 2);
 
     Ok(())
 }

@@ -1,4 +1,4 @@
-# MongoDB Cursor Pagination Test
+# MongoDB Cursor Pagination Test (DAG Format)
 # This pipeline demonstrates cursor-based pagination with small batch sizes
 
 [pipeline]
@@ -12,12 +12,13 @@ max_parallel_tasks = 2
 timeout_seconds = 600
 plugins = ["mongodb"]  # Load MongoDB plugin dynamically
 
-# MongoDB Source - Page 1 (batch_size = 8)
-[[sources]]
-name = "events_page1"
-type = "mongodb"
+# Stage 1: MongoDB Source - Page 1 (batch_size = 8)
+[[stages]]
+id = "events_page1"
+type = "plugin.mongodb"
+inputs = []
 
-[sources.config]
+[stages.config]
 connection_string = "mongodb://localhost:27017"
 database = "analytics"
 collection = "raw_events"
@@ -26,12 +27,13 @@ cursor_field = "_id"          # Use _id for pagination
 batch_size = 8                # Small batch to test pagination
 sort = '{ "_id": 1 }'
 
-# Output to stdout
-[[sinks]]
-name = "preview_page1"
-type = "stdout"
+# Stage 2: Output to stdout
+[[stages]]
+id = "preview_page1"
+type = "sink.stdout"
+inputs = ["events_page1"]
 
-[sinks.config]
+[stages.config]
 format = "table"
 
 # Error Handling

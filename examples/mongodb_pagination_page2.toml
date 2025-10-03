@@ -1,4 +1,4 @@
-# MongoDB Cursor Pagination Test - Page 2
+# MongoDB Cursor Pagination Test - Page 2 (DAG Format)
 # This pipeline demonstrates fetching the next page using cursor_value
 
 [pipeline]
@@ -12,12 +12,13 @@ max_parallel_tasks = 2
 timeout_seconds = 600
 plugins = ["mongodb"]  # Load MongoDB plugin dynamically
 
-# MongoDB Source - Page 2 (starting after first 8 documents)
-[[sources]]
-name = "events_page2"
-type = "mongodb"
+# Stage 1: MongoDB Source - Page 2 (starting after first 8 documents)
+[[stages]]
+id = "events_page2"
+type = "plugin.mongodb"
+inputs = []
 
-[sources.config]
+[stages.config]
 connection_string = "mongodb://localhost:27017"
 database = "analytics"
 collection = "raw_events"
@@ -27,12 +28,13 @@ cursor_value = "68ddb46805d95baf344f8805"  # Last _id from previous batch
 batch_size = 8
 sort = '{ "_id": 1 }'
 
-# Output to stdout
-[[sinks]]
-name = "preview_page2"
-type = "stdout"
+# Stage 2: Output to stdout
+[[stages]]
+id = "preview_page2"
+type = "sink.stdout"
+inputs = ["events_page2"]
 
-[sinks.config]
+[stages.config]
 format = "table"
 
 # Error Handling

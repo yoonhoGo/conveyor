@@ -1,4 +1,4 @@
-# HTTP ETL Pipeline Example
+# HTTP ETL Pipeline Example (DAG Format)
 # This pipeline fetches data from a public API, transforms it, and outputs to JSON
 
 [pipeline]
@@ -12,42 +12,46 @@ max_parallel_tasks = 2
 timeout_seconds = 300
 plugins = ["http"]  # Load HTTP plugin dynamically
 
-# HTTP Source - Fetch data from JSONPlaceholder API
-[[sources]]
-name = "users_api"
-type = "http"
+# Stage 1: HTTP Source - Fetch data from JSONPlaceholder API
+[[stages]]
+id = "users_api"
+type = "plugin.http"
+inputs = []
 
-[sources.config]
+[stages.config]
 url = "https://jsonplaceholder.typicode.com/users"
 method = "GET"
 format = "json"
 timeout = 30
 
-# Transformations
-[[transforms]]
-name = "validate_data"
-function = "validate_schema"
+# Stage 2: Validate schema
+[[stages]]
+id = "validate_data"
+type = "transform.validate_schema"
+inputs = ["users_api"]
 
-[transforms.config]
+[stages.config]
 required_fields = ["id", "name", "email"]
 non_nullable = ["id", "name"]
 
-# Output to JSON file
-[[sinks]]
-name = "output_json"
-type = "json"
+# Stage 3: Output to JSON file
+[[stages]]
+id = "output_json"
+type = "sink.json"
+inputs = ["validate_data"]
 
-[sinks.config]
+[stages.config]
 path = "output/http_users.json"
 format = "records"
 pretty = true
 
-# Also output to stdout for preview
-[[sinks]]
-name = "preview"
-type = "stdout"
+# Stage 4: Also output to stdout for preview (branching)
+[[stages]]
+id = "preview"
+type = "sink.stdout"
+inputs = ["validate_data"]
 
-[sinks.config]
+[stages.config]
 format = "table"
 limit = 5
 

@@ -13,7 +13,7 @@ mod plugin_loader;
 mod utils;
 mod wasm_plugin_loader;
 
-use crate::core::pipeline::Pipeline;
+use crate::core::pipeline::DagPipeline;
 
 #[derive(Parser)]
 #[command(
@@ -39,9 +39,6 @@ enum Commands {
 
         #[arg(long, help = "Validate configuration without running")]
         dry_run: bool,
-
-        #[arg(long, help = "Continue on errors")]
-        continue_on_error: bool,
     },
 
     #[command(about = "Validate a pipeline configuration")]
@@ -97,29 +94,25 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
 
     match cli.command {
-        Commands::Run {
-            config,
-            dry_run,
-            continue_on_error,
-        } => {
+        Commands::Run { config, dry_run } => {
             info!("Loading pipeline configuration from {:?}", config);
-            let pipeline = Pipeline::from_file(&config).await?;
+            let pipeline = DagPipeline::from_file(&config).await?;
 
             if dry_run {
                 info!("Dry run mode - validating configuration");
-                pipeline.validate().await?;
+                pipeline.validate()?;
                 info!("Configuration is valid");
             } else {
                 info!("Executing pipeline");
-                pipeline.execute(continue_on_error).await?;
+                pipeline.execute().await?;
                 info!("Pipeline execution completed");
             }
         }
 
         Commands::Validate { config } => {
             info!("Validating pipeline configuration from {:?}", config);
-            let pipeline = Pipeline::from_file(&config).await?;
-            pipeline.validate().await?;
+            let pipeline = DagPipeline::from_file(&config).await?;
+            pipeline.validate()?;
             println!("✓ Configuration is valid");
         }
 

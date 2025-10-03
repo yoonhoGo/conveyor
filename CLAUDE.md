@@ -60,22 +60,28 @@ conveyor/
 
 #### 1. Configuration System (`core/config.rs`)
 
-The configuration system uses `serde` for TOML deserialization with strong typing:
+The configuration system uses `serde` for TOML deserialization with strong typing. Conveyor uses a DAG-based pipeline configuration:
 
 ```rust
-pub struct PipelineConfig {
+pub struct DagPipelineConfig {
     pub pipeline: PipelineMetadata,
     pub global: GlobalConfig,
-    pub sources: Vec<SourceConfig>,
-    pub transforms: Vec<TransformConfig>,
-    pub sinks: Vec<SinkConfig>,
+    pub stages: Vec<StageConfig>,
     pub error_handling: ErrorHandlingConfig,
+}
+
+pub struct StageConfig {
+    pub id: String,              // Unique stage identifier
+    pub stage_type: String,      // e.g., "source.json", "transform.filter", "sink.csv"
+    pub inputs: Vec<String>,     // List of stage IDs this stage depends on
+    pub config: HashMap<String, toml::Value>,
 }
 ```
 
 Key features:
+- DAG-based execution with support for parallel stages and branching
 - Default values for optional fields
-- Comprehensive validation
+- Comprehensive validation (cycle detection, unique IDs, valid inputs)
 - Support for nested configurations
 - Plugin loading via `GlobalConfig.plugins: Vec<String>`
 
@@ -136,28 +142,32 @@ pub enum DataFormat {
 
 This abstraction allows seamless conversion between formats while maintaining performance.
 
-#### 4. Pipeline Executor (`core/pipeline.rs`)
+#### 4. DAG Pipeline Executor (`core/pipeline.rs`, `core/dag_executor.rs`, `core/dag_builder.rs`)
 
-The pipeline executor orchestrates data flow:
+The DAG pipeline executor orchestrates data flow using directed acyclic graphs:
 
 ```rust
-pub struct Pipeline {
-    config: PipelineConfig,
+pub struct DagPipeline {
+    config: DagPipelineConfig,
     registry: Arc<ModuleRegistry>,
+    executor: DagExecutor,
     plugin_loader: PluginLoader,
 }
 ```
 
 Features:
-- Sequential execution of sources → transforms → sinks
-- Dynamic plugin loading on initialization
-- Data passing between stages
-- Timeout handling
-- Error recovery based on strategy (stop/continue/retry)
+- **DAG-based execution**: Supports parallel execution and branching
+- **Topological ordering**: Stages execute in dependency order
+- **Level-based parallelism**: Stages with no dependencies between them run in parallel
+- **Dynamic plugin loading** on initialization
+- **Data passing between stages** via HashMap
+- **Timeout handling** at pipeline level
+- **Error recovery** based on strategy (stop/continue/retry)
+- **Cycle detection** during validation
 
 **Plugin Integration**: The pipeline loads plugins specified in `config.global.plugins` during initialization:
 ```rust
-pub async fn new(config: PipelineConfig) -> Result<Self> {
+pub async fn new(config: DagPipelineConfig) -> Result<Self> {
     let registry = Arc::new(ModuleRegistry::with_defaults().await?);
 
     // Load plugins dynamically
@@ -166,7 +176,11 @@ pub async fn new(config: PipelineConfig) -> Result<Self> {
         plugin_loader.load_plugins(&config.global.plugins)?;
     }
 
-    Ok(Self { config, registry, plugin_loader })
+    // Build DAG executor with cycle detection
+    let builder = DagPipelineBuilder::new(registry.clone());
+    let executor = builder.build(&config)?;
+
+    Ok(Self { config, registry, executor, plugin_loader })
 }
 ```
 

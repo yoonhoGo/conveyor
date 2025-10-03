@@ -1,4 +1,4 @@
-# MongoDB Cursor Pagination with Limit
+# MongoDB Cursor Pagination with Limit (DAG Format)
 # This demonstrates using both cursor pagination and limit
 
 [pipeline]
@@ -12,12 +12,13 @@ max_parallel_tasks = 2
 timeout_seconds = 600
 plugins = ["mongodb"]  # Load MongoDB plugin dynamically
 
-# MongoDB Source - First page with limit
-[[sources]]
-name = "events_limited"
-type = "mongodb"
+# Stage 1: MongoDB Source - First page with limit
+[[stages]]
+id = "events_limited"
+type = "plugin.mongodb"
+inputs = []
 
-[sources.config]
+[stages.config]
 connection_string = "mongodb://localhost:27017"
 database = "analytics"
 collection = "raw_events"
@@ -27,12 +28,13 @@ batch_size = 100
 limit = 5                     # Only fetch 5 documents
 sort = '{ "_id": 1 }'
 
-# Output to stdout
-[[sinks]]
-name = "preview"
-type = "stdout"
+# Stage 2: Output to stdout
+[[stages]]
+id = "preview"
+type = "sink.stdout"
+inputs = ["events_limited"]
 
-[sinks.config]
+[stages.config]
 format = "table"
 
 # Error Handling

@@ -1,4 +1,4 @@
-# HTTP Plugin Example
+# HTTP Plugin Example (DAG Format)
 # This example demonstrates using the HTTP plugin to fetch data from a REST API
 
 [pipeline]
@@ -12,23 +12,25 @@ max_parallel_tasks = 2
 timeout_seconds = 60
 plugins = ["http"]  # Load HTTP plugin dynamically
 
-# Fetch users from JSONPlaceholder API
-[[sources]]
-name = "api_users"
-type = "http"
+# Stage 1: Fetch users from JSONPlaceholder API
+[[stages]]
+id = "api_users"
+type = "plugin.http"
+inputs = []
 
-[sources.config]
+[stages.config]
 url = "https://jsonplaceholder.typicode.com/users"
 method = "GET"
 format = "json"
 timeout = 30
 
-# Output to JSON file
-[[sinks]]
-name = "json_output"
-type = "json"
+# Stage 2: Output to JSON file
+[[stages]]
+id = "json_output"
+type = "sink.json"
+inputs = ["api_users"]
 
-[sinks.config]
+[stages.config]
 path = "output/users_from_plugin.json"
 format = "records"
 pretty = true

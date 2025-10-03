@@ -1,4 +1,4 @@
-# Simple ETL Pipeline Example
+# Simple ETL Pipeline Example (DAG Format)
 # This pipeline reads CSV data, performs basic transformations, and outputs to JSON
 
 [pipeline]
@@ -11,57 +11,66 @@ log_level = "info"
 max_parallel_tasks = 4
 timeout_seconds = 300
 
-# Data Sources
-[[sources]]
-name = "sales_data"
-type = "csv"
+# Stage 1: Load CSV data
+[[stages]]
+id = "sales_data"
+type = "source.csv"
+inputs = []
 
-[sources.config]
+[stages.config]
 path = "data/sales.csv"
 headers = true
 delimiter = ","
 
-# Transformations
-[[transforms]]
-name = "validate_data"
-function = "validate_schema"
+# Stage 2: Validate schema
+[[stages]]
+id = "validate_data"
+type = "transform.validate_schema"
+inputs = ["sales_data"]
 
-[transforms.config]
+[stages.config]
 required_fields = ["id", "date", "amount", "customer_id"]
 date_fields = ["date"]
 
-[[transforms]]
-name = "filter_high_value"
-function = "filter"
+# Stage 3: Filter high value sales
+[[stages]]
+id = "filter_high_value"
+type = "transform.filter"
+inputs = ["validate_data"]
 
-[transforms.config]
+[stages.config]
 column = "amount"
 operator = ">="
 value = 1000.0
 
-[[transforms]]
-name = "add_tax"
-function = "map"
+# Stage 4: Add tax calculation
+[[stages]]
+id = "add_tax"
+type = "transform.map"
+inputs = ["filter_high_value"]
 
-[transforms.config]
+[stages.config]
 expression = "amount * 1.1"
 output_column = "amount_with_tax"
 
-# Data Sinks
-[[sinks]]
-name = "output_json"
-type = "json"
+# Stage 5: Save to JSON
+[[stages]]
+id = "output_json"
+type = "sink.json"
+inputs = ["add_tax"]
 
-[sinks.config]
+[stages.config]
 path = "output/processed_sales.json"
 format = "records"
 pretty = true
 
-[[sinks]]
-name = "high_value_csv"
-type = "csv"
+# Stage 6: Also save to CSV (branching from add_tax)
+[[stages]]
+id = "high_value_csv"
+type = "sink.csv"
+inputs = ["add_tax"]
 
-[sinks.config]
+[stages.config]
 path = "output/high_value_sales.csv"
 headers = true
 

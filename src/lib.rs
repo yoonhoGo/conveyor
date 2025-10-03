@@ -8,9 +8,9 @@ pub mod utils;
 pub mod wasm_plugin_loader;
 
 // Re-export commonly used types
-pub use core::config::PipelineConfig;
+pub use core::config::DagPipelineConfig;
 pub use core::error::{ConveyorError, ConveyorResult};
-pub use core::pipeline::Pipeline;
+pub use core::pipeline::DagPipeline;
 pub use core::registry::ModuleRegistry;
 pub use core::traits::{DataFormat, DataSource, Sink, Transform};
 pub use plugin_loader::PluginLoader;
