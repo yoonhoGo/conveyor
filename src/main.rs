@@ -10,6 +10,7 @@ mod cli;
 mod core;
 mod modules;
 mod plugin_loader;
+mod update;
 mod utils;
 mod wasm_plugin_loader;
 
@@ -58,6 +59,9 @@ enum Commands {
         #[command(subcommand)]
         command: StageCommands,
     },
+
+    #[command(about = "Update conveyor to the latest version")]
+    Update,
 }
 
 #[derive(Subcommand)]
@@ -92,6 +96,9 @@ async fn main() -> Result<()> {
     let log_level = cli.log_level.unwrap_or(Level::INFO);
     let subscriber = FmtSubscriber::builder().with_max_level(log_level).finish();
     tracing::subscriber::set_global_default(subscriber)?;
+
+    // Check for updates (once per 24 hours)
+    let _ = update::check_for_updates(false).await;
 
     match cli.command {
         Commands::Run { config, dry_run } => {
@@ -140,6 +147,10 @@ async fn main() -> Result<()> {
                 cli::edit_pipeline_interactive(pipeline.clone()).await?;
             }
         },
+
+        Commands::Update => {
+            update::install_update().await?;
+        }
     }
 
     Ok(())

@@ -109,6 +109,7 @@ regex = "1.11"
 indexmap = "2.11"
 base64 = "0.22.1"
 futures = { workspace = true }
+dirs = "5.0"
 
 # HTTP client (for http_fetch transform)
 reqwest = { workspace = true }
