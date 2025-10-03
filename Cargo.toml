@@ -21,6 +21,7 @@ toml = "0.8"
 
 # Async runtime
 tokio = { version = "1.47", features = ["full"] }
+tokio-stream = "0.1"
 async-trait = "0.1"
 
 # Error handling
@@ -72,6 +73,8 @@ toml = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true }
+tokio-stream = { workspace = true }
+async-stream = "0.3"
 async-trait = { workspace = true }
 
 # Data processing

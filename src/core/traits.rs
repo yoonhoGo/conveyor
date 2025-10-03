@@ -3,17 +3,19 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
+use std::pin::Pin;
 use std::sync::Arc;
+use tokio_stream::Stream;
 
 pub type DataFrameResult = Result<DataFrame>;
 pub type RecordBatch = Vec<HashMap<String, JsonValue>>;
 pub type RecordBatchResult = Result<RecordBatch>;
 
-#[derive(Debug, Clone)]
 pub enum DataFormat {
     DataFrame(DataFrame),
     RecordBatch(RecordBatch),
     Raw(Vec<u8>),
+    Stream(Pin<Box<dyn Stream<Item = Result<RecordBatch>> + Send>>),
 }
 
 impl DataFormat {
@@ -34,6 +36,9 @@ impl DataFormat {
             }
             DataFormat::Raw(_bytes) => {
                 anyhow::bail!("Cannot convert raw bytes to DataFrame without format information")
+            }
+            DataFormat::Stream(_) => {
+                anyhow::bail!("Cannot synchronously convert stream to DataFrame. Use collect_stream() instead")
             }
         }
     }
@@ -85,6 +90,26 @@ impl DataFormat {
             DataFormat::Raw(_) => {
                 anyhow::bail!("Cannot convert raw bytes to RecordBatch without format information")
             }
+            DataFormat::Stream(_) => {
+                anyhow::bail!("Cannot synchronously convert stream to RecordBatch. Use collect_stream() instead")
+            }
+        }
+    }
+
+    /// Check if this is a streaming data format
+    pub fn is_stream(&self) -> bool {
+        matches!(self, DataFormat::Stream(_))
+    }
+
+    /// Try to clone the data format (Stream cannot be cloned)
+    pub fn try_clone(&self) -> Result<Self> {
+        match self {
+            DataFormat::DataFrame(df) => Ok(DataFormat::DataFrame(df.clone())),
+            DataFormat::RecordBatch(batch) => Ok(DataFormat::RecordBatch(batch.clone())),
+            DataFormat::Raw(data) => Ok(DataFormat::Raw(data.clone())),
+            DataFormat::Stream(_) => {
+                anyhow::bail!("Cannot clone streaming data. Streams can only be consumed once.")
+            }
         }
     }
 }
@@ -126,6 +151,22 @@ pub trait Sink: Send + Sync {
 pub type DataSourceRef = Arc<dyn DataSource>;
 pub type TransformRef = Arc<dyn Transform>;
 pub type SinkRef = Arc<dyn Sink>;
+
+/// Streaming data source that produces a stream of data
+#[async_trait]
+pub trait StreamingDataSource: Send + Sync {
+    async fn name(&self) -> &str;
+
+    /// Create a stream of data
+    async fn stream(
+        &self,
+        config: &HashMap<String, toml::Value>,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<RecordBatch>> + Send>>>;
+
+    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()>;
+}
+
+pub type StreamingDataSourceRef = Arc<dyn StreamingDataSource>;
 
 #[async_trait]
 pub trait Plugin: Send + Sync {

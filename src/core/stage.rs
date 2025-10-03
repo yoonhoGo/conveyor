@@ -103,12 +103,11 @@ impl Stage for TransformStageAdapter {
     ) -> Result<DataFormat> {
         // Get the first input (transforms typically work on a single input)
         let input_data = inputs
-            .values()
+            .into_values()
             .next()
             .ok_or_else(|| {
                 anyhow::anyhow!("Transform '{}' requires at least one input", self.name)
-            })?
-            .clone();
+            })?;
 
         let config_opt = if config.is_empty() {
             None
@@ -154,12 +153,13 @@ impl Stage for SinkStageAdapter {
     ) -> Result<DataFormat> {
         // Get the first input
         let input_data = inputs
-            .values()
+            .into_values()
             .next()
-            .ok_or_else(|| anyhow::anyhow!("Sink '{}' requires at least one input", self.name))?
-            .clone();
+            .ok_or_else(|| anyhow::anyhow!("Sink '{}' requires at least one input", self.name))?;
 
-        self.sink.write(input_data.clone(), config).await?;
+        // Clone for write (sinks consume data)
+        let data_for_write = input_data.try_clone()?;
+        self.sink.write(data_for_write, config).await?;
 
         // Return the input data for potential chaining (though sinks don't typically produce output)
         Ok(input_data)
@@ -355,6 +355,9 @@ fn dataformat_to_ffi(data: &DataFormat) -> Result<FfiDataFormat> {
             }
         }
         DataFormat::Raw(bytes) => Ok(FfiDataFormat::from_raw(bytes.clone())),
+        DataFormat::Stream(_) => {
+            anyhow::bail!("Cannot convert streaming data to FFI format. Streams must be collected first.")
+        }
     }
 }
 
@@ -414,6 +417,9 @@ fn dataformat_to_wasm(data: &DataFormat) -> Result<WasmDataFormat> {
             Ok(WasmDataFormat::JsonRecords(bytes))
         }
         DataFormat::Raw(bytes) => Ok(WasmDataFormat::Raw(bytes.clone())),
+        DataFormat::Stream(_) => {
+            anyhow::bail!("Cannot convert streaming data to WASM format. Streams must be collected first.")
+        }
     }
 }
 

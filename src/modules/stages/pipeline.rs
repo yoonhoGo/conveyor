@@ -124,8 +124,8 @@ version = "1.0"
 
         // For now, return the first input if available, or empty DataFrame
         // TODO: In the future, we should capture and return the output from the sub-pipeline
-        if let Some(data) = inputs.values().next() {
-            Ok(data.clone())
+        if let Some(data) = inputs.into_values().next() {
+            Ok(data)
         } else {
             Ok(DataFormat::DataFrame(polars::prelude::DataFrame::empty()))
         }

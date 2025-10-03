@@ -14,6 +14,7 @@ A high-performance, TOML-based ETL (Extract, Transform, Load) CLI tool built in 
 - **⚡ High Performance**: Built with Rust and Polars for fast data processing (10-100x faster than Python)
 - **🔌 Dynamic Plugin System**: Load plugins on-demand with version checking and panic isolation
 - **🔄 Async Processing**: Built on Tokio for efficient concurrent operations
+- **🌊 Stream Processing**: Real-time data processing with micro-batching and windowing support
 - **🛡️ Type-Safe**: Rust's type system ensures reliability and safety
 - **📊 Multiple Data Formats**: Support for CSV, JSON, HTTP APIs, and more
 
@@ -162,6 +163,65 @@ inputs = ["fetch_profiles"]
 path = "enriched_users.json"
 ```
 
+### 4. Real-time Stream Processing
+
+```toml
+[[stages]]
+id = "stream_source"
+type = "source.stdin_stream"
+inputs = []
+[stages.config]
+format = "jsonl"
+
+[[stages]]
+id = "filter"
+type = "transform.filter"
+inputs = ["stream_source"]
+[stages.config]
+column = "value"
+operator = ">="
+value = 100.0
+
+[[stages]]
+id = "output"
+type = "sink.stdout_stream"
+inputs = ["filter"]
+[stages.config]
+format = "jsonl"
+```
+
+### 5. Windowing and Aggregation
+
+```toml
+[[stages]]
+id = "stream_source"
+type = "source.stdin_stream"
+inputs = []
+[stages.config]
+format = "jsonl"
+
+[[stages]]
+id = "window"
+type = "transform.window"
+inputs = ["stream_source"]
+[stages.config]
+type = "tumbling"
+size = 10  # 10 records per window
+
+[[stages]]
+id = "aggregate"
+type = "transform.aggregate_stream"
+inputs = ["window"]
+[stages.config]
+operation = "count"
+group_by = ["level"]
+
+[[stages]]
+id = "output"
+type = "sink.stdout_stream"
+inputs = ["aggregate"]
+```
+
 See [examples/](examples/) for more complete pipelines.
 
 ## CLI Commands
@@ -192,17 +252,22 @@ conveyor stage edit pipeline.toml
 - `source.csv` - Read CSV files
 - `source.json` - Read JSON files
 - `source.stdin` - Read from standard input
+- `source.stdin_stream` - Streaming stdin (line-by-line)
+- `source.file_watch` - Monitor files for changes (polling-based)
 
 ### Built-in Transforms
 - `transform.filter` - Filter rows by conditions
 - `transform.map` - Transform columns with expressions
 - `transform.validate_schema` - Validate data schema
 - `transform.http_fetch` - Make HTTP requests per row
+- `transform.window` - Apply windowing (tumbling/sliding/session)
+- `transform.aggregate_stream` - Real-time aggregation (count/sum/avg/min/max)
 
 ### Built-in Sinks
 - `sink.csv` - Write to CSV
 - `sink.json` - Write to JSON
 - `sink.stdout` - Display in terminal
+- `sink.stdout_stream` - Real-time streaming output
 
 ### Plugin Modules
 - `plugin.http` - HTTP source & sink (REST APIs)
@@ -276,15 +341,23 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 - Dynamic plugin system (FFI & WASM)
 - HTTP fetch transform
 - CLI with interactive stage management
+- Stream processing infrastructure (DataFormat::Stream, micro-batching, windowing)
+- Streaming sources (stdin_stream, file_watch)
+- Streaming sinks (stdout_stream)
+- Streaming transforms (window, aggregate_stream)
 
 ### In Progress 🚧
 - MongoDB plugin
 - WASM plugin ecosystem
+- Advanced streaming joins
 
 ### Planned 📋
 - PostgreSQL, MySQL plugins
-- Advanced transforms (join, aggregate, pivot)
-- Stream processing
+- Advanced transforms (join, pivot)
+- Exactly-once processing guarantees
+- Checkpointing and recovery for streams
+- Event-driven file watching (inotify/FSEvents)
+- Kafka, Redis Streams integration
 - Web UI for monitoring
 - Distributed execution
 

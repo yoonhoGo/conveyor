@@ -1,3 +1,4 @@
+pub mod aggregate_stream;
 pub mod distinct;
 pub mod filter;
 pub mod group_by;
@@ -7,6 +8,7 @@ pub mod reduce;
 pub mod select;
 pub mod sort;
 pub mod validate;
+pub mod window;
 
 use crate::core::traits::TransformRef;
 use std::collections::HashMap;
@@ -50,6 +52,14 @@ pub fn register_transforms() -> HashMap<String, TransformRef> {
     transforms.insert(
         "distinct".to_string(),
         Arc::new(distinct::DistinctTransform) as TransformRef,
+    );
+    transforms.insert(
+        "window".to_string(),
+        Arc::new(window::WindowTransform::new()) as TransformRef,
+    );
+    transforms.insert(
+        "aggregate_stream".to_string(),
+        Arc::new(aggregate_stream::AggregateStreamTransform::new()) as TransformRef,
     );
 
     transforms

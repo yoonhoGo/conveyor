@@ -1,0 +1,54 @@
+# Streaming Window Aggregation Example
+# This demonstrates windowing and aggregation on streaming data
+#
+# Usage:
+#   # Create test data
+#   echo '{"level": "error", "value": 10}
+#   {"level": "error", "value": 20}
+#   {"level": "info", "value": 5}
+#   {"level": "error", "value": 15}
+#   {"level": "info", "value": 8}' | conveyor run -c examples/streaming-window-example.toml
+
+[pipeline]
+name = "streaming_window_aggregation"
+version = "1.0.0"
+description = "Real-time analytics with windowing and aggregation"
+
+[global]
+log_level = "info"
+execution_mode = "batch"
+
+[[stages]]
+id = "stream_source"
+type = "source.stdin_stream"
+inputs = []
+
+[stages.config]
+format = "jsonl"
+
+[[stages]]
+id = "tumbling_window"
+type = "transform.window"
+inputs = ["stream_source"]
+
+[stages.config]
+type = "tumbling"
+size = 3  # Window size of 3 records
+
+[[stages]]
+id = "count_by_level"
+type = "transform.aggregate_stream"
+inputs = ["tumbling_window"]
+
+[stages.config]
+operation = "count"
+group_by = ["level"]
+
+[[stages]]
+id = "output"
+type = "sink.stdout_stream"
+inputs = ["count_by_level"]
+
+[stages.config]
+format = "json"
+pretty = true

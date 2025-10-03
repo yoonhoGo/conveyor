@@ -6,4 +6,5 @@ pub mod pipeline;
 pub mod registry;
 pub mod stage;
 pub mod strategy;
+pub mod streaming;
 pub mod traits;

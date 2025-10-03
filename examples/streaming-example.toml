@@ -1,0 +1,46 @@
+# Streaming Pipeline Example
+# This demonstrates a streaming data pipeline with micro-batching
+#
+# Usage:
+#   echo '{"value": 150, "name": "test1"}' | conveyor run -c examples/streaming-example.toml
+#   echo '{"value": 50, "name": "test2"}\n{"value": 200, "name": "test3"}' | conveyor run -c examples/streaming-example.toml
+
+[pipeline]
+name = "streaming_example"
+version = "1.0.0"
+description = "Real-time streaming pipeline with filtering"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 300
+
+# Batch mode (streaming sources work in both modes)
+execution_mode = "batch"
+
+[[stages]]
+id = "stream_source"
+type = "source.stdin_stream"
+inputs = []
+
+[stages.config]
+format = "jsonl"  # JSON Lines format
+
+[[stages]]
+id = "filter_high_value"
+type = "transform.filter"
+inputs = ["stream_source"]
+
+[stages.config]
+column = "value"
+operator = ">="
+value = 100.0
+
+[[stages]]
+id = "output_stream"
+type = "sink.stdout_stream"
+inputs = ["filter_high_value"]
+
+[stages.config]
+format = "jsonl"
+flush_every = 1  # Flush after every record for real-time output

@@ -6,6 +6,22 @@ use tokio::fs;
 
 use crate::core::strategy::ErrorStrategy;
 
+/// Pipeline execution mode
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionMode {
+    /// Traditional batch processing
+    Batch,
+    /// Stream processing with micro-batching
+    Streaming,
+}
+
+impl Default for ExecutionMode {
+    fn default() -> Self {
+        Self::Batch
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PipelineMetadata {
     pub name: String,
@@ -31,6 +47,18 @@ pub struct GlobalConfig {
     /// List of plugins to load (e.g., ["http", "mongodb"])
     #[serde(default)]
     pub plugins: Vec<String>,
+
+    /// Execution mode: batch or streaming
+    #[serde(default)]
+    pub execution_mode: ExecutionMode,
+
+    /// Batch size for micro-batching in streaming mode
+    #[serde(default = "default_stream_batch_size")]
+    pub stream_batch_size: usize,
+
+    /// Checkpoint interval (number of records) for streaming mode
+    #[serde(default = "default_checkpoint_interval")]
+    pub checkpoint_interval: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +94,14 @@ fn default_timeout_seconds() -> u64 {
     300
 }
 
+fn default_stream_batch_size() -> usize {
+    1000
+}
+
+fn default_checkpoint_interval() -> usize {
+    5000
+}
+
 impl Default for GlobalConfig {
     fn default() -> Self {
         Self {
@@ -73,6 +109,9 @@ impl Default for GlobalConfig {
             max_parallel_tasks: default_max_parallel_tasks(),
             timeout_seconds: default_timeout_seconds(),
             plugins: Vec::new(),
+            execution_mode: ExecutionMode::default(),
+            stream_batch_size: default_stream_batch_size(),
+            checkpoint_interval: default_checkpoint_interval(),
         }
     }
 }

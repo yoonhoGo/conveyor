@@ -130,7 +130,13 @@ impl DagExecutor {
                     let pred_id = &self.graph[pred_idx].id;
                     info!("Stage '{}': looking for input from '{}'", id, pred_id);
                     if let Some(data) = outputs.get(pred_id) {
-                        inputs.insert(pred_id.clone(), data.clone());
+                        let cloned_data = data.try_clone().map_err(|e| {
+                            anyhow::anyhow!(
+                                "Cannot clone input from '{}' for stage '{}': {}. Streaming data can only be consumed once.",
+                                pred_id, id, e
+                            )
+                        })?;
+                        inputs.insert(pred_id.clone(), cloned_data);
                         info!("Stage '{}': found input from '{}'", id, pred_id);
                     } else {
                         warn!(
@@ -143,7 +149,7 @@ impl DagExecutor {
                 info!("Stage '{}': has {} input(s)", id, inputs.len());
 
                 let error_strategy = self.error_strategy.clone();
-                let inputs_clone = inputs.clone();
+                let inputs_clone = inputs;
                 let config_clone = config.clone();
                 let stage_clone = Arc::clone(&stage);
                 let id_clone = id.clone();
