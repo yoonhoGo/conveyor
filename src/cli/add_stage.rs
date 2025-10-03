@@ -368,8 +368,6 @@ fn collect_stage_config(stage_type: &str) -> Result<toml::map::Map<String, toml:
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_collect_stage_config_types() {
         // Just ensure the function signatures are correct

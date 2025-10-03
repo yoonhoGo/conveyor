@@ -12,6 +12,12 @@ use crate::core::traits::{RecordBatch, StreamingDataSource};
 /// Streaming stdin source that reads line-by-line
 pub struct StdinStreamSource;
 
+impl Default for StdinStreamSource {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StdinStreamSource {
     pub fn new() -> Self {
         Self
@@ -121,7 +127,10 @@ mod tests {
         let line = r#"{"name": "Alice", "age": 30}"#.to_string();
         let result = StdinStreamSource::parse_line(line, "json").unwrap();
 
-        assert_eq!(result.get("name").unwrap(), &JsonValue::String("Alice".to_string()));
+        assert_eq!(
+            result.get("name").unwrap(),
+            &JsonValue::String("Alice".to_string())
+        );
         assert_eq!(result.get("age").unwrap(), &JsonValue::Number(30.into()));
     }
 
@@ -138,7 +147,10 @@ mod tests {
         let source = StdinStreamSource::new();
 
         let mut config = HashMap::new();
-        config.insert("format".to_string(), toml::Value::String("jsonl".to_string()));
+        config.insert(
+            "format".to_string(),
+            toml::Value::String("jsonl".to_string()),
+        );
 
         assert!(source.validate_config(&config).await.is_ok());
     }
@@ -148,7 +160,10 @@ mod tests {
         let source = StdinStreamSource::new();
 
         let mut config = HashMap::new();
-        config.insert("format".to_string(), toml::Value::String("invalid".to_string()));
+        config.insert(
+            "format".to_string(),
+            toml::Value::String("invalid".to_string()),
+        );
 
         assert!(source.validate_config(&config).await.is_err());
     }

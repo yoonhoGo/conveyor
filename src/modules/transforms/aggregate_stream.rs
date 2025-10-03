@@ -10,6 +10,12 @@ use crate::core::traits::{DataFormat, RecordBatch, Transform};
 /// Aggregate stream transform for real-time aggregation
 pub struct AggregateStreamTransform;
 
+impl Default for AggregateStreamTransform {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AggregateStreamTransform {
     pub fn new() -> Self {
         Self
@@ -41,7 +47,10 @@ impl AggregateStreamTransform {
 
         match operation {
             "count" => {
-                result.insert("count".to_string(), JsonValue::Number((batch.len() as i64).into()));
+                result.insert(
+                    "count".to_string(),
+                    JsonValue::Number((batch.len() as i64).into()),
+                );
             }
             "sum" => {
                 let col = value_column
@@ -53,9 +62,10 @@ impl AggregateStreamTransform {
                     .filter_map(|v| v.as_f64())
                     .sum();
 
-                result.insert("sum".to_string(), JsonValue::Number(
-                    serde_json::Number::from_f64(sum).unwrap_or(0.into())
-                ));
+                result.insert(
+                    "sum".to_string(),
+                    JsonValue::Number(serde_json::Number::from_f64(sum).unwrap_or(0.into())),
+                );
             }
             "avg" => {
                 let col = value_column
@@ -73,9 +83,10 @@ impl AggregateStreamTransform {
                     values.iter().sum::<f64>() / values.len() as f64
                 };
 
-                result.insert("avg".to_string(), JsonValue::Number(
-                    serde_json::Number::from_f64(avg).unwrap_or(0.into())
-                ));
+                result.insert(
+                    "avg".to_string(),
+                    JsonValue::Number(serde_json::Number::from_f64(avg).unwrap_or(0.into())),
+                );
             }
             "min" => {
                 let col = value_column
@@ -88,9 +99,12 @@ impl AggregateStreamTransform {
                     .min_by(|a, b| a.partial_cmp(b).unwrap());
 
                 if let Some(min_val) = min {
-                    result.insert("min".to_string(), JsonValue::Number(
-                        serde_json::Number::from_f64(min_val).unwrap_or(0.into())
-                    ));
+                    result.insert(
+                        "min".to_string(),
+                        JsonValue::Number(
+                            serde_json::Number::from_f64(min_val).unwrap_or(0.into()),
+                        ),
+                    );
                 }
             }
             "max" => {
@@ -104,9 +118,12 @@ impl AggregateStreamTransform {
                     .max_by(|a, b| a.partial_cmp(b).unwrap());
 
                 if let Some(max_val) = max {
-                    result.insert("max".to_string(), JsonValue::Number(
-                        serde_json::Number::from_f64(max_val).unwrap_or(0.into())
-                    ));
+                    result.insert(
+                        "max".to_string(),
+                        JsonValue::Number(
+                            serde_json::Number::from_f64(max_val).unwrap_or(0.into()),
+                        ),
+                    );
                 }
             }
             _ => {
@@ -133,7 +150,7 @@ impl AggregateStreamTransform {
                 .filter_map(|col| record.get(col).cloned())
                 .collect();
 
-            groups.entry(key).or_insert_with(Vec::new).push(record);
+            groups.entry(key).or_default().push(record);
         }
 
         // Aggregate each group
@@ -202,12 +219,7 @@ impl Transform for AggregateStreamTransform {
 
                 // Apply aggregation to each batch in the stream
                 let aggregated = StreamProcessor::map(stream, move |batch| {
-                    Self::aggregate_batch(
-                        batch,
-                        &op,
-                        &groups,
-                        val_col.as_deref(),
-                    )
+                    Self::aggregate_batch(batch, &op, &groups, val_col.as_deref())
                 });
 
                 Ok(DataFormat::Stream(aggregated))
@@ -249,10 +261,12 @@ impl Transform for AggregateStreamTransform {
         }
 
         // Validate value_column for operations that need it
-        if ["sum", "avg", "min", "max"].contains(&operation) {
-            if !config.contains_key("value_column") {
-                anyhow::bail!("Operation '{}' requires 'value_column' parameter", operation);
-            }
+        if ["sum", "avg", "min", "max"].contains(&operation) && !config.contains_key("value_column")
+        {
+            anyhow::bail!(
+                "Operation '{}' requires 'value_column' parameter",
+                operation
+            );
         }
 
         Ok(())
@@ -286,7 +300,8 @@ mod tests {
             HashMap::from([("value".to_string(), json!(30.0))]),
         ];
 
-        let result = AggregateStreamTransform::aggregate_global(batch, "sum", Some("value")).unwrap();
+        let result =
+            AggregateStreamTransform::aggregate_global(batch, "sum", Some("value")).unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].get("sum").unwrap(), &json!(60.0));
@@ -310,7 +325,8 @@ mod tests {
         ];
 
         let group_by = vec!["level".to_string()];
-        let result = AggregateStreamTransform::aggregate_grouped(batch, "count", &group_by, None).unwrap();
+        let result =
+            AggregateStreamTransform::aggregate_grouped(batch, "count", &group_by, None).unwrap();
 
         assert_eq!(result.len(), 2); // Two groups: error and info
     }
@@ -320,7 +336,10 @@ mod tests {
         let transform = AggregateStreamTransform::new();
 
         let mut config = HashMap::new();
-        config.insert("operation".to_string(), toml::Value::String("count".to_string()));
+        config.insert(
+            "operation".to_string(),
+            toml::Value::String("count".to_string()),
+        );
 
         assert!(transform.validate_config(&Some(config)).await.is_ok());
     }
@@ -330,7 +349,10 @@ mod tests {
         let transform = AggregateStreamTransform::new();
 
         let mut config = HashMap::new();
-        config.insert("operation".to_string(), toml::Value::String("sum".to_string()));
+        config.insert(
+            "operation".to_string(),
+            toml::Value::String("sum".to_string()),
+        );
 
         assert!(transform.validate_config(&Some(config)).await.is_err());
     }

@@ -188,7 +188,6 @@ version = "1.0"
 #[cfg(test)]
 mod tests {
     use super::*;
-    use polars::prelude::DataFrame;
 
     #[tokio::test]
     async fn test_pipeline_stage_validate_config() {

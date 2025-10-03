@@ -16,6 +16,12 @@ use crate::core::traits::{RecordBatch, StreamingDataSource};
 /// This is a simple polling-based implementation
 pub struct FileWatchSource;
 
+impl Default for FileWatchSource {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FileWatchSource {
     pub fn new() -> Self {
         Self
@@ -184,11 +190,10 @@ impl StreamingDataSource for FileWatchSource {
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;
-    use tokio::io::AsyncWriteExt;
 
     #[tokio::test]
     async fn test_parse_file_jsonl() {
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         let content = r#"{"name": "Alice", "age": 30}
 {"name": "Bob", "age": 25}"#;
         tokio::fs::write(temp_file.path(), content).await.unwrap();
@@ -198,12 +203,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(records.len(), 2);
-        assert_eq!(records[0].get("name").unwrap(), &JsonValue::String("Alice".to_string()));
+        assert_eq!(
+            records[0].get("name").unwrap(),
+            &JsonValue::String("Alice".to_string())
+        );
     }
 
     #[tokio::test]
     async fn test_parse_file_text() {
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         let content = "Line 1\nLine 2\nLine 3";
         tokio::fs::write(temp_file.path(), content).await.unwrap();
 
@@ -212,7 +220,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(records.len(), 3);
-        assert_eq!(records[0].get("line").unwrap(), &JsonValue::String("Line 1".to_string()));
+        assert_eq!(
+            records[0].get("line").unwrap(),
+            &JsonValue::String("Line 1".to_string())
+        );
     }
 
     #[tokio::test]
@@ -220,8 +231,14 @@ mod tests {
         let source = FileWatchSource::new();
 
         let mut config = HashMap::new();
-        config.insert("path".to_string(), toml::Value::String("/tmp/test.json".to_string()));
-        config.insert("format".to_string(), toml::Value::String("jsonl".to_string()));
+        config.insert(
+            "path".to_string(),
+            toml::Value::String("/tmp/test.json".to_string()),
+        );
+        config.insert(
+            "format".to_string(),
+            toml::Value::String("jsonl".to_string()),
+        );
         config.insert("poll_interval".to_string(), toml::Value::Integer(2));
 
         assert!(source.validate_config(&config).await.is_ok());

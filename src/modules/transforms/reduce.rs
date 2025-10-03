@@ -73,7 +73,9 @@ impl Transform for ReduceTransform {
         }
 
         let operation = config.get("operation").and_then(|v| v.as_str()).unwrap();
-        let valid_ops = ["sum", "avg", "mean", "count", "min", "max", "median", "std", "var"];
+        let valid_ops = [
+            "sum", "avg", "mean", "count", "min", "max", "median", "std", "var",
+        ];
         if !valid_ops.contains(&operation) {
             anyhow::bail!(
                 "Invalid operation '{}'. Must be one of: {}",

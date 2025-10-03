@@ -235,7 +235,6 @@ pub async fn edit_pipeline_interactive(pipeline_file: PathBuf) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_edit_module_exists() {

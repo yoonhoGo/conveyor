@@ -4,7 +4,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 const GITHUB_REPO: &str = "yoonhoGo/conveyor";
 const CHECK_INTERVAL_SECS: u64 = 86400; // 24 hours
@@ -38,7 +38,10 @@ pub async fn check_for_updates(silent: bool) -> Result<Option<String>> {
         .timeout(Duration::from_secs(5))
         .build()?;
 
-    let url = format!("https://api.github.com/repos/{}/releases/latest", GITHUB_REPO);
+    let url = format!(
+        "https://api.github.com/repos/{}/releases/latest",
+        GITHUB_REPO
+    );
 
     let response = match client
         .get(&url)
@@ -72,7 +75,10 @@ pub async fn check_for_updates(silent: bool) -> Result<Option<String>> {
 
     if is_newer_version(current_version, latest_version) {
         if !silent {
-            println!("\n🎉 New version available: {} (current: {})", latest_version, current_version);
+            println!(
+                "\n🎉 New version available: {} (current: {})",
+                latest_version, current_version
+            );
             println!("Run 'conveyor update' to install the latest version\n");
         }
         Ok(Some(latest_version.to_string()))
@@ -91,7 +97,10 @@ pub async fn install_update() -> Result<()> {
         .timeout(Duration::from_secs(30))
         .build()?;
 
-    let url = format!("https://api.github.com/repos/{}/releases/latest", GITHUB_REPO);
+    let url = format!(
+        "https://api.github.com/repos/{}/releases/latest",
+        GITHUB_REPO
+    );
     let response = client
         .get(&url)
         .header("User-Agent", "conveyor-cli")
@@ -100,7 +109,10 @@ pub async fn install_update() -> Result<()> {
         .context("Failed to fetch release information")?;
 
     if !response.status().is_success() {
-        return Err(anyhow!("Failed to fetch releases: HTTP {}", response.status()));
+        return Err(anyhow!(
+            "Failed to fetch releases: HTTP {}",
+            response.status()
+        ));
     }
 
     let release: GithubRelease = response.json().await?;
@@ -139,12 +151,10 @@ pub async fn install_update() -> Result<()> {
     let backup_path = current_exe.with_extension("backup");
 
     // Backup current binary
-    fs::copy(&current_exe, &backup_path)
-        .context("Failed to create backup of current binary")?;
+    fs::copy(&current_exe, &backup_path).context("Failed to create backup of current binary")?;
 
     // Write new binary
-    fs::write(&current_exe, &binary_data)
-        .context("Failed to write new binary")?;
+    fs::write(&current_exe, &binary_data).context("Failed to write new binary")?;
 
     // Set executable permissions on Unix
     #[cfg(unix)]
@@ -185,8 +195,7 @@ fn update_version_check_time() -> Result<()> {
 
 /// Get the path to the version check file
 fn get_version_check_file() -> Result<PathBuf> {
-    let home = dirs::home_dir()
-        .ok_or_else(|| anyhow!("Could not determine home directory"))?;
+    let home = dirs::home_dir().ok_or_else(|| anyhow!("Could not determine home directory"))?;
     Ok(home.join(VERSION_CHECK_FILE))
 }
 

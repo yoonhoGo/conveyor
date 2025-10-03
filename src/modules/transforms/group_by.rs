@@ -88,8 +88,9 @@ impl Transform for GroupByTransform {
         }
 
         // Use LazyFrame for groupby
-        let result = df.lazy()
-            .group_by(&group_columns.iter().map(|s| col(s)).collect::<Vec<_>>())
+        let result = df
+            .lazy()
+            .group_by(group_columns.iter().map(col).collect::<Vec<_>>())
             .agg(agg_exprs)
             .collect()?;
 

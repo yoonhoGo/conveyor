@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
-use tokio::io::{AsyncWriteExt, stdout};
+use tokio::io::{stdout, AsyncWriteExt};
 use tokio_stream::StreamExt;
 use tracing::{debug, info};
 
@@ -9,6 +9,12 @@ use crate::core::traits::{DataFormat, Sink};
 
 /// Streaming stdout sink that outputs data in real-time
 pub struct StdoutStreamSink;
+
+impl Default for StdoutStreamSink {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl StdoutStreamSink {
     pub fn new() -> Self {
@@ -45,10 +51,8 @@ impl StdoutStreamSink {
             }
             "text" => {
                 // Output as key=value pairs
-                let pairs: Vec<String> = record
-                    .iter()
-                    .map(|(k, v)| format!("{}={}", k, v))
-                    .collect();
+                let pairs: Vec<String> =
+                    record.iter().map(|(k, v)| format!("{}={}", k, v)).collect();
                 Ok(pairs.join(" "))
             }
             _ => {
@@ -80,7 +84,10 @@ impl Sink for StdoutStreamSink {
             .and_then(|v| v.as_integer())
             .unwrap_or(1) as usize;
 
-        info!("Writing to stdout stream (format: {}, pretty: {})", format, pretty);
+        info!(
+            "Writing to stdout stream (format: {}, pretty: {})",
+            format, pretty
+        );
 
         let mut stdout = stdout();
         let mut count = 0;
@@ -223,7 +230,10 @@ mod tests {
         let sink = StdoutStreamSink::new();
 
         let mut config = HashMap::new();
-        config.insert("format".to_string(), toml::Value::String("jsonl".to_string()));
+        config.insert(
+            "format".to_string(),
+            toml::Value::String("jsonl".to_string()),
+        );
         config.insert("pretty".to_string(), toml::Value::Boolean(false));
         config.insert("flush_every".to_string(), toml::Value::Integer(10));
 
@@ -235,7 +245,10 @@ mod tests {
         let sink = StdoutStreamSink::new();
 
         let mut config = HashMap::new();
-        config.insert("format".to_string(), toml::Value::String("invalid".to_string()));
+        config.insert(
+            "format".to_string(),
+            toml::Value::String("invalid".to_string()),
+        );
 
         assert!(sink.validate_config(&config).await.is_err());
     }

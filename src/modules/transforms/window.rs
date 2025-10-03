@@ -10,6 +10,12 @@ use crate::core::traits::{DataFormat, Transform};
 /// Window transform for streaming data
 pub struct WindowTransform;
 
+impl Default for WindowTransform {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WindowTransform {
     pub fn new() -> Self {
         Self
@@ -51,8 +57,9 @@ impl WindowTransform {
                 let gap_secs = config
                     .get("gap")
                     .and_then(|v| v.as_integer())
-                    .ok_or_else(|| anyhow::anyhow!("Session window requires 'gap' parameter (seconds)"))?
-                    as u64;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("Session window requires 'gap' parameter (seconds)")
+                    })? as u64;
 
                 Ok(WindowType::Session {
                     gap: std::time::Duration::from_secs(gap_secs),
@@ -113,7 +120,8 @@ impl Transform for WindowTransform {
                 let windowed = windower.apply(stream);
 
                 // Collect back to DataFrame
-                let df = crate::core::streaming::StreamBatcher::stream_to_dataframe(windowed).await?;
+                let df =
+                    crate::core::streaming::StreamBatcher::stream_to_dataframe(windowed).await?;
                 Ok(DataFormat::DataFrame(df))
             }
             DataFormat::Raw(_) => {
@@ -141,7 +149,10 @@ mod tests {
     #[test]
     fn test_parse_window_config_tumbling() {
         let mut config = HashMap::new();
-        config.insert("type".to_string(), toml::Value::String("tumbling".to_string()));
+        config.insert(
+            "type".to_string(),
+            toml::Value::String("tumbling".to_string()),
+        );
         config.insert("size".to_string(), toml::Value::Integer(100));
 
         let window_type = WindowTransform::parse_window_config(&config).unwrap();
@@ -155,7 +166,10 @@ mod tests {
     #[test]
     fn test_parse_window_config_sliding() {
         let mut config = HashMap::new();
-        config.insert("type".to_string(), toml::Value::String("sliding".to_string()));
+        config.insert(
+            "type".to_string(),
+            toml::Value::String("sliding".to_string()),
+        );
         config.insert("size".to_string(), toml::Value::Integer(100));
         config.insert("slide".to_string(), toml::Value::Integer(50));
 
@@ -175,7 +189,10 @@ mod tests {
         let transform = WindowTransform::new();
 
         let mut config = HashMap::new();
-        config.insert("type".to_string(), toml::Value::String("tumbling".to_string()));
+        config.insert(
+            "type".to_string(),
+            toml::Value::String("tumbling".to_string()),
+        );
         config.insert("size".to_string(), toml::Value::Integer(100));
 
         assert!(transform.validate_config(&Some(config)).await.is_ok());
@@ -186,7 +203,10 @@ mod tests {
         let transform = WindowTransform::new();
 
         let mut config = HashMap::new();
-        config.insert("type".to_string(), toml::Value::String("tumbling".to_string()));
+        config.insert(
+            "type".to_string(),
+            toml::Value::String("tumbling".to_string()),
+        );
 
         assert!(transform.validate_config(&Some(config)).await.is_err());
     }

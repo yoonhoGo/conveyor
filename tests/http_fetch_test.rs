@@ -191,7 +191,7 @@ method = "INVALID"
 "#;
 
     let config = DagPipelineConfig::from_str(config_str)?;
-    let pipeline = DagPipeline::new(config).await?;
+    let _pipeline = DagPipeline::new(config).await?;
 
     // Validation should fail due to invalid method
     // Note: This will be caught during execution when the transform validates its config

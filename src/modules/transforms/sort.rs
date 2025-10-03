@@ -41,10 +41,7 @@ impl Transform for SortTransform {
             match desc {
                 toml::Value::Boolean(b) => vec![*b; sort_columns.len()],
                 toml::Value::Array(arr) => {
-                    let bools: Vec<bool> = arr
-                        .iter()
-                        .filter_map(|v| v.as_bool())
-                        .collect();
+                    let bools: Vec<bool> = arr.iter().filter_map(|v| v.as_bool()).collect();
                     if bools.len() != sort_columns.len() {
                         anyhow::bail!(
                             "If 'descending' is an array, it must have the same length as 'by'"

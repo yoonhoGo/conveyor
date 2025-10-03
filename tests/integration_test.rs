@@ -1,6 +1,5 @@
 use anyhow::Result;
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 #[tokio::test]
@@ -84,7 +83,7 @@ async fn test_json_to_csv_pipeline() -> Result<()> {
     // Create temporary directory
     let temp_dir = TempDir::new()?;
     let input_json = temp_dir.path().join("input.json");
-    let output_csv = temp_dir.path().join("output.csv");
+    let _output_csv = temp_dir.path().join("output.csv");
 
     // Create test JSON file
     let json_data = r#"[

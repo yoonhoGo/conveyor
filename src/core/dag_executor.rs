@@ -254,7 +254,7 @@ impl DagExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::stage::{SourceStageAdapter, Stage};
+    use crate::core::stage::SourceStageAdapter;
     use crate::core::traits::DataSource;
     use async_trait::async_trait;
     use polars::prelude::DataFrame;

@@ -61,8 +61,7 @@ pub struct GlobalConfig {
     pub checkpoint_interval: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ErrorHandlingConfig {
     #[serde(default, flatten)]
     pub strategy: ErrorStrategy,

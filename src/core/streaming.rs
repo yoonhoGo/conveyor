@@ -196,9 +196,7 @@ impl StreamProcessor {
     where
         F: Fn(RecordBatch) -> Result<RecordBatch> + Send + 'static,
     {
-        Box::pin(stream.map(move |batch_result| {
-            batch_result.and_then(|batch| f(batch))
-        }))
+        Box::pin(stream.map(move |batch_result| batch_result.and_then(&f)))
     }
 
     /// Filter records in a stream
@@ -228,9 +226,18 @@ mod tests {
     #[tokio::test]
     async fn test_batch_records() {
         let records: Vec<Result<RecordBatch>> = vec![
-            Ok(vec![HashMap::from([("id".to_string(), JsonValue::from(1))])]),
-            Ok(vec![HashMap::from([("id".to_string(), JsonValue::from(2))])]),
-            Ok(vec![HashMap::from([("id".to_string(), JsonValue::from(3))])]),
+            Ok(vec![HashMap::from([(
+                "id".to_string(),
+                JsonValue::from(1),
+            )])]),
+            Ok(vec![HashMap::from([(
+                "id".to_string(),
+                JsonValue::from(2),
+            )])]),
+            Ok(vec![HashMap::from([(
+                "id".to_string(),
+                JsonValue::from(3),
+            )])]),
         ];
 
         let stream = Box::pin(tokio_stream::iter(records));
@@ -244,8 +251,14 @@ mod tests {
     #[tokio::test]
     async fn test_collect_stream() {
         let records: Vec<Result<RecordBatch>> = vec![
-            Ok(vec![HashMap::from([("id".to_string(), JsonValue::from(1))])]),
-            Ok(vec![HashMap::from([("id".to_string(), JsonValue::from(2))])]),
+            Ok(vec![HashMap::from([(
+                "id".to_string(),
+                JsonValue::from(1),
+            )])]),
+            Ok(vec![HashMap::from([(
+                "id".to_string(),
+                JsonValue::from(2),
+            )])]),
         ];
 
         let stream = Box::pin(tokio_stream::iter(records));
@@ -265,13 +278,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_stream_processor_filter() {
-        let records: Vec<Result<RecordBatch>> = vec![
-            Ok(vec![
-                HashMap::from([("value".to_string(), JsonValue::from(10))]),
-                HashMap::from([("value".to_string(), JsonValue::from(20))]),
-                HashMap::from([("value".to_string(), JsonValue::from(5))]),
-            ]),
-        ];
+        let records: Vec<Result<RecordBatch>> = vec![Ok(vec![
+            HashMap::from([("value".to_string(), JsonValue::from(10))]),
+            HashMap::from([("value".to_string(), JsonValue::from(20))]),
+            HashMap::from([("value".to_string(), JsonValue::from(5))]),
+        ])];
 
         let stream = Box::pin(tokio_stream::iter(records));
         let filtered = StreamProcessor::filter(stream, |record| {

@@ -27,7 +27,6 @@ fn default_retry_delay_seconds() -> u64 {
     5
 }
 
-
 impl ErrorStrategy {
     /// Execute an operation with the configured error handling strategy
     pub async fn execute<F, Fut, T>(&self, operation_name: &str, operation: F) -> Result<T>

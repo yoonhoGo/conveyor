@@ -102,12 +102,9 @@ impl Stage for TransformStageAdapter {
         config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
         // Get the first input (transforms typically work on a single input)
-        let input_data = inputs
-            .into_values()
-            .next()
-            .ok_or_else(|| {
-                anyhow::anyhow!("Transform '{}' requires at least one input", self.name)
-            })?;
+        let input_data = inputs.into_values().next().ok_or_else(|| {
+            anyhow::anyhow!("Transform '{}' requires at least one input", self.name)
+        })?;
 
         let config_opt = if config.is_empty() {
             None
@@ -356,7 +353,9 @@ fn dataformat_to_ffi(data: &DataFormat) -> Result<FfiDataFormat> {
         }
         DataFormat::Raw(bytes) => Ok(FfiDataFormat::from_raw(bytes.clone())),
         DataFormat::Stream(_) => {
-            anyhow::bail!("Cannot convert streaming data to FFI format. Streams must be collected first.")
+            anyhow::bail!(
+                "Cannot convert streaming data to FFI format. Streams must be collected first."
+            )
         }
     }
 }
@@ -418,7 +417,9 @@ fn dataformat_to_wasm(data: &DataFormat) -> Result<WasmDataFormat> {
         }
         DataFormat::Raw(bytes) => Ok(WasmDataFormat::Raw(bytes.clone())),
         DataFormat::Stream(_) => {
-            anyhow::bail!("Cannot convert streaming data to WASM format. Streams must be collected first.")
+            anyhow::bail!(
+                "Cannot convert streaming data to WASM format. Streams must be collected first."
+            )
         }
     }
 }
