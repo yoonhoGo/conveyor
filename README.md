@@ -580,6 +580,16 @@ cargo test --lib
 cargo test -- --nocapture
 ```
 
+**Test Coverage:**
+- 28+ unit tests (config validation, registry, sources, FFI plugin system)
+- 3 FFI plugin integration tests
+- 6 WASM plugin integration tests
+- 4 DAG pipeline tests
+- 3 HTTP fetch transform tests
+- 3 pipeline stage tests
+- 5 CLI commands tests
+- **Total: 52+ tests passing**
+
 ### Building Plugins
 
 ```bash

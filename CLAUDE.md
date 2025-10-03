@@ -1,18 +1,6 @@
 # Conveyor - Development Notes (Claude Code)
 
-This document provides technical details about the Conveyor project's architecture, implementation decisions, and development process. It was created as part of a conversation with Claude Code.
-
-## Project Overview
-
-Conveyor is a TOML-based ETL CLI tool built in Rust, designed to provide high-performance data pipeline processing with a simple, declarative configuration approach.
-
-### Design Goals
-
-1. **Simplicity**: TOML-based configuration that's easy to read and write
-2. **Performance**: Leverage Rust and Polars for 10-100x faster processing than Python alternatives
-3. **Extensibility**: Modular architecture supporting plugins and custom modules
-4. **Safety**: Rust's type system ensures memory safety and prevents common bugs
-5. **Production-Ready**: Comprehensive error handling, logging, and testing
+This document provides technical details about the Conveyor project's architecture, implementation decisions, and development process for AI agents and developers working on the codebase.
 
 ## Architecture
 
@@ -328,35 +316,7 @@ pub fn load_plugin(&mut self, name: &str) -> Result<()> {
 
 ## Implementation Challenges & Solutions
 
-### 1. Polars API Changes
-
-**Challenge**: Polars 0.44 had breaking API changes from earlier versions.
-
-**Solutions**:
-- `CsvReader::from_path()` → `CsvReader::new(file)` with `CsvReadOptions`
-- `has_header()` → `with_has_header()`
-- `DataType::Categorical` removed in some contexts
-- Column operations require `.as_materialized_series()`
-
-### 2. String Type Conversions
-
-**Challenge**: Polars 0.44 uses `PlSmallStr` instead of `&str` for column names.
-
-**Solution**: Added `.into()` conversions and `.to_string()` where needed:
-```rust
-Series::new("column".into(), values)  // PlSmallStr conversion
-column.name().to_string()              // Get String from PlSmallStr
-```
-
-### 3. Expression API
-
-**Challenge**: Some Expr methods like `.str().contains()` and `.is_in()` changed or were removed.
-
-**Solutions**:
-- `contains`: Implemented manual filtering with iteration
-- `is_in`: Used multiple `eq()` operations combined with `or()`
-
-### 4. Async Trait Methods
+### 1. Async Trait Methods
 
 **Challenge**: Rust doesn't natively support async methods in traits.
 
@@ -368,7 +328,7 @@ pub trait DataSource: Send + Sync {
 }
 ```
 
-### 5. Type Safety in Dynamic Configuration
+### 2. Type Safety in Dynamic Configuration
 
 **Challenge**: TOML values are dynamic (`toml::Value`), but we need type safety.
 
@@ -380,7 +340,7 @@ let value = config
     .ok_or_else(|| anyhow::anyhow!("Missing required 'key' configuration"))?;
 ```
 
-### 6. Dynamic Plugin Loading and FFI Safety
+### 3. Dynamic Plugin Loading and FFI Safety
 
 **Challenge**: Creating an FFI-safe plugin interface that works across Rust compiler versions.
 
@@ -434,7 +394,7 @@ let value = config
 - FFI in Rust is achievable with the right tools and patterns
 - Proper documentation and examples are crucial for plugin developers
 
-### 7. Workspace Dependency Management
+### 4. Workspace Dependency Management
 
 **Challenge**: Managing dependency versions across multiple crates (main binary, plugin API, plugins).
 
@@ -468,29 +428,6 @@ Located in each module using `#[cfg(test)]`:
 - Total: 28+ unit tests
 
 ### Integration Tests
-
-**FFI Plugin Tests** (`tests/integration_test.rs`):
-- End-to-end pipeline scenarios
-- File I/O with temporary directories
-- Config parsing verification
-- Total: 3 tests
-
-**WASM Plugin Tests** (`tests/wasm_plugin_test.rs`):
-- WasmPluginLoader creation and configuration
-- Plugin loading from .wasm files
-- Plugin metadata extraction (name, version, API version)
-- Plugin listing and management
-- Error handling for nonexistent plugins
-- Multi-plugin loading support
-- Total: 6 tests
-
-### Test Coverage
-
-```
-FFI tests: ok. 36 passed; 0 failed; 0 ignored
-WASM tests: ok. 6 passed; 0 failed; 0 ignored
-Total: 42+ tests passing
-```
 
 **Key Test Patterns**:
 1. **Positive tests**: Valid configurations and operations
@@ -536,569 +473,52 @@ async fn main() -> Result<()> {
 - In-place operations where possible
 - Efficient serialization with `serde`
 
-## Future Enhancements
-
-### Completed ✅
-
-1. **FFI-Safe Plugin System** ⭐ NEW (October 2025)
-   - Full `abi_stable` integration for cross-compiler compatibility
-   - FFI-safe traits with `#[sabi_trait]` macro:
-     - `FfiDataSource`: Read data from sources
-     - `FfiTransform`: Transform data
-     - `FfiSink`: Write data to destinations
-   - FFI-safe data formats (Arrow IPC, JSON, Raw)
-   - `rstr!` macro for static RStr initialization
-   - `PluginDeclaration` with API version checking
-   - Dynamic library loading with `libloading`
-   - Panic isolation with `std::panic::catch_unwind`
-   - Platform-specific library loading (.dylib, .so, .dll)
-   - Test plugin successfully loads and runs
-   - Comprehensive plugin development template
-
-2. **Dynamic Plugin System**: True runtime plugin loading
-   - Workspace architecture with separate plugin crates
-   - On-demand loading (plugins NOT in binary by default)
-   - Plugin API version checking
-   - Capability verification
-   - Independent plugin compilation
-
-3. **HTTP Plugin**: REST API integration ✅ FFI-safe
-   - Source and sink implementation
-   - Multiple HTTP methods (GET/POST/PUT/PATCH/DELETE)
-   - Format support (JSON, JSONL)
-   - Custom headers and timeout configuration
-   - 32KB .dylib plugin
-
-4. **MongoDB Plugin**: Database integration ✅ FFI-safe
-   - Source and sink implementation
-   - Cursor-based pagination for large datasets
-   - Batch insert support
-   - JSON to BSON conversion
-   - Query filter support
-   - 33KB .dylib plugin
-
-5. **Workspace Dependencies**: Centralized dependency management
-   - `[workspace.dependencies]` for version consistency
-   - Shared dependency resolution across all crates
-   - Independent plugin compilation
-
-6. **Plugin Development Template**: Complete development guide
-   - Ready-to-use template in `examples/plugin-template/`
-   - Comprehensive README with best practices
-   - Example implementations for all plugin types
-   - Testing examples and troubleshooting guide
-
-7. **WASM Plugin System** ⭐ NEW (October 2025) ✅ Production-ready
-   - **Architecture**: WebAssembly Component Model with WASI Preview 2
-   - **WIT Interface**: Complete type definitions in `conveyor-plugin.wit`
-   - **Guest-side API**: `conveyor-wasm-plugin-api` crate with helper functions
-   - **Host-side Runtime**: `WasmPluginLoader` with Wasmtime 28.0
-   - **Build Target**: `wasm32-wasip2` with wit-bindgen 0.46
-
-   **Core Features**:
-   - ✅ Complete sandboxing and memory isolation
-   - ✅ Language-independent (Rust, C, Go, Python, etc.)
-   - ✅ Cross-platform portability (single .wasm binary)
-   - ✅ Compact binary sizes (~100KB for echo plugin)
-
-   **Implementation Details**:
-   - WIT interface with 4 operations: read, write, transform, validate-config
-   - Data formats: Arrow IPC, JSON Records, Raw bytes
-   - Error types: ConfigError, RuntimeError, IoError, SerializationError
-   - Async plugin execution with Wasmtime
-   - WASI context with ResourceTable for capability-based security
-
-   **Echo Plugin Example** (100KB):
-   - First working WASM plugin demonstrating all operations
-   - Located in `plugins-wasm/conveyor-plugin-echo-wasm/`
-   - Build: `cargo build -p conveyor-plugin-echo-wasm --target wasm32-wasip2 --release`
-
-   **Testing**:
-   - 6 integration tests passing (tests/wasm_plugin_test.rs)
-   - Plugin loading, metadata extraction, error handling verified
-   - Multi-plugin support tested
-
-   **Status**: ✅ Production-ready, ready for real-world plugins
-
-8. **DAG-Based Pipeline System** ⭐ NEW (January 2025) ✅ Production-ready
-   - **Architecture**: Directed Acyclic Graph (DAG) execution engine with `petgraph`
-   - **Unified Stage Concept**: Sources, Transforms, and Sinks as composable stages
-   - **Flexible Composition**: Any stage can be used anywhere in the pipeline
-   - **Automatic Parallelization**: Independent stages execute concurrently
-
-   **Core Components**:
-   - ✅ `Stage` trait: Unified interface for all pipeline components
-   - ✅ Stage adapters: Convert existing Source/Transform/Sink to Stage
-   - ✅ DAG executor: Topological sort and level-based parallel execution
-   - ✅ Cycle detection: Validates pipeline structure before execution
-   - ✅ Legacy converter: Automatic conversion from old format
-
-   **Key Features**:
-   - **Branching**: Send same data to multiple stages (e.g., file + stdout)
-   - **Chaining**: Source → Transform → HTTP Source (fetch related) → Transform → Sink
-   - **Parallel Execution**: Stages in same level execute concurrently
-   - **Backward Compatible**: Old pipelines automatically converted to DAG format
-
-   **Configuration Format**:
-   ```toml
-   [[stages]]
-   id = "load_users"
-   type = "source.json"
-   inputs = []
-
-   [[stages]]
-   id = "filter_active"
-   type = "transform.filter"
-   inputs = ["load_users"]
-
-   [[stages]]
-   id = "save_file"
-   type = "sink.json"
-   inputs = ["filter_active"]
-
-   [[stages]]
-   id = "display"
-   type = "sink.stdout"
-   inputs = ["filter_active"]  # Branching!
-   ```
-
-   **Testing**:
-   - 4 integration tests passing (tests/dag_pipeline_test.rs)
-   - Basic pipeline, branching, cycle detection, legacy conversion verified
-   - Automatic level calculation and parallel execution tested
-
-   **Status**: ✅ Production-ready, enables functional pipeline composition
-
-9. **HTTP Fetch Transform** ⭐ NEW (January 2025) ✅ Production-ready
-   - **Architecture**: Input-aware HTTP transform using Handlebars templates
-   - **Dynamic API Calls**: Use previous stage data as context for HTTP requests
-   - **Flexible Modes**: Per-row (N calls) or batch (1 call) execution
-   - **Template Engine**: Handlebars for URL and body generation
-
-   **Core Features**:
-   - ✅ Template-based URL generation: `{{ field }}` syntax
-   - ✅ Per-row mode: Individual API call for each data row
-   - ✅ Batch mode: Single API call with all data
-   - ✅ Custom headers: Authentication and API key support
-   - ✅ Error handling: Graceful degradation with null values
-
-   **Configuration**:
-   ```toml
-   [[stages]]
-   id = "fetch_posts"
-   type = "transform.http_fetch"
-   inputs = ["users"]
-
-   [stages.config]
-   url = "https://api.example.com/users/{{ id }}/posts"
-   method = "GET"
-   mode = "per_row"
-   result_field = "posts"
-   ```
-
-   **Use Cases**:
-   - Data enrichment: Add related information from APIs
-   - Multi-step pipelines: Load → Filter → HTTP Fetch → Transform → Save
-   - Validation: Check data against external services
-   - Aggregation: Collect data from multiple endpoints
-
-   **Testing**:
-   - 3 integration tests passing (tests/http_fetch_test.rs)
-   - Template rendering, per-row mode, config validation verified
-   - Real API integration tested with JSONPlaceholder
-
-   **Status**: ✅ Production-ready, enables API-driven data pipelines
-
-10. **Pipeline Stage** ⭐ NEW (January 2025) ✅ Production-ready
-   - **Architecture**: Recursive pipeline execution as a stage type
-   - **Nested Pipelines**: Execute complete pipelines within pipeline stages
-   - **Flexible Configuration**: File-based or inline pipeline definitions
-   - **Modular Composition**: Reusable pipeline components
-
-   **Core Features**:
-   - ✅ File-based pipeline inclusion: Load external TOML pipeline files
-   - ✅ Inline pipeline definitions: Embed pipelines directly in configuration
-   - ✅ Full DAG integration: Pipeline stages work seamlessly with DAG executor
-   - ✅ Configuration validation: Validates nested pipeline structure before execution
-   - ✅ Recursive support: Pipelines can contain other pipeline stages
-
-   **Configuration Format (File-based)**:
-   ```toml
-   [[stages]]
-   id = "preprocessing"
-   type = "stage.pipeline"
-   inputs = ["load_data"]
-
-   [stages.config]
-   file = "pipelines/preprocess.toml"
-   ```
-
-   **Configuration Format (Inline)**:
-   ```toml
-   [[stages]]
-   id = "preprocessing"
-   type = "stage.pipeline"
-   inputs = ["load_data"]
-
-   [stages.config]
-   inline = """
-   [[stages]]
-   id = "clean"
-   type = "transform.filter"
-   inputs = []
-
-   [stages.config]
-   column = "status"
-   operator = "!="
-   value = "invalid"
-
-   [[stages]]
-   id = "output"
-   type = "sink.stdout"
-   inputs = ["clean"]
-
-   [stages.config]
-   format = "json"
-   """
-   ```
-
-   **Use Cases**:
-   - Pipeline composition: Combine reusable pipeline components
-   - Modular workflows: Break complex pipelines into manageable pieces
-   - Team collaboration: Share common pipeline patterns across projects
-   - Testing: Test sub-pipelines independently
-
-   **Implementation**:
-   - `PipelineStage` struct in `src/modules/stages/pipeline.rs`
-   - Integrates with `DagPipelineBuilder` for dynamic stage creation
-   - Registry support for stage lookup and management
-   - Independent ModuleRegistry for each sub-pipeline
-
-   **Testing**:
-   - 3 integration tests passing (tests/pipeline_stage_test.rs)
-   - Inline pipeline execution verified
-   - Configuration validation tested
-   - Nested pipeline composition validated
-
-   **Status**: ✅ Production-ready, enables modular pipeline architecture
-
-11. **CLI Stage Management Commands** ⭐ NEW (January 2025) ✅ Production-ready
-   - **Architecture**: Interactive CLI tools for pipeline development
-   - **Stage Subcommand Group**: Organized commands under `conveyor stage`
-   - **Dialoguer Integration**: User-friendly prompts and menus
-   - **TOML Manipulation**: Safe modification of existing pipeline files
-
-   **Core Commands**:
-   - ✅ `stage new`: Create new DAG-based pipeline templates
-   - ✅ `stage add`: Interactively add stages to existing pipelines
-   - ✅ `stage edit`: Full-featured interactive pipeline editor
-   - ✅ Interactive/non-interactive modes for automation support
-   - ✅ Input validation and dependency checking
-
-   **Features**:
-   - **Template Generation**: Creates valid DAG pipeline structure
-   - **13 Stage Types**: Full support for all built-in and plugin stages
-   - **Dependency Management**: Automatic validation of stage dependencies
-   - **Live Editing**: Add, remove, reorder, view stages
-   - **Configuration Prompts**: Context-aware config collection per stage type
-   - **TOML Preservation**: Safely updates existing files without data loss
-
-   **Implementation**:
-   - `scaffold.rs` (177 lines): Pipeline template generation
-   - `add_stage.rs` (354 lines): Interactive stage addition
-   - `edit.rs` (179 lines): Full pipeline editor with menu system
-   - `dialoguer` dependency for CLI interaction
-   - Complete integration with existing DAG pipeline system
-
-   **Testing**:
-   - 5 unit tests passing (tests/cli_commands_test.rs)
-   - Template generation, TOML validity, metadata verification
-   - Output path handling and default value testing
-
-   **Status**: ✅ Production-ready, simplifies pipeline development workflow
-
-### Short Term
-
-1. **WASM Plugin Expansion**:
-   - Create real-world WASM plugins (HTTP, transformers)
-   - Performance benchmarks vs FFI plugins
-   - Language polyglot examples (C, Go, Python bindings)
-
-2. **Database Connectors**: PostgreSQL, MySQL implementations
-3. **Advanced Transforms**:
-   - `aggregate`: GROUP BY operations
-   - `join`: Merge multiple data sources
-   - `pivot`: Reshape data
-4. **Authentication**: OAuth, API key support for HTTP plugin
-
-### Medium Term
-
-1. **Enhanced Plugin System**:
-   - Plugin marketplace/registry
-   - Hot reload support for both FFI and WASM plugins
-   - Plugin dependency management
-
-2. **Stream Processing**: Process data in chunks for memory efficiency
-   - Implement streaming for large datasets
-   - Add backpressure handling
-   - Memory-bounded processing
-
-3. **Monitoring**: Metrics, progress tracking, performance profiling
-   - Pipeline execution metrics
-   - Data throughput monitoring
-   - Plugin performance tracking
-
-### Long Term
-
-1. **Distributed Execution**: Multi-node processing
-2. **Web UI**: Visual pipeline builder and monitoring
-3. **Scheduling**: Cron-like execution management
-4. **Data Catalog**: Metadata management and lineage tracking
-
 ## Plugin Systems Comparison
 
-Conveyor supports two plugin architectures, each with distinct advantages:
+Conveyor supports two plugin architectures:
 
 ### FFI Plugins (using `abi_stable`)
 
-**Architecture:**
+**Technical Architecture:**
 - Dynamic library loading (.dylib, .so, .dll)
 - FFI-safe traits with `#[sabi_trait]` macro
 - Direct memory access between host and plugin
-- Same Rust version required (or compatible ABI)
+- `#[repr(C)]` for C-compatible memory layout
+- `StableAbi` derive macro for FFI-safe types
+- FFI-safe types: `RString`, `RVec`, `RResult`, `RBoxError`, `RHashMap`
 
-**Advantages:**
-- ✅ **Best Performance**: Near-zero overhead, direct function calls
-- ✅ **Rich Type System**: Full Rust type support with `abi_stable`
-- ✅ **Mature Ecosystem**: Well-tested with production libraries
-- ✅ **Async Support**: Native async/await throughout
+**Performance Characteristics:**
+- Near-zero overhead, direct function calls
+- Native async/await support
+- No serialization overhead
+- Shared process memory (plugins not sandboxed)
 
-**Trade-offs:**
-- ⚠️ Less sandboxing (plugins share process memory)
-- ⚠️ Platform-specific binaries required
-- ⚠️ Potential for version mismatches
-
-**Best For:**
-- High-performance plugins (HTTP, databases)
-- Complex data transformations
-- When you control the plugin development
+**Constraints:**
+- Platform-specific binaries required (.dylib/.so/.dll)
+- Same or compatible Rust compiler version
+- Potential for version mismatches
 
 ### WASM Plugins (using WebAssembly Component Model)
 
-**Architecture:**
+**Technical Architecture:**
 - WebAssembly Component Model (WASI Preview 2)
 - WIT (WebAssembly Interface Types) definitions
 - Wasmtime runtime for execution
 - Complete memory isolation
+- Capability-based security with ResourceTable
 
-**Advantages:**
-- ✅ **Ultimate Sandboxing**: Memory-safe, capability-based security
-- ✅ **Cross-Platform**: Write once, run anywhere
-- ✅ **Language Agnostic**: Support for Rust, C, Go, Python, etc.
-- ✅ **Smaller Binaries**: Typically 10-50% smaller than FFI plugins
-- ✅ **Version Independence**: No ABI compatibility issues
+**Performance Characteristics:**
+- 5-15% overhead vs FFI
+- Serialization required for data exchange (Arrow IPC, JSON)
+- Memory-safe by design
+- Limited async support (WASI Preview 2 constraints)
 
-**Trade-offs:**
-- ⚠️ Slight performance overhead (5-15% vs FFI)
-- ⚠️ Limited async support (WASI Preview 2 constraints)
-- ⚠️ Ecosystem still maturing
-
-**Best For:**
-- Third-party/untrusted plugins
-- Simple transformations
-- Cross-platform distribution
-- Security-critical environments
-
-### Decision Matrix
-
-| Feature | FFI Plugins | WASM Plugins |
-|---------|-------------|--------------|
-| Performance | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| Security | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Cross-platform | ⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Language support | Rust only | Any WASI language |
-| Binary size | ~30-40KB | ~20-30KB |
-| Development complexity | Medium | Low |
-| Maturity | High | Medium |
-
-### Current Status
-
-- **FFI Plugins**: ✅ Production-ready
-  - HTTP plugin (32KB .dylib)
-  - MongoDB plugin (33KB .dylib)
-  - Test plugin (33KB .dylib)
-
-- **WASM Plugins**: ✅ Production-ready
-  - WIT interface: `conveyor-plugin.wit`
-  - Guest-side API: `conveyor-wasm-plugin-api` crate
-  - Host-side loader: `WasmPluginLoader` with Wasmtime 28.0
-  - Echo plugin example (100KB .wasm)
-  - 6 integration tests passing
-  - Ready for real-world plugin development
-
-## Dependencies
-
-### Workspace Dependencies
-
-All common dependencies are managed in `[workspace.dependencies]` for consistency:
-
-```toml
-[workspace.dependencies]
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-toml = "0.8"
-
-# Async runtime
-tokio = { version = "1.47", features = ["full"] }
-async-trait = "0.1"
-
-# Error handling
-anyhow = "1.0"
-thiserror = "2.0"
-
-# Logging
-tracing = "0.1"
-
-# Plugin API
-conveyor-plugin-api = { path = "conveyor-plugin-api" }
-conveyor-wasm-plugin-api = { path = "conveyor-wasm-plugin-api" }
-abi_stable = "0.11"
-
-# WASM runtime
-wasmtime = "28.0"
-wit-bindgen = "0.46"
-
-# HTTP client (for HTTP plugin)
-reqwest = { version = "0.12", features = ["json", "stream"] }
-
-# Database (for MongoDB plugin)
-mongodb = "3.3"
-chrono = "0.4"
-futures = "0.3.31"
-```
-
-### Main Binary Dependencies
-
-```toml
-[dependencies]
-# CLI
-clap = { version = "4.5", features = ["derive", "env"] }
-
-# Workspace dependencies
-serde = { workspace = true }
-tokio = { workspace = true }
-anyhow = { workspace = true }
-# ... etc
-
-# Data processing (main binary only)
-polars = { version = "0.44", features = ["lazy", "csv", "json", "parquet"] }
-arrow = "54.3"
-
-# Plugin system (FFI)
-libloading = "0.8"
-conveyor-plugin-api = { workspace = true }
-
-# Plugin system (WASM)
-wasmtime = { workspace = true }
-wasmtime-wasi = "28.0"
-```
-
-**Benefits of Workspace Dependencies**:
-- Consistent versions across all crates
-- Single location for version updates
-- Prevents dependency conflicts
-- Shared feature flags
+**Constraints:**
+- Ecosystem still maturing
+- Wasmtime dependency (28.0+)
+- `wasm32-wasip2` build target required
 
 ## Code Organization
-
-### Workspace Structure
-
-```
-conveyor/
-├── Cargo.toml                     # Workspace root with shared dependencies
-├── conveyor-plugin-api/           # FFI Plugin API crate (lib)
-│   ├── Cargo.toml
-│   └── src/
-│       └── lib.rs                 # FFI-safe plugin traits
-├── conveyor-wasm-plugin-api/      # WASM Plugin API crate (lib)
-│   ├── Cargo.toml
-│   ├── wit/
-│   │   └── conveyor-plugin.wit    # WIT interface
-│   └── src/
-│       └── lib.rs                 # Guest-side helpers (~100 lines)
-├── plugins/                       # FFI Plugin crates (cdylib → .dylib/.so/.dll)
-│   ├── conveyor-plugin-http/
-│   │   ├── Cargo.toml             # HTTP plugin manifest
-│   │   └── src/
-│   │       └── lib.rs             # HTTP source & sink (~300 lines)
-│   └── conveyor-plugin-mongodb/
-│       ├── Cargo.toml             # MongoDB plugin manifest
-│       └── src/
-│           └── lib.rs             # MongoDB source & sink (~400 lines)
-├── plugins-wasm/                  # WASM Plugin crates (cdylib → .wasm)
-│   └── conveyor-plugin-echo-wasm/
-│       ├── Cargo.toml             # Echo WASM plugin manifest
-│       └── src/
-│           └── lib.rs             # Echo plugin (~75 lines)
-├── tests/
-│   ├── integration_test.rs        # FFI plugin tests
-│   ├── wasm_plugin_test.rs        # WASM plugin tests (~80 lines)
-│   ├── dag_pipeline_test.rs       # DAG pipeline tests
-│   ├── http_fetch_test.rs         # HTTP fetch transform tests
-│   ├── pipeline_stage_test.rs     # Pipeline stage tests (~172 lines)
-│   └── cli_commands_test.rs       # CLI commands tests (~122 lines)
-└── src/                           # Main application
-    ├── main.rs                    # CLI entry point
-    ├── lib.rs                     # Library exports
-    ├── plugin_loader.rs           # FFI plugin loader (150 lines)
-    ├── wasm_plugin_loader.rs      # WASM plugin loader (280 lines)
-    ├── cli/
-    │   ├── mod.rs                 # CLI module exports
-    │   ├── scaffold.rs            # Pipeline template generator (~177 lines)
-    │   ├── add_stage.rs           # Interactive stage addition (~354 lines)
-    │   └── edit.rs                # Interactive pipeline editor (~179 lines)
-    ├── core/
-    │   ├── mod.rs                 # Core module exports
-    │   ├── config.rs              # Configuration types (240 lines)
-    │   ├── error.rs               # Error types (71 lines)
-    │   ├── pipeline.rs            # Execution engine (180 lines)
-    │   ├── registry.rs            # Module registry (120 lines)
-    │   └── traits.rs              # Core traits (158 lines)
-    ├── modules/
-    │   ├── mod.rs                 # Module exports
-    │   ├── sources/
-    │   │   ├── mod.rs             # Built-in source registration
-    │   │   ├── csv.rs             # CSV source (119 lines)
-    │   │   ├── json.rs            # JSON source (129 lines)
-    │   │   └── stdin.rs           # Stdin source (91 lines)
-    │   ├── transforms/
-    │   │   ├── mod.rs             # Transform registration
-    │   │   ├── filter.rs          # Filter transform (130 lines)
-    │   │   ├── map.rs             # Map transform (143 lines)
-    │   │   └── validate.rs        # Validation (157 lines)
-    │   ├── sinks/
-    │   │   ├── mod.rs             # Sink registration
-    │   │   ├── csv.rs             # CSV sink (72 lines)
-    │   │   ├── json.rs            # JSON sink (166 lines)
-    │   │   └── stdout.rs          # Stdout sink (121 lines)
-    │   └── stages/
-    │       ├── mod.rs             # Stage exports
-    │       └── pipeline.rs        # Pipeline stage (217 lines)
-    └── utils/
-        └── mod.rs                 # Utilities (placeholder)
-```
-
-**Total Lines of Code**:
-- Main binary: ~3,230 lines (including WASM loader, pipeline stage, CLI commands)
-  - CLI commands: ~710 lines (scaffold, add_stage, edit)
-- FFI Plugin API: ~100 lines
-- WASM Plugin API: ~100 lines
-- HTTP plugin (FFI): ~300 lines
-- MongoDB plugin (FFI): ~400 lines
-- Echo plugin (WASM): ~75 lines
-- Tests: ~522 lines (FFI + WASM + DAG + HTTP Fetch + Pipeline Stage + CLI tests)
-- **Total**: ~4,732 lines (excluding tests: ~4,210 lines)
 
 **Key Organization Principles**:
 - **Dual Plugin Systems**: FFI for performance, WASM for security/portability
@@ -1106,28 +526,6 @@ conveyor/
 - **Workspace Benefits**: Shared dependencies, independent compilation
 - **Plugin Isolation**: Each plugin is a self-contained crate
 - **Cross-platform**: WASM plugins compile once, run everywhere
-
-## Build Configuration
-
-### Release Profile
-
-Optimized for production:
-```toml
-[profile.release]
-opt-level = 3          # Maximum optimization
-lto = true             # Link-time optimization
-codegen-units = 1      # Better optimization
-strip = true           # Remove debug symbols
-```
-
-### Development Profile
-
-Fast compilation for development:
-```toml
-[profile.dev]
-opt-level = 0
-debug = true
-```
 
 ## Error Handling Philosophy
 
@@ -1154,34 +552,6 @@ Log levels:
 - `INFO`: Major milestones
 - `WARN`: Recoverable errors
 - `ERROR`: Fatal errors
-
-## Development Workflow
-
-### Local Testing
-
-```bash
-# Run tests
-cargo test
-
-# Run with specific log level
-RUST_LOG=debug cargo run -- run -c pipeline.toml
-
-# Check for issues
-cargo clippy
-
-# Format code
-cargo fmt
-```
-
-### CI/CD Pipeline (Future)
-
-```yaml
-- lint: cargo clippy
-- test: cargo test --all-features
-- build: cargo build --release
-- benchmark: cargo bench
-- deploy: publish to crates.io
-```
 
 ## Lessons Learned
 
@@ -1267,30 +637,3 @@ cargo fmt
     - README.md for users
     - CLAUDE.md for technical details
     - Helps identify inconsistencies and gaps
-
-## Contributing Guidelines
-
-### Code Style
-
-- Follow Rust conventions (rustfmt)
-- Use meaningful variable names
-- Add doc comments for public APIs
-- Include tests for new features
-
-### Pull Request Process
-
-1. Create feature branch
-2. Add tests
-3. Update documentation
-4. Ensure CI passes
-5. Request review
-
-## Contact & Support
-
-- **GitHub Issues**: Bug reports and feature requests
-- **Discussions**: Design discussions and Q&A
-- **Documentation**: https://docs.rs/conveyor (future)
-
----
-
-**Built with Claude Code** - This document was created during an interactive development session with Claude, demonstrating collaborative AI-assisted software engineering.
