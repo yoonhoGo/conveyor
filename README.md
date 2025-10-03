@@ -318,7 +318,12 @@ cargo test --all
 
 # Run clippy
 cargo clippy --all-targets --all-features
+
+# Install git hooks (recommended)
+./hooks/install.sh
 ```
+
+**Git Hooks**: The pre-push hook automatically runs lint checks before pushing. See [hooks/README.md](hooks/README.md) for details.
 
 See [Development Guide](docs/development.md) for detailed instructions.
 
