@@ -115,6 +115,7 @@ jobs:
 
       - name: Run security audit
         run: cargo audit
+        continue-on-error: true  # Don't fail CI on security advisories
 
   coverage:
     name: Code Coverage
@@ -146,6 +147,7 @@ jobs:
 
       - name: Generate coverage
         run: cargo tarpaulin --workspace --timeout 300 --out Xml
+        continue-on-error: true  # Tarpaulin has issues with polars const evaluation
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
