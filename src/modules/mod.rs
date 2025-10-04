@@ -95,6 +95,10 @@ pub fn register_functions() -> HashMap<String, StageRef> {
         "aggregate.stream".to_string(),
         Arc::new(transforms::aggregate_stream::AggregateStreamTransform::new()) as StageRef,
     );
+    functions.insert(
+        "json.extract".to_string(),
+        Arc::new(transforms::json_extract::JsonExtractTransform) as StageRef,
+    );
 
     functions
 }

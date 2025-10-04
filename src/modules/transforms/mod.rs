@@ -3,6 +3,7 @@ pub mod distinct;
 pub mod filter;
 pub mod group_by;
 pub mod http_fetch;
+pub mod json_extract;
 pub mod map;
 pub mod reduce;
 pub mod select;
