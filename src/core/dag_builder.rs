@@ -5,10 +5,7 @@ use crate::core::config::{DagPipelineConfig, StageConfig};
 use crate::core::dag_executor::DagExecutor;
 use crate::core::error::ConveyorError;
 use crate::core::registry::ModuleRegistry;
-use crate::core::stage::{
-    FfiPluginStageAdapter, SinkStageAdapter, SourceStageAdapter, StageRef, TransformStageAdapter,
-    WasmPluginStageAdapter,
-};
+use crate::core::stage::{FfiPluginStageAdapter, StageRef, WasmPluginStageAdapter};
 use crate::plugin_loader::PluginLoader;
 use crate::wasm_plugin_loader::WasmPluginLoader;
 
@@ -64,132 +61,70 @@ impl DagPipelineBuilder {
         Ok(executor)
     }
 
-    /// Create a stage from configuration
+    /// Create a stage from configuration using function-based API
     ///
-    /// Supports four formats:
-    /// 1. Built-in: "source.json", "transform.filter", "sink.csv"
-    /// 2. Stage: "stage.pipeline" (special stages like pipeline)
-    /// 3. FFI Plugin: "plugin.http" (auto-detects from loaded plugins)
-    /// 4. WASM Plugin: "wasm.echo" (auto-detects from loaded WASM plugins)
+    /// Supports:
+    /// - Built-in functions: "csv.read", "json.write", "filter.apply"
+    /// - Plugin functions: "mongodb-find", "http-get" (from FFI/WASM plugins)
+    /// - Special stages: "stage.pipeline"
     fn create_stage(&self, stage_config: &StageConfig) -> Result<StageRef> {
-        // Parse stage type
-        let parts: Vec<&str> = stage_config.stage_type.split('.').collect();
+        let function_name = &stage_config.function;
 
-        if parts.len() != 2 {
-            return Err(ConveyorError::PipelineError(format!(
-                "Invalid stage type format: '{}'. Expected 'category.name' (e.g., 'source.json', 'stage.pipeline', 'plugin.http', 'wasm.echo')",
-                stage_config.stage_type
-            ))
-            .into());
+        // 1. Try registry lookup (built-in functions)
+        if let Some(stage) = self.registry.get_function(function_name) {
+            tracing::debug!(
+                "Found function '{}' in registry for stage '{}'",
+                function_name,
+                stage_config.id
+            );
+            return Ok(Arc::clone(stage));
         }
 
-        let category = parts[0];
-        let type_name = parts[1];
-
-        match category {
-            // Special stage types (e.g., pipeline)
-            "stage" => {
-                match type_name {
-                    "pipeline" => {
-                        use crate::modules::stages::PipelineStage;
-                        Ok(Arc::new(PipelineStage::new(Arc::clone(&self.registry))))
-                    }
-                    _ => Err(ConveyorError::ModuleNotFound(format!(
-                        "Stage type '{}' not found",
-                        type_name
-                    ))
-                    .into()),
-                }
-            }
-            // Built-in source
-            "source" => {
-                let source = self.registry.get_source(type_name).ok_or_else(|| {
-                    ConveyorError::ModuleNotFound(format!("Source type '{}' not found", type_name))
-                })?;
-
-                Ok(Arc::new(SourceStageAdapter::new(
+        // 2. Try FFI plugin lookup
+        if let Some(loader) = &self.plugin_loader {
+            if let Ok(stage_instance) = loader.create_stage(function_name) {
+                tracing::debug!(
+                    "Found function '{}' in FFI plugins for stage '{}'",
+                    function_name,
+                    stage_config.id
+                );
+                return Ok(Arc::new(FfiPluginStageAdapter::new(
                     stage_config.id.clone(),
-                    Arc::clone(source),
-                )))
-            }
-
-            // Built-in transform
-            "transform" => {
-                let transform = self
-                    .registry
-                    .get_transform(type_name)
-                    .ok_or_else(|| {
-                        ConveyorError::ModuleNotFound(format!(
-                            "Transform type '{}' not found",
-                            type_name
-                        ))
-                    })?;
-
-                Ok(Arc::new(TransformStageAdapter::new(
-                    stage_config.id.clone(),
-                    Arc::clone(transform),
-                )))
-            }
-
-            // Built-in sink
-            "sink" => {
-                let sink = self.registry.get_sink(type_name).ok_or_else(|| {
-                    ConveyorError::ModuleNotFound(format!("Sink type '{}' not found", type_name))
-                })?;
-
-                Ok(Arc::new(SinkStageAdapter::new(
-                    stage_config.id.clone(),
-                    Arc::clone(sink),
-                )))
-            }
-
-            // FFI Plugin stage
-            "plugin" => {
-                let loader = self.plugin_loader.as_ref().ok_or_else(|| {
-                    ConveyorError::PipelineError(
-                        "FFI plugin loader not initialized. Add plugins to configuration.".to_string()
-                    )
-                })?;
-
-                // Create stage from plugin
-                let stage_instance = loader
-                    .create_stage(type_name)
-                    .map_err(|e| ConveyorError::PipelineError(format!("Failed to create FFI plugin stage '{}': {}", type_name, e)))?;
-
-                Ok(Arc::new(FfiPluginStageAdapter::new(
-                    stage_config.id.clone(),
-                    type_name.to_string(),
+                    function_name.to_string(),
                     stage_instance,
-                )))
+                )));
             }
+        }
 
-            // WASM Plugin stage
-            "wasm" => {
-                let loader = self.wasm_plugin_loader.as_ref().ok_or_else(|| {
-                    ConveyorError::PipelineError(
-                        "WASM plugin loader not initialized. Add WASM plugins to configuration.".to_string()
-                    )
-                })?;
-
-                // Find which plugin provides this stage
-                let plugin = loader.find_plugin_for_stage(type_name).ok_or_else(|| {
-                    ConveyorError::ModuleNotFound(format!("WASM stage '{}' not found in any loaded plugin", type_name))
-                })?;
-
-                Ok(Arc::new(WasmPluginStageAdapter::new(
+        // 3. Try WASM plugin lookup
+        if let Some(loader) = &self.wasm_plugin_loader {
+            if let Some(plugin) = loader.find_plugin_for_stage(function_name) {
+                tracing::debug!(
+                    "Found function '{}' in WASM plugins for stage '{}'",
+                    function_name,
+                    stage_config.id
+                );
+                return Ok(Arc::new(WasmPluginStageAdapter::new(
                     stage_config.id.clone(),
                     plugin.name().to_string(),
-                    type_name.to_string(),
+                    function_name.to_string(),
                     Arc::clone(loader),
-                )))
+                )));
             }
-
-            _ => Err(ConveyorError::PipelineError(format!(
-                "Invalid stage category: '{}'. Must be 'source', 'transform', 'sink', 'stage', 'plugin', or 'wasm'",
-                category
-            ))
-            .into()),
         }
+
+        // 4. Special stage: "stage.pipeline"
+        if function_name == "stage.pipeline" {
+            use crate::modules::stages::PipelineStage;
+            return Ok(Arc::new(PipelineStage::new(Arc::clone(&self.registry))));
+        }
+
+        // Not found
+        Err(ConveyorError::ModuleNotFound(format!(
+            "Function '{}' not found in registry or plugins",
+            function_name
+        ))
+        .into())
     }
 }
 
@@ -209,7 +144,7 @@ version = "1.0"
 
 [[stages]]
 id = "load_data"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -217,7 +152,7 @@ path = "test.json"
 
 [[stages]]
 id = "filter_data"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["load_data"]
 
 [stages.config]
@@ -227,7 +162,7 @@ value = "active"
 
 [[stages]]
 id = "save_data"
-type = "sink.json"
+function = "json.write"
 inputs = ["filter_data"]
 
 [stages.config]
@@ -241,7 +176,7 @@ path = "output.json"
     }
 
     #[tokio::test]
-    async fn test_dag_builder_invalid_stage_type() {
+    async fn test_dag_builder_invalid_function() {
         let registry = Arc::new(ModuleRegistry::with_defaults().await.unwrap());
         let builder = DagPipelineBuilder::new(registry);
 
@@ -252,7 +187,7 @@ version = "1.0"
 
 [[stages]]
 id = "invalid"
-type = "invalid_format"
+function = "nonexistent.function"
 inputs = []
 "#;
 

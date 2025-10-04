@@ -121,9 +121,8 @@ pub struct StageConfig {
     /// Unique identifier for this stage
     pub id: String,
 
-    /// Stage type (e.g., "source.json", "transform.filter", "sink.csv")
-    #[serde(rename = "type")]
-    pub stage_type: String,
+    /// Function name (e.g., "csv.read", "mongodb.find", "filter.apply")
+    pub function: String,
 
     /// List of stage IDs this stage depends on (receives input from)
     #[serde(default)]

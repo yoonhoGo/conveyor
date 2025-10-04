@@ -1,0 +1,98 @@
+# JSONPlaceholder API to MongoDB Pipeline
+# Fetches data from JSONPlaceholder API and stores it in MongoDB
+
+[pipeline]
+name = "jsonplaceholder_to_mongodb"
+version = "1.0.0"
+description = "Clone JSONPlaceholder API data to MongoDB"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 300
+plugins = ["http", "mongodb"]  # Load both HTTP and MongoDB plugins
+
+# Stage 1: Fetch posts from JSONPlaceholder API
+[[stages]]
+id = "fetch_posts"
+function = "http"  # HTTP plugin (source)
+inputs = []
+
+[stages.config]
+url = "https://jsonplaceholder.typicode.com/posts"
+method = "GET"
+format = "json"
+timeout = "30"
+
+# Stage 2: Fetch users from JSONPlaceholder API
+[[stages]]
+id = "fetch_users"
+function = "http"  # HTTP plugin (source)
+inputs = []
+
+[stages.config]
+url = "https://jsonplaceholder.typicode.com/users"
+method = "GET"
+format = "json"
+timeout = "30"
+
+# Stage 3: Fetch comments from JSONPlaceholder API
+[[stages]]
+id = "fetch_comments"
+function = "http"  # HTTP plugin (source)
+inputs = []
+
+[stages.config]
+url = "https://jsonplaceholder.typicode.com/comments"
+method = "GET"
+format = "json"
+timeout = "30"
+
+# Stage 4: Save posts to MongoDB
+[[stages]]
+id = "save_posts"
+function = "mongodb-createmany"  # MongoDB bulk insert
+inputs = ["fetch_posts"]
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "jsonplaceholder"
+collection = "posts"
+
+# Stage 5: Save users to MongoDB
+[[stages]]
+id = "save_users"
+function = "mongodb-createmany"  # MongoDB bulk insert
+inputs = ["fetch_users"]
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "jsonplaceholder"
+collection = "users"
+
+# Stage 6: Save comments to MongoDB
+[[stages]]
+id = "save_comments"
+function = "mongodb-createmany"  # MongoDB bulk insert
+inputs = ["fetch_comments"]
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "jsonplaceholder"
+collection = "comments"
+
+# Stage 7: Preview posts (first 5 records)
+[[stages]]
+id = "preview_posts"
+function = "stdout.write"
+inputs = ["fetch_posts"]
+
+[stages.config]
+format = "table"
+limit = 5
+
+# Error Handling
+[error_handling]
+strategy = "stop"
+max_retries = 3
+retry_delay_seconds = 5

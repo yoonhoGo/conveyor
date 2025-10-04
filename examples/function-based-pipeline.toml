@@ -1,0 +1,59 @@
+# Function-based Pipeline Example
+# Demonstrates the new function-based API for stages
+
+[pipeline]
+name = "function-based-user-pipeline"
+version = "1.0"
+description = "Example function-based pipeline using the new API (csv.read, filter.apply, json.write)"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 300
+
+# Stage 1: Read user data from JSON using function API
+[[stages]]
+id = "load_users"
+function = "json.read"  # New function-based API!
+inputs = []
+
+[stages.config]
+path = "data/users.json"
+format = "records"
+
+# Stage 2: Filter only active users
+[[stages]]
+id = "filter_active_users"
+function = "filter.apply"  # Function-based filter
+inputs = ["load_users"]
+
+[stages.config]
+column = "status"
+operator = "=="
+value = "active"
+
+# Stage 3: Save filtered users to JSON
+[[stages]]
+id = "save_active_users"
+function = "json.write"  # Function-based write
+inputs = ["filter_active_users"]
+
+[stages.config]
+path = "output/active_users.json"
+format = "records"
+
+# Stage 4: Display to console (parallel branch)
+[[stages]]
+id = "display_users"
+function = "stdout.write"  # Function-based stdout
+inputs = ["filter_active_users"]
+
+[stages.config]
+format = "table"
+limit = 10
+
+# Benefits of function-based API:
+# 1. More intuitive: csv.read, json.write, filter.apply
+# 2. Unix-like: small, composable functions
+# 3. Extensible: plugins can provide many functions (mongodb.find, mongodb.insertMany, etc.)
+# 4. Same DAG execution model with parallel stages and branching

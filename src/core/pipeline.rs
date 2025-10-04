@@ -19,7 +19,7 @@ pub struct DagPipeline {
     registry: Arc<ModuleRegistry>,
     executor: DagExecutor,
     #[allow(dead_code)]
-    plugin_loader: PluginLoader,
+    plugin_loader: Option<Arc<PluginLoader>>,
 }
 
 impl DagPipeline {
@@ -46,15 +46,17 @@ impl DagPipeline {
             plugin_loader.load_plugins(&config.global.plugins)?;
         }
 
-        // Build DAG executor
-        let builder = DagPipelineBuilder::new(registry.clone());
+        // Build DAG executor with plugin loader
+        let plugin_loader_arc = Arc::new(plugin_loader);
+        let builder = DagPipelineBuilder::new(registry.clone())
+            .with_plugin_loader(plugin_loader_arc.clone());
         let executor = builder.build(&config)?;
 
         Ok(Self {
             config,
             registry,
             executor,
-            plugin_loader,
+            plugin_loader: Some(plugin_loader_arc),
         })
     }
 

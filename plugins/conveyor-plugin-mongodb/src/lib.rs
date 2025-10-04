@@ -1,7 +1,7 @@
-//! MongoDB Plugin for Conveyor - Version 2 (Unified Stage API)
+//! MongoDB Plugin for Conveyor - Operation-based API
 //!
-//! Provides MongoDB source and sink functionality as a unified stage.
-//! Supports database reads and writes with query filtering.
+//! Provides MongoDB operations: find, findOne, createOne, createMany,
+//! updateOne, updateMany, deleteOne, deleteMany, replaceOne, replaceMany
 
 use conveyor_plugin_api::sabi_trait::prelude::*;
 use conveyor_plugin_api::traits::{FfiExecutionContext, FfiStage, FfiStage_TO};
@@ -11,29 +11,555 @@ use conveyor_plugin_api::{
 };
 use mongodb::{
     bson::Document,
-    options::{ClientOptions, FindOptions},
+    options::{ClientOptions, FindOneOptions, FindOptions, ReplaceOptions, UpdateOptions},
     Client,
 };
 use serde_json::Value;
 use std::collections::HashMap;
 
-/// MongoDB Stage - unified source and sink
+/// MongoDB operation types
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MongoOperation {
+    Find,
+    FindOne,
+    CreateOne,
+    CreateMany,
+    UpdateOne,
+    UpdateMany,
+    DeleteOne,
+    DeleteMany,
+    ReplaceOne,
+    ReplaceMany,
+}
+
+/// MongoDB Stage - operation-based
 pub struct MongoDbStage {
     name: String,
+    operation: MongoOperation,
     stage_type: StageType,
 }
 
 impl MongoDbStage {
-    fn new(name: String, stage_type: StageType) -> Self {
-        Self { name, stage_type }
+    fn new(name: String, operation: MongoOperation, stage_type: StageType) -> Self {
+        Self {
+            name,
+            operation,
+            stage_type,
+        }
     }
 
-    /// Execute as MongoDB source (read data from MongoDB)
-    async fn execute_source_async(
+    /// Execute find operation - read multiple documents
+    async fn execute_find_async(
         &self,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        // Get MongoDB URI
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Build query filter
+        let filter = match self.parse_query(config) {
+            ROk(f) => f,
+            RErr(e) => return RErr(e),
+        };
+
+        // Build find options
+        let mut find_options = FindOptions::default();
+        if let Some(limit_str) = config.get("limit") {
+            if let Ok(limit) = limit_str.parse::<i64>() {
+                find_options.limit = Some(limit);
+            }
+        }
+
+        // Execute query
+        let mut cursor = match collection.find(filter).with_options(find_options).await {
+            Ok(c) => c,
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "MongoDB find failed: {}",
+                    e
+                )))
+            }
+        };
+
+        // Collect results
+        let mut records: Vec<HashMap<String, Value>> = Vec::new();
+        use futures::stream::TryStreamExt;
+        loop {
+            match cursor.try_next().await {
+                Ok(Some(doc)) => {
+                    if let Ok(json_str) = serde_json::to_string(&doc) {
+                        if let Ok(json_val) = serde_json::from_str::<Value>(&json_str) {
+                            if let Some(obj) = json_val.as_object() {
+                                let record: HashMap<String, Value> =
+                                    obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                                records.push(record);
+                            }
+                        }
+                    }
+                }
+                Ok(None) => break,
+                Err(e) => {
+                    return RErr(RBoxError::from_fmt(&format_args!(
+                        "Failed to fetch document: {}",
+                        e
+                    )))
+                }
+            }
+        }
+
+        FfiDataFormat::from_json_records(&records)
+    }
+
+    /// Execute findOne operation - read single document
+    async fn execute_find_one_async(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Build query filter
+        let filter = match self.parse_query(config) {
+            ROk(f) => f,
+            RErr(e) => return RErr(e),
+        };
+
+        // Execute query
+        let doc = match collection
+            .find_one(filter)
+            .with_options(FindOneOptions::default())
+            .await
+        {
+            Ok(Some(d)) => d,
+            Ok(None) => {
+                // No document found, return empty result
+                let empty: Vec<HashMap<String, Value>> = Vec::new();
+                return FfiDataFormat::from_json_records(&empty);
+            }
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "MongoDB findOne failed: {}",
+                    e
+                )))
+            }
+        };
+
+        // Convert to JSON record
+        if let Ok(json_str) = serde_json::to_string(&doc) {
+            if let Ok(json_val) = serde_json::from_str::<Value>(&json_str) {
+                if let Some(obj) = json_val.as_object() {
+                    let record: HashMap<String, Value> =
+                        obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                    return FfiDataFormat::from_json_records(&[record]);
+                }
+            }
+        }
+
+        RErr(RBoxError::from_fmt(&format_args!(
+            "Failed to convert document to JSON"
+        )))
+    }
+
+    /// Execute createOne operation - insert single document
+    async fn execute_create_one_async(
+        &self,
+        input_data: &FfiDataFormat,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Convert input data to document
+        let records = match input_data.to_json_records() {
+            ROk(r) => r,
+            RErr(e) => return RErr(e),
+        };
+
+        if records.is_empty() {
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "No data provided for createOne"
+            )));
+        }
+
+        let record = &records[0];
+        let doc = match self.json_record_to_bson(record) {
+            ROk(d) => d,
+            RErr(e) => return RErr(e),
+        };
+
+        // Insert document
+        match collection.insert_one(doc).await {
+            Ok(_) => ROk(input_data.clone()),
+            Err(e) => RErr(RBoxError::from_fmt(&format_args!(
+                "MongoDB createOne failed: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Execute createMany operation - insert multiple documents
+    async fn execute_create_many_async(
+        &self,
+        input_data: &FfiDataFormat,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Convert input data to documents
+        let records = match input_data.to_json_records() {
+            ROk(r) => r,
+            RErr(e) => return RErr(e),
+        };
+
+        if records.is_empty() {
+            return ROk(input_data.clone());
+        }
+
+        let documents: Vec<Document> = records
+            .iter()
+            .filter_map(|record| match self.json_record_to_bson(record) {
+                ROk(d) => Some(d),
+                RErr(_) => None,
+            })
+            .collect();
+
+        if documents.is_empty() {
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "No valid documents to insert"
+            )));
+        }
+
+        // Insert documents
+        match collection.insert_many(documents).await {
+            Ok(_) => ROk(input_data.clone()),
+            Err(e) => RErr(RBoxError::from_fmt(&format_args!(
+                "MongoDB createMany failed: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Execute updateOne operation - update single document
+    async fn execute_update_one_async(
+        &self,
+        input_data: &FfiDataFormat,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Build filter
+        let filter = match self.parse_query(config) {
+            ROk(f) => f,
+            RErr(e) => return RErr(e),
+        };
+
+        // Build update document from input data
+        let records = match input_data.to_json_records() {
+            ROk(r) => r,
+            RErr(e) => return RErr(e),
+        };
+
+        if records.is_empty() {
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "No data provided for updateOne"
+            )));
+        }
+
+        let update_doc = match self.json_record_to_bson(&records[0]) {
+            ROk(d) => d,
+            RErr(e) => return RErr(e),
+        };
+
+        // Wrap in $set operator
+        let update = mongodb::bson::doc! { "$set": update_doc };
+
+        // Execute update
+        match collection
+            .update_one(filter, update)
+            .with_options(UpdateOptions::default())
+            .await
+        {
+            Ok(_) => ROk(input_data.clone()),
+            Err(e) => RErr(RBoxError::from_fmt(&format_args!(
+                "MongoDB updateOne failed: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Execute updateMany operation - update multiple documents
+    async fn execute_update_many_async(
+        &self,
+        input_data: &FfiDataFormat,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Build filter
+        let filter = match self.parse_query(config) {
+            ROk(f) => f,
+            RErr(e) => return RErr(e),
+        };
+
+        // Build update document from input data
+        let records = match input_data.to_json_records() {
+            ROk(r) => r,
+            RErr(e) => return RErr(e),
+        };
+
+        if records.is_empty() {
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "No data provided for updateMany"
+            )));
+        }
+
+        let update_doc = match self.json_record_to_bson(&records[0]) {
+            ROk(d) => d,
+            RErr(e) => return RErr(e),
+        };
+
+        // Wrap in $set operator
+        let update = mongodb::bson::doc! { "$set": update_doc };
+
+        // Execute update
+        match collection
+            .update_many(filter, update)
+            .with_options(UpdateOptions::default())
+            .await
+        {
+            Ok(_) => ROk(input_data.clone()),
+            Err(e) => RErr(RBoxError::from_fmt(&format_args!(
+                "MongoDB updateMany failed: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Execute deleteOne operation - delete single document
+    async fn execute_delete_one_async(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Build filter
+        let filter = match self.parse_query(config) {
+            ROk(f) => f,
+            RErr(e) => return RErr(e),
+        };
+
+        // Execute delete
+        match collection.delete_one(filter).await {
+            Ok(_) => {
+                let empty: Vec<HashMap<String, Value>> = Vec::new();
+                FfiDataFormat::from_json_records(&empty)
+            }
+            Err(e) => RErr(RBoxError::from_fmt(&format_args!(
+                "MongoDB deleteOne failed: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Execute deleteMany operation - delete multiple documents
+    async fn execute_delete_many_async(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Build filter
+        let filter = match self.parse_query(config) {
+            ROk(f) => f,
+            RErr(e) => return RErr(e),
+        };
+
+        // Execute delete
+        match collection.delete_many(filter).await {
+            Ok(_) => {
+                let empty: Vec<HashMap<String, Value>> = Vec::new();
+                FfiDataFormat::from_json_records(&empty)
+            }
+            Err(e) => RErr(RBoxError::from_fmt(&format_args!(
+                "MongoDB deleteMany failed: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Execute replaceOne operation - replace single document
+    async fn execute_replace_one_async(
+        &self,
+        input_data: &FfiDataFormat,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Build filter
+        let filter = match self.parse_query(config) {
+            ROk(f) => f,
+            RErr(e) => return RErr(e),
+        };
+
+        // Build replacement document from input data
+        let records = match input_data.to_json_records() {
+            ROk(r) => r,
+            RErr(e) => return RErr(e),
+        };
+
+        if records.is_empty() {
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "No data provided for replaceOne"
+            )));
+        }
+
+        let replacement = match self.json_record_to_bson(&records[0]) {
+            ROk(d) => d,
+            RErr(e) => return RErr(e),
+        };
+
+        // Execute replace
+        match collection
+            .replace_one(filter, replacement)
+            .with_options(ReplaceOptions::default())
+            .await
+        {
+            Ok(_) => ROk(input_data.clone()),
+            Err(e) => RErr(RBoxError::from_fmt(&format_args!(
+                "MongoDB replaceOne failed: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Execute replaceMany operation - replace multiple documents
+    /// Note: MongoDB doesn't have a native replaceMany, so we iterate
+    async fn execute_replace_many_async(
+        &self,
+        input_data: &FfiDataFormat,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Build filter
+        let filter = match self.parse_query(config) {
+            ROk(f) => f,
+            RErr(e) => return RErr(e),
+        };
+
+        // Get all documents matching filter
+        let mut cursor = match collection.find(filter.clone()).await {
+            Ok(c) => c,
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "MongoDB find failed: {}",
+                    e
+                )))
+            }
+        };
+
+        // Build replacement document from input data
+        let records = match input_data.to_json_records() {
+            ROk(r) => r,
+            RErr(e) => return RErr(e),
+        };
+
+        if records.is_empty() {
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "No data provided for replaceMany"
+            )));
+        }
+
+        let replacement = match self.json_record_to_bson(&records[0]) {
+            ROk(d) => d,
+            RErr(e) => return RErr(e),
+        };
+
+        // Replace each document
+        use futures::stream::TryStreamExt;
+        loop {
+            match cursor.try_next().await {
+                Ok(Some(doc)) => {
+                    if let Some(id) = doc.get("_id") {
+                        let id_filter = mongodb::bson::doc! { "_id": id };
+                        if let Err(e) = collection
+                            .replace_one(id_filter, replacement.clone())
+                            .await
+                        {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "MongoDB replaceMany failed: {}",
+                                e
+                            )));
+                        }
+                    }
+                }
+                Ok(None) => break,
+                Err(e) => {
+                    return RErr(RBoxError::from_fmt(&format_args!(
+                        "Failed to fetch document: {}",
+                        e
+                    )))
+                }
+            }
+        }
+
+        ROk(input_data.clone())
+    }
+
+    // Helper methods
+
+    /// Connect to MongoDB and return client, database name, and collection name
+    async fn connect_mongodb(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<(Client, String, String), RBoxError> {
         let uri = match config.get("uri") {
             Some(u) => u,
             None => {
@@ -43,7 +569,6 @@ impl MongoDbStage {
             }
         };
 
-        // Get database name
         let database = match config.get("database") {
             Some(d) => d,
             None => {
@@ -53,8 +578,7 @@ impl MongoDbStage {
             }
         };
 
-        // Get collection name
-        let collection_name = match config.get("collection") {
+        let collection = match config.get("collection") {
             Some(c) => c,
             None => {
                 return RErr(RBoxError::from_fmt(&format_args!(
@@ -63,10 +587,6 @@ impl MongoDbStage {
             }
         };
 
-        // Parse limit (default: no limit)
-        let limit: Option<i64> = config.get("limit").and_then(|l| l.parse().ok());
-
-        // Connect to MongoDB
         let client_options = match ClientOptions::parse(uri).await {
             Ok(opts) => opts,
             Err(e) => {
@@ -87,11 +607,12 @@ impl MongoDbStage {
             }
         };
 
-        let db = client.database(database);
-        let collection = db.collection::<Document>(collection_name);
+        ROk((client, database.clone(), collection.clone()))
+    }
 
-        // Build query filter (optional)
-        let filter = if let Some(query_str) = config.get("query") {
+    /// Parse query from config
+    fn parse_query(&self, config: &HashMap<String, String>) -> RResult<Document, RBoxError> {
+        if let Some(query_str) = config.get("query") {
             match serde_json::from_str::<Value>(query_str) {
                 Ok(Value::Object(obj)) => {
                     let mut filter_doc = Document::new();
@@ -100,153 +621,32 @@ impl MongoDbStage {
                             filter_doc.insert(key, bson_val);
                         }
                     }
-                    filter_doc
+                    ROk(filter_doc)
                 }
-                _ => Document::new(),
+                _ => ROk(Document::new()),
             }
         } else {
-            Document::new()
-        };
-
-        // Build find options
-        let mut find_options = FindOptions::default();
-        if let Some(lim) = limit {
-            find_options.limit = Some(lim);
+            ROk(Document::new())
         }
-
-        // Execute query
-        let mut cursor = match collection.find(filter).with_options(find_options).await {
-            Ok(c) => c,
-            Err(e) => {
-                return RErr(RBoxError::from_fmt(&format_args!(
-                    "MongoDB query failed: {}",
-                    e
-                )))
-            }
-        };
-
-        // Collect results
-        let mut records: Vec<HashMap<String, Value>> = Vec::new();
-
-        use futures::stream::TryStreamExt;
-        while let Some(doc) = match cursor.try_next().await {
-            Ok(d) => d,
-            Err(e) => {
-                return RErr(RBoxError::from_fmt(&format_args!(
-                    "Failed to fetch document: {}",
-                    e
-                )))
-            }
-        } {
-            if let Ok(json_str) = serde_json::to_string(&doc) {
-                if let Ok(json_val) = serde_json::from_str::<Value>(&json_str) {
-                    if let Some(obj) = json_val.as_object() {
-                        let record: HashMap<String, Value> =
-                            obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-                        records.push(record);
-                    }
-                }
-            }
-        }
-
-        FfiDataFormat::from_json_records(&records)
     }
 
-    /// Execute as MongoDB sink (write data to MongoDB)
-    async fn execute_sink_async(
+    /// Convert JSON record to BSON document
+    fn json_record_to_bson(
         &self,
-        input_data: &FfiDataFormat,
-        config: &HashMap<String, String>,
-    ) -> RResult<FfiDataFormat, RBoxError> {
-        // Get MongoDB URI
-        let uri = match config.get("uri") {
-            Some(u) => u,
-            None => {
-                return RErr(RBoxError::from_fmt(&format_args!(
-                    "Missing required 'uri' configuration"
-                )))
+        record: &HashMap<String, Value>,
+    ) -> RResult<Document, RBoxError> {
+        let mut doc = Document::new();
+        for (key, value) in record {
+            if let Some(bson_val) = json_to_bson(value) {
+                doc.insert(key.clone(), bson_val);
             }
-        };
-
-        // Get database name
-        let database = match config.get("database") {
-            Some(d) => d,
-            None => {
-                return RErr(RBoxError::from_fmt(&format_args!(
-                    "Missing required 'database' configuration"
-                )))
-            }
-        };
-
-        // Get collection name
-        let collection_name = match config.get("collection") {
-            Some(c) => c,
-            None => {
-                return RErr(RBoxError::from_fmt(&format_args!(
-                    "Missing required 'collection' configuration"
-                )))
-            }
-        };
-
-        // Connect to MongoDB
-        let client_options = match ClientOptions::parse(uri).await {
-            Ok(opts) => opts,
-            Err(e) => {
-                return RErr(RBoxError::from_fmt(&format_args!(
-                    "Failed to parse MongoDB URI: {}",
-                    e
-                )))
-            }
-        };
-
-        let client = match Client::with_options(client_options) {
-            Ok(c) => c,
-            Err(e) => {
-                return RErr(RBoxError::from_fmt(&format_args!(
-                    "Failed to create MongoDB client: {}",
-                    e
-                )))
-            }
-        };
-
-        let db = client.database(database);
-        let collection = db.collection::<Document>(collection_name);
-
-        // Convert data to JSON records
-        let records = match input_data.to_json_records() {
-            ROk(r) => r,
-            RErr(e) => return RErr(e),
-        };
-
-        // Convert records to BSON documents
-        let documents: Vec<Document> = records
-            .iter()
-            .filter_map(|record| {
-                let mut doc = Document::new();
-                for (key, value) in record {
-                    if let Some(bson_val) = json_to_bson(value) {
-                        doc.insert(key.clone(), bson_val);
-                    }
-                }
-                if doc.is_empty() {
-                    None
-                } else {
-                    Some(doc)
-                }
-            })
-            .collect();
-
-        if documents.is_empty() {
-            return ROk(input_data.clone());
         }
-
-        // Insert documents
-        match collection.insert_many(documents).await {
-            Ok(_) => ROk(input_data.clone()),
-            Err(e) => RErr(RBoxError::from_fmt(&format_args!(
-                "MongoDB insert failed: {}",
-                e
-            ))),
+        if doc.is_empty() {
+            RErr(RBoxError::from_fmt(&format_args!(
+                "Failed to convert JSON to BSON"
+            )))
+        } else {
+            ROk(doc)
         }
     }
 }
@@ -280,28 +680,77 @@ impl FfiStage for MongoDbStage {
         };
 
         runtime.block_on(async {
-            match self.stage_type {
-                StageType::Source => {
-                    // Source mode: read from MongoDB
-                    self.execute_source_async(&config).await
-                }
-                StageType::Sink => {
-                    // Sink mode: write to MongoDB
-                    // Get input data (should have exactly one input)
+            match self.operation {
+                MongoOperation::Find => self.execute_find_async(&config).await,
+                MongoOperation::FindOne => self.execute_find_one_async(&config).await,
+                MongoOperation::CreateOne => {
                     let input_data = match context.inputs.into_iter().next() {
                         Some(tuple) => tuple.1,
                         None => {
                             return RErr(RBoxError::from_fmt(&format_args!(
-                                "MongoDB sink requires input data"
+                                "createOne requires input data"
                             )))
                         }
                     };
-
-                    self.execute_sink_async(&input_data, &config).await
+                    self.execute_create_one_async(&input_data, &config).await
                 }
-                StageType::Transform => RErr(RBoxError::from_fmt(&format_args!(
-                    "MongoDB transform not supported in this plugin"
-                ))),
+                MongoOperation::CreateMany => {
+                    let input_data = match context.inputs.into_iter().next() {
+                        Some(tuple) => tuple.1,
+                        None => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "createMany requires input data"
+                            )))
+                        }
+                    };
+                    self.execute_create_many_async(&input_data, &config).await
+                }
+                MongoOperation::UpdateOne => {
+                    let input_data = match context.inputs.into_iter().next() {
+                        Some(tuple) => tuple.1,
+                        None => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "updateOne requires input data"
+                            )))
+                        }
+                    };
+                    self.execute_update_one_async(&input_data, &config).await
+                }
+                MongoOperation::UpdateMany => {
+                    let input_data = match context.inputs.into_iter().next() {
+                        Some(tuple) => tuple.1,
+                        None => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "updateMany requires input data"
+                            )))
+                        }
+                    };
+                    self.execute_update_many_async(&input_data, &config).await
+                }
+                MongoOperation::DeleteOne => self.execute_delete_one_async(&config).await,
+                MongoOperation::DeleteMany => self.execute_delete_many_async(&config).await,
+                MongoOperation::ReplaceOne => {
+                    let input_data = match context.inputs.into_iter().next() {
+                        Some(tuple) => tuple.1,
+                        None => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "replaceOne requires input data"
+                            )))
+                        }
+                    };
+                    self.execute_replace_one_async(&input_data, &config).await
+                }
+                MongoOperation::ReplaceMany => {
+                    let input_data = match context.inputs.into_iter().next() {
+                        Some(tuple) => tuple.1,
+                        None => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "replaceMany requires input data"
+                            )))
+                        }
+                    };
+                    self.execute_replace_many_async(&input_data, &config).await
+                }
             }
         })
     }
@@ -359,19 +808,123 @@ fn json_to_bson(value: &Value) -> Option<mongodb::bson::Bson> {
     }
 }
 
-// Factory functions
+// Factory functions for each operation
 #[no_mangle]
-pub extern "C" fn create_mongodb_source() -> FfiStage_TO<'static, RBox<()>> {
+pub extern "C" fn create_mongodb_find() -> FfiStage_TO<'static, RBox<()>> {
     FfiStage_TO::from_value(
-        MongoDbStage::new("mongodb".to_string(), StageType::Source),
+        MongoDbStage::new(
+            "mongodb-find".to_string(),
+            MongoOperation::Find,
+            StageType::Source,
+        ),
         TD_Opaque,
     )
 }
 
 #[no_mangle]
-pub extern "C" fn create_mongodb_sink() -> FfiStage_TO<'static, RBox<()>> {
+pub extern "C" fn create_mongodb_findone() -> FfiStage_TO<'static, RBox<()>> {
     FfiStage_TO::from_value(
-        MongoDbStage::new("mongodb".to_string(), StageType::Sink),
+        MongoDbStage::new(
+            "mongodb-findone".to_string(),
+            MongoOperation::FindOne,
+            StageType::Source,
+        ),
+        TD_Opaque,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn create_mongodb_createone() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-createone".to_string(),
+            MongoOperation::CreateOne,
+            StageType::Sink,
+        ),
+        TD_Opaque,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn create_mongodb_createmany() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-createmany".to_string(),
+            MongoOperation::CreateMany,
+            StageType::Sink,
+        ),
+        TD_Opaque,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn create_mongodb_updateone() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-updateone".to_string(),
+            MongoOperation::UpdateOne,
+            StageType::Sink,
+        ),
+        TD_Opaque,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn create_mongodb_updatemany() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-updatemany".to_string(),
+            MongoOperation::UpdateMany,
+            StageType::Sink,
+        ),
+        TD_Opaque,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn create_mongodb_deleteone() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-deleteone".to_string(),
+            MongoOperation::DeleteOne,
+            StageType::Sink,
+        ),
+        TD_Opaque,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn create_mongodb_deletemany() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-deletemany".to_string(),
+            MongoOperation::DeleteMany,
+            StageType::Sink,
+        ),
+        TD_Opaque,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn create_mongodb_replaceone() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-replaceone".to_string(),
+            MongoOperation::ReplaceOne,
+            StageType::Sink,
+        ),
+        TD_Opaque,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn create_mongodb_replacemany() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-replacemany".to_string(),
+            MongoOperation::ReplaceMany,
+            StageType::Sink,
+        ),
         TD_Opaque,
     )
 }
@@ -380,16 +933,64 @@ pub extern "C" fn create_mongodb_sink() -> FfiStage_TO<'static, RBox<()>> {
 extern "C" fn get_capabilities() -> RVec<PluginCapability> {
     vec![
         PluginCapability {
-            name: RString::from("mongodb"),
+            name: RString::from("mongodb-find"),
             stage_type: StageType::Source,
-            description: RString::from("MongoDB source - read data from MongoDB collections"),
-            factory_symbol: RString::from("create_mongodb_source"),
+            description: RString::from("MongoDB find - read multiple documents"),
+            factory_symbol: RString::from("create_mongodb_find"),
         },
         PluginCapability {
-            name: RString::from("mongodb"),
+            name: RString::from("mongodb-findone"),
+            stage_type: StageType::Source,
+            description: RString::from("MongoDB findOne - read single document"),
+            factory_symbol: RString::from("create_mongodb_findone"),
+        },
+        PluginCapability {
+            name: RString::from("mongodb-createone"),
             stage_type: StageType::Sink,
-            description: RString::from("MongoDB sink - write data to MongoDB collections"),
-            factory_symbol: RString::from("create_mongodb_sink"),
+            description: RString::from("MongoDB createOne - insert single document"),
+            factory_symbol: RString::from("create_mongodb_createone"),
+        },
+        PluginCapability {
+            name: RString::from("mongodb-createmany"),
+            stage_type: StageType::Sink,
+            description: RString::from("MongoDB createMany - insert multiple documents"),
+            factory_symbol: RString::from("create_mongodb_createmany"),
+        },
+        PluginCapability {
+            name: RString::from("mongodb-updateone"),
+            stage_type: StageType::Sink,
+            description: RString::from("MongoDB updateOne - update single document"),
+            factory_symbol: RString::from("create_mongodb_updateone"),
+        },
+        PluginCapability {
+            name: RString::from("mongodb-updatemany"),
+            stage_type: StageType::Sink,
+            description: RString::from("MongoDB updateMany - update multiple documents"),
+            factory_symbol: RString::from("create_mongodb_updatemany"),
+        },
+        PluginCapability {
+            name: RString::from("mongodb-deleteone"),
+            stage_type: StageType::Sink,
+            description: RString::from("MongoDB deleteOne - delete single document"),
+            factory_symbol: RString::from("create_mongodb_deleteone"),
+        },
+        PluginCapability {
+            name: RString::from("mongodb-deletemany"),
+            stage_type: StageType::Sink,
+            description: RString::from("MongoDB deleteMany - delete multiple documents"),
+            factory_symbol: RString::from("create_mongodb_deletemany"),
+        },
+        PluginCapability {
+            name: RString::from("mongodb-replaceone"),
+            stage_type: StageType::Sink,
+            description: RString::from("MongoDB replaceOne - replace single document"),
+            factory_symbol: RString::from("create_mongodb_replaceone"),
+        },
+        PluginCapability {
+            name: RString::from("mongodb-replacemany"),
+            stage_type: StageType::Sink,
+            description: RString::from("MongoDB replaceMany - replace multiple documents"),
+            factory_symbol: RString::from("create_mongodb_replacemany"),
         },
     ]
     .into()
@@ -400,8 +1001,8 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
 pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
     api_version: PLUGIN_API_VERSION,
     name: rstr!("mongodb"),
-    version: rstr!("1.0.0"),
-    description: rstr!("MongoDB source and sink plugin for database integration"),
+    version: rstr!("2.0.0"),
+    description: rstr!("MongoDB plugin with operation-based API (find, findOne, create, update, delete, replace)"),
     get_capabilities,
 };
 
@@ -414,53 +1015,41 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_mongodb_source() {
-        let stage = MongoDbStage::new("mongodb".to_string(), StageType::Source);
-        assert_eq!(stage.name(), "mongodb");
-        assert_eq!(stage.stage_type(), StageType::Source);
-    }
-
-    #[test]
-    fn test_mongodb_sink() {
-        let stage = MongoDbStage::new("mongodb".to_string(), StageType::Sink);
-        assert_eq!(stage.name(), "mongodb");
-        assert_eq!(stage.stage_type(), StageType::Sink);
-    }
-
-    #[test]
     fn test_plugin_declaration() {
         assert_eq!(_plugin_declaration.name, "mongodb");
-        assert_eq!(_plugin_declaration.version, "1.0.0");
+        assert_eq!(_plugin_declaration.version, "2.0.0");
         assert!(_plugin_declaration.is_compatible());
     }
 
     #[test]
-    fn test_source_validation() {
-        let stage = MongoDbStage::new("mongodb".to_string(), StageType::Source);
-        let mut config = RHashMap::new();
+    fn test_capabilities() {
+        let caps = get_capabilities();
+        assert_eq!(caps.len(), 10);
 
-        // Missing all configs should fail
-        assert!(stage.validate_config(config.clone()).is_err());
+        // Check find operation
+        assert_eq!(caps[0].name.as_str(), "mongodb-find");
+        assert_eq!(caps[0].stage_type, StageType::Source);
 
-        // With only URI should still fail
-        config.insert(
-            RString::from("uri"),
-            RString::from("mongodb://localhost:27017"),
-        );
-        assert!(stage.validate_config(config.clone()).is_err());
+        // Check findOne operation
+        assert_eq!(caps[1].name.as_str(), "mongodb-findone");
+        assert_eq!(caps[1].stage_type, StageType::Source);
 
-        // With URI and database should still fail
-        config.insert(RString::from("database"), RString::from("testdb"));
-        assert!(stage.validate_config(config.clone()).is_err());
+        // Check createOne operation
+        assert_eq!(caps[2].name.as_str(), "mongodb-createone");
+        assert_eq!(caps[2].stage_type, StageType::Sink);
 
-        // With all required configs should succeed
-        config.insert(RString::from("collection"), RString::from("testcol"));
-        assert!(stage.validate_config(config).is_ok());
+        // Check createMany operation
+        assert_eq!(caps[3].name.as_str(), "mongodb-createmany");
+        assert_eq!(caps[3].stage_type, StageType::Sink);
     }
 
     #[test]
-    fn test_sink_validation() {
-        let stage = MongoDbStage::new("mongodb".to_string(), StageType::Sink);
+    fn test_validation() {
+        let stage = MongoDbStage::new(
+            "mongodb-find".to_string(),
+            MongoOperation::Find,
+            StageType::Source,
+        );
         let mut config = RHashMap::new();
 
         // Missing all configs should fail
@@ -514,14 +1103,5 @@ mod tests {
         } else {
             panic!("Expected string");
         }
-    }
-
-    #[test]
-    fn test_capabilities() {
-        let caps = get_capabilities();
-        assert_eq!(caps.len(), 2);
-        assert_eq!(caps[0].name.as_str(), "mongodb");
-        assert_eq!(caps[0].stage_type, StageType::Source);
-        assert_eq!(caps[1].stage_type, StageType::Sink);
     }
 }

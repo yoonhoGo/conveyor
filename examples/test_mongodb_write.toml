@@ -1,0 +1,49 @@
+# Test MongoDB Write - Debug Pipeline
+# Fetch small data from API and save to MongoDB with verbose output
+
+[pipeline]
+name = "test_mongodb_write"
+version = "1.0.0"
+description = "Test MongoDB write with debugging"
+
+[global]
+log_level = "debug"
+max_parallel_tasks = 1
+timeout_seconds = 60
+plugins = ["http", "mongodb"]
+
+# Stage 1: Fetch only 3 posts
+[[stages]]
+id = "fetch_posts"
+function = "http"  # HTTP plugin (source)
+inputs = []
+
+[stages.config]
+url = "https://jsonplaceholder.typicode.com/posts?_limit=3"
+method = "GET"
+format = "json"
+timeout = "30"
+
+# Stage 2: Preview what we got
+[[stages]]
+id = "preview_data"
+function = "stdout.write"
+inputs = ["fetch_posts"]
+
+[stages.config]
+format = "json"
+pretty = true
+
+# Stage 3: Save to MongoDB
+[[stages]]
+id = "save_to_mongodb"
+function = "mongodb-createmany"  # MongoDB bulk insert
+inputs = ["fetch_posts"]
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "test_conveyor"
+collection = "test_posts"
+
+[error_handling]
+strategy = "stop"

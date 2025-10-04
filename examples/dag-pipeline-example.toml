@@ -14,7 +14,7 @@ timeout_seconds = 300
 # Stage 1: Load user data from JSON file
 [[stages]]
 id = "load_users"
-type = "source.json"
+function = "json.read"
 inputs = []  # No inputs - this is a source
 
 [stages.config]
@@ -24,7 +24,7 @@ format = "records"
 # Stage 2: Filter only active users
 [[stages]]
 id = "filter_active_users"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["load_users"]  # Depends on load_users stage
 
 [stages.config]
@@ -35,7 +35,7 @@ value = "active"
 # Stage 3: Save filtered users to a file
 [[stages]]
 id = "save_active_users"
-type = "sink.json"
+function = "json.write"
 inputs = ["filter_active_users"]
 
 [stages.config]
@@ -45,7 +45,7 @@ format = "records"
 # Stage 4: Also display filtered users to console
 [[stages]]
 id = "display_users"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["filter_active_users"]  # Same input as save_active_users - branching!
 
 [stages.config]

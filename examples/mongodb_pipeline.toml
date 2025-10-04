@@ -13,27 +13,23 @@ max_parallel_tasks = 2
 timeout_seconds = 600
 plugins = ["mongodb"]  # Load MongoDB plugin dynamically
 
-# Stage 1: MongoDB Source - First Page with Cursor Pagination
+# Stage 1: MongoDB Source - Fetch purchase events
 [[stages]]
 id = "user_events"
-type = "plugin.mongodb"
+function = "mongodb-find"  # MongoDB plugin function
 inputs = []
 
 [stages.config]
-connection_string = "mongodb://localhost:27017"
+uri = "mongodb://localhost:27017"
 database = "analytics"
 collection = "raw_events"
 query = '{ "event_type": "purchase" }'
-# Cursor-based pagination settings
-cursor_field = "_id"          # Use _id for pagination
-# cursor_value = ""           # Omit for first page, or set to last _id from previous batch
-batch_size = 5000             # Fetch 5000 documents per batch
-limit = 10000                 # Optional: total limit across all batches
+limit = 10000
 
 # Stage 2: Validate schema
 [[stages]]
 id = "validate_data"
-type = "transform.validate_schema"
+function = "validate.schema"
 inputs = ["user_events"]
 
 [stages.config]
@@ -47,7 +43,7 @@ amount = "int"
 # Stage 3: Filter high value events
 [[stages]]
 id = "filter_high_value"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["validate_data"]
 
 [stages.config]
@@ -58,7 +54,7 @@ value = 100.0
 # Stage 4: Add tax calculation
 [[stages]]
 id = "add_tax"
-type = "transform.map"
+function = "map.apply"
 inputs = ["filter_high_value"]
 
 [stages.config]
@@ -68,7 +64,7 @@ output_column = "amount_with_tax"
 # Stage 5: Output to JSON file
 [[stages]]
 id = "output_json"
-type = "sink.json"
+function = "json.write"
 inputs = ["add_tax"]
 
 [stages.config]
@@ -79,7 +75,7 @@ pretty = false
 # Stage 6: Also output to stdout for preview (branching)
 [[stages]]
 id = "preview"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["add_tax"]
 
 [stages.config]

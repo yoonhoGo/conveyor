@@ -35,23 +35,30 @@ impl ModuleRegistry {
     }
 
     pub async fn register_default_modules(&mut self) -> Result<()> {
-        // Register built-in sources
+        // Register built-in sources (legacy)
         self.sources.extend(sources::register_sources());
 
-        // Register built-in transforms
+        // Register built-in transforms (legacy)
         self.transforms.extend(transforms::register_transforms());
 
-        // Register built-in sinks
+        // Register built-in sinks (legacy)
         self.sinks.extend(sinks::register_sinks());
+
+        // Register function-based modules (new preferred API)
+        let functions = crate::modules::register_functions();
+        for (name, stage) in functions {
+            self.stages.insert(name, stage);
+        }
 
         // Note: PipelineStage is registered dynamically in DagPipelineBuilder
         // to avoid circular dependencies with the registry
 
         tracing::debug!(
-            "Registered {} sources, {} transforms, {} sinks",
+            "Registered {} sources, {} transforms, {} sinks, {} functions",
             self.sources.len(),
             self.transforms.len(),
-            self.sinks.len()
+            self.sinks.len(),
+            self.stages.len()
         );
 
         Ok(())
@@ -73,6 +80,12 @@ impl ModuleRegistry {
         self.stages.insert(name, stage);
     }
 
+    /// Register a function-style stage (e.g., "csv.read", "mongodb.find")
+    /// This is an alias for register_stage but with clearer semantics
+    pub fn register_function(&mut self, function_name: String, stage: StageRef) {
+        self.stages.insert(function_name, stage);
+    }
+
     pub fn get_source(&self, name: &str) -> Option<&DataSourceRef> {
         self.sources.get(name)
     }
@@ -87,6 +100,12 @@ impl ModuleRegistry {
 
     pub fn get_stage(&self, name: &str) -> Option<&StageRef> {
         self.stages.get(name)
+    }
+
+    /// Get a function-style stage (e.g., "csv.read", "mongodb.find")
+    /// This is an alias for get_stage but with clearer semantics
+    pub fn get_function(&self, function_name: &str) -> Option<&StageRef> {
+        self.stages.get(function_name)
     }
 
     pub fn list_sources(&self) -> Vec<String> {
