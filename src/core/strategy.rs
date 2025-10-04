@@ -94,28 +94,6 @@ impl ErrorStrategy {
     }
 }
 
-// Legacy support: convert from old string-based config
-impl ErrorStrategy {
-    pub fn from_legacy(strategy: &str, max_retries: u32, retry_delay_seconds: u64) -> Result<Self> {
-        match strategy {
-            "stop" => Ok(ErrorStrategy::Stop),
-            "continue" => Ok(ErrorStrategy::Continue),
-            "retry" => Ok(ErrorStrategy::Retry {
-                max_retries,
-                retry_delay_seconds,
-            }),
-            _ => anyhow::bail!("Invalid error strategy: {}", strategy),
-        }
-    }
-
-    pub fn to_legacy_string(&self) -> &'static str {
-        match self {
-            ErrorStrategy::Stop => "stop",
-            ErrorStrategy::Continue => "continue",
-            ErrorStrategy::Retry { .. } => "retry",
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -198,24 +176,4 @@ mod tests {
         assert_eq!(*call_count.lock().unwrap(), 3); // Initial + 2 retries
     }
 
-    #[test]
-    fn test_from_legacy() {
-        let stop = ErrorStrategy::from_legacy("stop", 3, 5).unwrap();
-        assert_eq!(stop, ErrorStrategy::Stop);
-
-        let continue_strategy = ErrorStrategy::from_legacy("continue", 3, 5).unwrap();
-        assert_eq!(continue_strategy, ErrorStrategy::Continue);
-
-        let retry = ErrorStrategy::from_legacy("retry", 3, 5).unwrap();
-        assert_eq!(
-            retry,
-            ErrorStrategy::Retry {
-                max_retries: 3,
-                retry_delay_seconds: 5
-            }
-        );
-
-        let invalid = ErrorStrategy::from_legacy("invalid", 3, 5);
-        assert!(invalid.is_err());
-    }
 }
