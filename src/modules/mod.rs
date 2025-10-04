@@ -99,6 +99,10 @@ pub fn register_functions() -> HashMap<String, StageRef> {
         "json.extract".to_string(),
         Arc::new(transforms::json_extract::JsonExtractTransform) as StageRef,
     );
+    functions.insert(
+        "ai.generate".to_string(),
+        Arc::new(transforms::ai::AiGenerateTransform::new()) as StageRef,
+    );
 
     functions
 }
