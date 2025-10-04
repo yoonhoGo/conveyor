@@ -9,7 +9,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # GitHub repository information
-REPO="yoonho-go/conveyor"
+REPO="yoonhoGo/conveyor"
 BINARY_NAME="conveyor"
 
 # Detect OS and architecture (macOS only)
@@ -44,15 +44,15 @@ detect_platform() {
 
 # Get latest release version from GitHub
 get_latest_version() {
-    echo -e "${YELLOW}Fetching latest release...${NC}"
+    echo -e "${YELLOW}Fetching latest release...${NC}" >&2
     VERSION=$(curl -s "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
     if [ -z "$VERSION" ]; then
-        echo -e "${RED}Failed to fetch latest version${NC}"
+        echo -e "${RED}Failed to fetch latest version${NC}" >&2
         exit 1
     fi
 
-    echo -e "${GREEN}Latest version: ${VERSION}${NC}"
+    echo -e "${GREEN}Latest version: ${VERSION}${NC}" >&2
 }
 
 # Download binary
@@ -61,10 +61,10 @@ download_binary() {
     local download_url="https://github.com/${REPO}/releases/download/${VERSION}/${binary_name}"
     local temp_file="/tmp/${binary_name}"
 
-    echo -e "${YELLOW}Downloading from: ${download_url}${NC}"
+    echo -e "${YELLOW}Downloading from: ${download_url}${NC}" >&2
 
     if ! curl -L -o "$temp_file" "$download_url"; then
-        echo -e "${RED}Failed to download binary${NC}"
+        echo -e "${RED}Failed to download binary${NC}" >&2
         exit 1
     fi
 
@@ -102,8 +102,16 @@ install_binary() {
         echo -e "${GREEN}Successfully installed ${BINARY_NAME} to ${install_path}${NC}"
     else
         echo -e "${YELLOW}Permission denied. Attempting with sudo...${NC}"
-        sudo mv "$temp_file" "$install_path"
-        echo -e "${GREEN}Successfully installed ${BINARY_NAME} to ${install_path}${NC}"
+        if sudo mv "$temp_file" "$install_path" 2>/dev/null; then
+            echo -e "${GREEN}Successfully installed ${BINARY_NAME} to ${install_path}${NC}"
+        else
+            echo -e "${YELLOW}sudo failed, falling back to ~/.local/bin${NC}"
+            install_dir="$HOME/.local/bin"
+            install_path="${install_dir}/${BINARY_NAME}"
+            mkdir -p "$install_dir"
+            mv "$temp_file" "$install_path"
+            echo -e "${GREEN}Successfully installed ${BINARY_NAME} to ${install_path}${NC}"
+        fi
     fi
 
     # Check if install directory is in PATH
