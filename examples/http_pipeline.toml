@@ -27,7 +27,7 @@ timeout = 30
 # Stage 2: Validate schema
 [[stages]]
 id = "validate_data"
-type = "transform.validate_schema"
+function = "validate.schema"
 inputs = ["users_api"]
 
 [stages.config]
@@ -37,7 +37,7 @@ non_nullable = ["id", "name"]
 # Stage 3: Output to JSON file
 [[stages]]
 id = "output_json"
-type = "sink.json"
+function = "json.write"
 inputs = ["validate_data"]
 
 [stages.config]
@@ -48,7 +48,7 @@ pretty = true
 # Stage 4: Also output to stdout for preview (branching)
 [[stages]]
 id = "preview"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["validate_data"]
 
 [stages.config]

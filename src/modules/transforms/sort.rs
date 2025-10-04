@@ -3,24 +3,26 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
-use crate::core::traits::{DataFormat, Transform};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 pub struct SortTransform;
 
 #[async_trait]
-impl Transform for SortTransform {
-    async fn name(&self) -> &str {
+impl Stage for SortTransform {
+    fn name(&self) -> &str {
         "sort"
     }
 
-    async fn apply(
+    async fn execute(
         &self,
-        data: DataFormat,
-        config: &Option<HashMap<String, toml::Value>>,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Sort transform requires configuration"))?;
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Sort transform requires input data"))?;
 
         // Get columns to sort by (can be single string or array)
         let sort_columns: Vec<String> = if let Some(cols) = config.get("by") {
@@ -72,11 +74,7 @@ impl Transform for SortTransform {
         Ok(DataFormat::DataFrame(result))
     }
 
-    async fn validate_config(&self, config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Sort transform requires configuration"))?;
-
+    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
         if !config.contains_key("by") {
             anyhow::bail!("Sort requires 'by' configuration");
         }

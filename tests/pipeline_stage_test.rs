@@ -37,7 +37,7 @@ version = "1.0"
 
 [[stages]]
 id = "load_data"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -46,14 +46,14 @@ path = "{}"
 
 [[stages]]
 id = "sub_pipeline"
-type = "stage.pipeline"
+function = "stage.pipeline"
 inputs = ["load_data"]
 
 [stages.config]
 inline = """
 [[stages]]
 id = "load_sub"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -62,7 +62,7 @@ path = "{}"
 
 [[stages]]
 id = "filter"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["load_sub"]
 
 [stages.config]
@@ -72,7 +72,7 @@ value = 0
 
 [[stages]]
 id = "output_sub"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["filter"]
 
 [stages.config]
@@ -81,7 +81,7 @@ format = "json"
 
 [[stages]]
 id = "output"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["sub_pipeline"]
 
 [stages.config]
@@ -117,7 +117,7 @@ async fn test_pipeline_stage_validation() -> Result<()> {
     let inline_config = r#"
 [[stages]]
 id = "test"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -172,7 +172,7 @@ version = "1.0"
 
 [[stages]]
 id = "load"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -181,14 +181,14 @@ path = "{}"
 
 [[stages]]
 id = "process"
-type = "stage.pipeline"
+function = "stage.pipeline"
 inputs = ["load"]
 
 [stages.config]
 inline = """
 [[stages]]
 id = "load_sub"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -197,7 +197,7 @@ path = "{}"
 
 [[stages]]
 id = "filter_low"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["load_sub"]
 
 [stages.config]
@@ -207,7 +207,7 @@ value = 15
 
 [[stages]]
 id = "display"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["filter_low"]
 
 [stages.config]
@@ -216,7 +216,7 @@ format = "json"
 
 [[stages]]
 id = "final_output"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["process"]
 
 [stages.config]

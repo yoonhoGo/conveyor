@@ -7,7 +7,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
-use crate::core::traits::{DataFormat, Transform};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 /// HTTP Fetch Transform
 /// Fetches data from HTTP APIs using input data as context for templated requests
@@ -37,19 +38,20 @@ impl HttpFetchTransform {
 }
 
 #[async_trait]
-impl Transform for HttpFetchTransform {
-    async fn name(&self) -> &str {
+impl Stage for HttpFetchTransform {
+    fn name(&self) -> &str {
         "http_fetch"
     }
 
-    async fn apply(
+    async fn execute(
         &self,
-        data: DataFormat,
-        config: &Option<HashMap<String, toml::Value>>,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("http_fetch requires configuration"))?;
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("HTTP fetch requires input data"))?;
 
         // Parse configuration
         let url_template = config
@@ -119,11 +121,7 @@ impl Transform for HttpFetchTransform {
         }
     }
 
-    async fn validate_config(&self, config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("http_fetch requires configuration"))?;
-
+    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
         // Validate required fields
         if !config.contains_key("url") {
             anyhow::bail!("http_fetch requires 'url' field");
@@ -304,7 +302,7 @@ mod tests {
         let transform = HttpFetchTransform::new();
 
         // Missing URL
-        let config = Some(HashMap::new());
+        let config = HashMap::new();
         assert!(transform.validate_config(&config).await.is_err());
 
         // Valid config
@@ -313,7 +311,7 @@ mod tests {
             "url".to_string(),
             toml::Value::String("http://example.com".to_string()),
         );
-        assert!(transform.validate_config(&Some(config)).await.is_ok());
+        assert!(transform.validate_config(&config).await.is_ok());
     }
 
     #[tokio::test]

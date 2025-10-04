@@ -3,24 +3,26 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
-use crate::core::traits::{DataFormat, Transform};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 pub struct FilterTransform;
 
 #[async_trait]
-impl Transform for FilterTransform {
-    async fn name(&self) -> &str {
-        "filter"
+impl Stage for FilterTransform {
+    fn name(&self) -> &str {
+        "filter.apply"
     }
 
-    async fn apply(
+    async fn execute(
         &self,
-        data: DataFormat,
-        config: &Option<HashMap<String, toml::Value>>,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Filter transform requires configuration"))?;
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Filter transform requires input data"))?;
 
         let column = config
             .get("column")
@@ -106,11 +108,7 @@ impl Transform for FilterTransform {
         Ok(DataFormat::DataFrame(filtered_df))
     }
 
-    async fn validate_config(&self, config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Filter transform requires configuration"))?;
-
+    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
         if !config.contains_key("column") {
             anyhow::bail!("Filter requires 'column' configuration");
         }

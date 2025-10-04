@@ -3,17 +3,30 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
-use crate::core::traits::{DataFormat, Sink};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 pub struct StdoutSink;
 
 #[async_trait]
-impl Sink for StdoutSink {
-    async fn name(&self) -> &str {
-        "stdout"
+impl Stage for StdoutSink {
+    fn name(&self) -> &str {
+        "stdout.write"
     }
 
-    async fn write(&self, data: DataFormat, config: &HashMap<String, toml::Value>) -> Result<()> {
+    fn produces_output(&self) -> bool {
+        false
+    }
+
+    async fn execute(
+        &self,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
+    ) -> Result<DataFormat> {
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Stdout sink requires input data"))?;
         let format = config
             .get("format")
             .and_then(|v| v.as_str())
@@ -92,7 +105,7 @@ impl Sink for StdoutSink {
             ),
         }
 
-        Ok(())
+        Ok(DataFormat::RecordBatch(vec![]))
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {

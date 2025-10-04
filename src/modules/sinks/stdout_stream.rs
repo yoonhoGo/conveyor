@@ -5,7 +5,8 @@ use tokio::io::{stdout, AsyncWriteExt};
 use tokio_stream::StreamExt;
 use tracing::{debug, info};
 
-use crate::core::traits::{DataFormat, Sink};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 /// Streaming stdout sink that outputs data in real-time
 pub struct StdoutStreamSink;
@@ -63,12 +64,24 @@ impl StdoutStreamSink {
 }
 
 #[async_trait]
-impl Sink for StdoutStreamSink {
-    async fn name(&self) -> &str {
+impl Stage for StdoutStreamSink {
+    fn name(&self) -> &str {
         "stdout_stream"
     }
 
-    async fn write(&self, data: DataFormat, config: &HashMap<String, toml::Value>) -> Result<()> {
+    fn produces_output(&self) -> bool {
+        false
+    }
+
+    async fn execute(
+        &self,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
+    ) -> Result<DataFormat> {
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Stdout stream sink requires input data"))?;
         let format = config
             .get("format")
             .and_then(|v| v.as_str())
@@ -160,7 +173,7 @@ impl Sink for StdoutStreamSink {
             }
         }
 
-        Ok(())
+        Ok(DataFormat::RecordBatch(vec![]))
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {

@@ -31,7 +31,7 @@ sort = '{ "_id": 1 }'
 # Stage 2: Output to stdout
 [[stages]]
 id = "preview"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["events_limited"]
 
 [stages.config]

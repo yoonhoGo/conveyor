@@ -3,24 +3,26 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
-use crate::core::traits::{DataFormat, Transform};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 pub struct ValidateSchemaTransform;
 
 #[async_trait]
-impl Transform for ValidateSchemaTransform {
-    async fn name(&self) -> &str {
+impl Stage for ValidateSchemaTransform {
+    fn name(&self) -> &str {
         "validate_schema"
     }
 
-    async fn apply(
+    async fn execute(
         &self,
-        data: DataFormat,
-        config: &Option<HashMap<String, toml::Value>>,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Validate schema transform requires configuration"))?;
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Validate transform requires input data"))?;
 
         let df = data.as_dataframe()?;
 
@@ -130,8 +132,8 @@ impl Transform for ValidateSchemaTransform {
         Ok(data)
     }
 
-    async fn validate_config(&self, config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
-        if config.is_none() {
+    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
+        if config.is_empty() {
             anyhow::bail!("Validate schema transform requires configuration");
         }
 

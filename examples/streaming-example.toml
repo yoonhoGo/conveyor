@@ -28,7 +28,7 @@ format = "jsonl"  # JSON Lines format
 
 [[stages]]
 id = "filter_high_value"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["stream_source"]
 
 [stages.config]
@@ -38,7 +38,7 @@ value = 100.0
 
 [[stages]]
 id = "output_stream"
-type = "sink.stdout_stream"
+function = "stdout.stream"
 inputs = ["filter_high_value"]
 
 [stages.config]

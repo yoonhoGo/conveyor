@@ -114,43 +114,6 @@ impl DataFormat {
     }
 }
 
-#[async_trait]
-pub trait DataSource: Send + Sync {
-    async fn name(&self) -> &str;
-
-    async fn read(&self, config: &HashMap<String, toml::Value>) -> Result<DataFormat>;
-
-    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()>;
-}
-
-#[async_trait]
-pub trait Transform: Send + Sync {
-    async fn name(&self) -> &str;
-
-    async fn apply(
-        &self,
-        data: DataFormat,
-        config: &Option<HashMap<String, toml::Value>>,
-    ) -> Result<DataFormat>;
-
-    async fn validate_config(&self, _config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
-        // Default implementation - no validation
-        Ok(())
-    }
-}
-
-#[async_trait]
-pub trait Sink: Send + Sync {
-    async fn name(&self) -> &str;
-
-    async fn write(&self, data: DataFormat, config: &HashMap<String, toml::Value>) -> Result<()>;
-
-    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()>;
-}
-
-pub type DataSourceRef = Arc<dyn DataSource>;
-pub type TransformRef = Arc<dyn Transform>;
-pub type SinkRef = Arc<dyn Sink>;
 
 /// Streaming data source that produces a stream of data
 #[async_trait]
@@ -167,47 +130,3 @@ pub trait StreamingDataSource: Send + Sync {
 }
 
 pub type StreamingDataSourceRef = Arc<dyn StreamingDataSource>;
-
-#[async_trait]
-pub trait Plugin: Send + Sync {
-    /// Plugin name (unique identifier)
-    fn name(&self) -> &str;
-
-    /// Plugin version (semantic versioning recommended)
-    fn version(&self) -> &str;
-
-    /// Plugin description
-    fn description(&self) -> &str {
-        ""
-    }
-
-    /// Plugin author
-    fn author(&self) -> &str {
-        ""
-    }
-
-    /// Lifecycle hook: called when plugin is loaded
-    async fn on_load(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    /// Lifecycle hook: called when plugin is unloaded
-    async fn on_unload(&mut self) -> Result<()> {
-        Ok(())
-    }
-
-    /// Register data sources provided by this plugin
-    async fn register_sources(&self) -> Vec<(&str, DataSourceRef)> {
-        vec![]
-    }
-
-    /// Register transforms provided by this plugin
-    async fn register_transforms(&self) -> Vec<(&str, TransformRef)> {
-        vec![]
-    }
-
-    /// Register sinks provided by this plugin
-    async fn register_sinks(&self) -> Vec<(&str, SinkRef)> {
-        vec![]
-    }
-}

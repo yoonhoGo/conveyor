@@ -3,24 +3,26 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
-use crate::core::traits::{DataFormat, Transform};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 pub struct GroupByTransform;
 
 #[async_trait]
-impl Transform for GroupByTransform {
-    async fn name(&self) -> &str {
+impl Stage for GroupByTransform {
+    fn name(&self) -> &str {
         "group_by"
     }
 
-    async fn apply(
+    async fn execute(
         &self,
-        data: DataFormat,
-        config: &Option<HashMap<String, toml::Value>>,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("GroupBy transform requires configuration"))?;
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("GroupBy transform requires input data"))?;
 
         // Get group columns (can be single string or array)
         let group_columns: Vec<String> = if let Some(cols) = config.get("by") {
@@ -97,11 +99,7 @@ impl Transform for GroupByTransform {
         Ok(DataFormat::DataFrame(result))
     }
 
-    async fn validate_config(&self, config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("GroupBy transform requires configuration"))?;
-
+    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
         if !config.contains_key("by") {
             anyhow::bail!("GroupBy requires 'by' configuration");
         }

@@ -14,7 +14,7 @@ timeout_seconds = 300
 # Stage 1: Load user data
 [[stages]]
 id = "load_users"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -24,7 +24,7 @@ format = "records"
 # Stage 2: Fetch data for all users in a single batch request
 [[stages]]
 id = "batch_fetch"
-type = "transform.http_fetch"
+function = "http.fetch"
 inputs = ["load_users"]
 
 [stages.config]
@@ -52,7 +52,7 @@ Authorization = "Bearer YOUR_API_KEY"
 # Stage 3: Save results
 [[stages]]
 id = "save_results"
-type = "sink.json"
+function = "json.write"
 inputs = ["batch_fetch"]
 
 [stages.config]

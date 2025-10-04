@@ -7,17 +7,30 @@ use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
-use crate::core::traits::{DataFormat, Sink};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 pub struct JsonSink;
 
 #[async_trait]
-impl Sink for JsonSink {
-    async fn name(&self) -> &str {
-        "json"
+impl Stage for JsonSink {
+    fn name(&self) -> &str {
+        "json.write"
     }
 
-    async fn write(&self, data: DataFormat, config: &HashMap<String, toml::Value>) -> Result<()> {
+    fn produces_output(&self) -> bool {
+        false
+    }
+
+    async fn execute(
+        &self,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
+    ) -> Result<DataFormat> {
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("JSON sink requires input data"))?;
         let path = config
             .get("path")
             .and_then(|v| v.as_str())
@@ -126,7 +139,7 @@ impl Sink for JsonSink {
 
         tracing::info!("Written {} rows to JSON file: {}", row_count, path);
 
-        Ok(())
+        Ok(DataFormat::RecordBatch(vec![]))
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {

@@ -5,17 +5,22 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::fs;
 
-use crate::core::traits::{DataFormat, DataSource, RecordBatch};
+use crate::core::stage::Stage;
+use crate::core::traits::{DataFormat, RecordBatch};
 
 pub struct JsonSource;
 
 #[async_trait]
-impl DataSource for JsonSource {
-    async fn name(&self) -> &str {
-        "json"
+impl Stage for JsonSource {
+    fn name(&self) -> &str {
+        "json.read"
     }
 
-    async fn read(&self, config: &HashMap<String, toml::Value>) -> Result<DataFormat> {
+    async fn execute(
+        &self,
+        _inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
+    ) -> Result<DataFormat> {
         let path = config
             .get("path")
             .and_then(|v| v.as_str())
@@ -114,7 +119,7 @@ mod tests {
         );
 
         let source = JsonSource;
-        let result = source.read(&config).await;
+        let result = source.execute(HashMap::new(), &config).await;
         assert!(result.is_ok());
 
         let data = result.unwrap();

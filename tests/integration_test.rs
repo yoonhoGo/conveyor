@@ -31,7 +31,7 @@ timeout_seconds = 300
 
 [[stages]]
 id = "csv_input"
-type = "source.csv"
+function = "csv.read"
 inputs = []
 
 [stages.config]
@@ -41,7 +41,7 @@ delimiter = ","
 
 [[stages]]
 id = "filter_high_value"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["csv_input"]
 
 [stages.config]
@@ -51,7 +51,7 @@ value = 150
 
 [[stages]]
 id = "json_output"
-type = "sink.json"
+function = "json.write"
 inputs = ["filter_high_value"]
 
 [stages.config]
@@ -114,7 +114,7 @@ timeout_seconds = 300
 
 [[stages]]
 id = "test_source"
-type = "source.csv"
+function = "csv.read"
 inputs = []
 
 [stages.config]
@@ -123,7 +123,7 @@ headers = true
 
 [[stages]]
 id = "test_sink"
-type = "sink.json"
+function = "json.write"
 inputs = ["test_source"]
 
 [stages.config]

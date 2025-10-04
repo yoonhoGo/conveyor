@@ -4,17 +4,31 @@ use polars::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::core::traits::{DataFormat, Sink};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 pub struct CsvSink;
 
 #[async_trait]
-impl Sink for CsvSink {
-    async fn name(&self) -> &str {
-        "csv"
+impl Stage for CsvSink {
+    fn name(&self) -> &str {
+        "csv.write"
     }
 
-    async fn write(&self, data: DataFormat, config: &HashMap<String, toml::Value>) -> Result<()> {
+    fn produces_output(&self) -> bool {
+        false
+    }
+
+    async fn execute(
+        &self,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
+    ) -> Result<DataFormat> {
+        // Get input data
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("CSV sink requires input data"))?;
         let path = config
             .get("path")
             .and_then(|v| v.as_str())
@@ -49,7 +63,8 @@ impl Sink for CsvSink {
 
         tracing::info!("Written {} rows to CSV file: {}", df.height(), path);
 
-        Ok(())
+        // Sinks return empty RecordBatch
+        Ok(DataFormat::RecordBatch(vec![]))
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {

@@ -72,7 +72,7 @@ pub struct DagPipelineConfig {
 
 pub struct StageConfig {
     pub id: String,              // Unique stage identifier
-    pub stage_type: String,      // e.g., "source.json", "transform.filter", "sink.csv"
+    pub function: String,        // Function name: "csv.read", "filter.apply", "json.write"
     pub inputs: Vec<String>,     // List of stage IDs this stage depends on
     pub config: HashMap<String, toml::Value>,
 }
@@ -98,33 +98,34 @@ pub struct GlobalConfig {
 }
 ```
 
-#### 2. Trait System (`core/traits.rs`)
+#### 2. Stage System (`core/stage.rs`, `core/traits.rs`)
 
-The core abstraction uses three main traits:
+The core abstraction uses a unified **Stage** trait that replaces the legacy DataSource/Transform/Sink system:
 
 ```rust
 #[async_trait]
-pub trait DataSource: Send + Sync {
-    async fn name(&self) -> &str;
-    async fn read(&self, config: &HashMap<String, toml::Value>) -> Result<DataFormat>;
-    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()>;
-}
+pub trait Stage: Send + Sync {
+    fn name(&self) -> &str;
 
-#[async_trait]
-pub trait Transform: Send + Sync {
-    async fn name(&self) -> &str;
-    async fn apply(&self, data: DataFormat, config: &Option<HashMap<String, toml::Value>>)
-        -> Result<DataFormat>;
-    async fn validate_config(&self, config: &Option<HashMap<String, toml::Value>>) -> Result<()>;
-}
+    async fn execute(
+        &self,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
+    ) -> Result<DataFormat>;
 
-#[async_trait]
-pub trait Sink: Send + Sync {
-    async fn name(&self) -> &str;
-    async fn write(&self, data: DataFormat, config: &HashMap<String, toml::Value>) -> Result<()>;
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()>;
+
+    fn produces_output(&self) -> bool {
+        true  // Most stages produce output; sinks override to return false
+    }
 }
 ```
+
+**Key Benefits**:
+- **Unified API**: All modules (sources, transforms, sinks) implement the same trait
+- **Function-based naming**: Stages are registered as functions like "csv.read", "filter.apply", "json.write"
+- **Composability**: Easy to chain and combine stages in DAG pipelines
+- **Input flexibility**: `inputs` HashMap supports multiple inputs for advanced use cases
 
 **Design Decision**: Using `async_trait` for async methods in traits, enabling async I/O operations throughout the pipeline.
 
@@ -186,17 +187,25 @@ pub async fn new(config: DagPipelineConfig) -> Result<Self> {
 
 #### 5. Module Registry (`core/registry.rs`)
 
-The registry manages available modules:
+The registry manages available stages using a function-based API:
 
 ```rust
 pub struct ModuleRegistry {
-    sources: HashMap<String, DataSourceRef>,
-    transforms: HashMap<String, TransformRef>,
-    sinks: HashMap<String, SinkRef>,
+    stages: HashMap<String, StageRef>,
 }
 ```
 
-Supports dynamic module registration with the plugin system.
+**Function Registration**:
+- Built-in functions: "csv.read", "json.write", "filter.apply", etc.
+- Plugin functions: "mongodb.find", "http.get", etc.
+- Supports dynamic registration via plugin system
+
+**Simplified API**:
+- `register_stage(name, stage)` / `register_function(name, stage)`
+- `get_stage(name)` / `get_function(name)`
+- `list_stages()` / `list_functions()`
+
+Previous complex API (26 methods across sources/transforms/sinks) reduced to 6 core methods.
 
 #### 6. Dynamic Plugin System (`plugin_loader.rs`)
 
@@ -272,56 +281,73 @@ pub fn load_plugin(&mut self, name: &str) -> Result<()> {
   - Connection pooling
   - Only loaded when `plugins = ["mongodb"]` is specified
 
-### Module Implementation
+### Stage Implementation
 
-#### Sources
+All built-in modules implement the `Stage` trait with function-based naming:
 
-**CSV Source** (`modules/sources/csv.rs`):
+#### Source Stages
+
+**CSV Reader** (`modules/sources/csv.rs`) - Function: `csv.read`
 - Uses Polars' `CsvReader` with optimizations
 - Supports custom delimiters and headers
 - Schema inference capabilities
+- Implements `Stage::execute()` with no inputs required
 
-**JSON Source** (`modules/sources/json.rs`):
+**JSON Reader** (`modules/sources/json.rs`) - Function: `json.read`
 - Multiple format support (records, jsonl, dataframe)
 - Handles large files efficiently
 - Converts to appropriate DataFormat
 
-**Stdin Source** (`modules/sources/stdin.rs`):
+**Stdin Reader** (`modules/sources/stdin.rs`) - Function: `stdin.read`
 - Reads from standard input
 - Format detection (json, jsonl, csv, raw)
 - Enables pipeline chaining with Unix tools
 
-#### Transforms
+#### Transform Stages
 
-**Filter Transform** (`modules/transforms/filter.rs`):
+**Filter** (`modules/transforms/filter.rs`) - Function: `filter.apply`
 - Supports comparison operators: `==`, `!=`, `>`, `>=`, `<`, `<=`
 - String operations: `contains`, `in`
 - Works on DataFrame columns efficiently
 
-**Map Transform** (`modules/transforms/map.rs`):
+**Map** (`modules/transforms/map.rs`) - Function: `map.apply`
 - Simple expression evaluation
 - Arithmetic operations: `+`, `-`, `*`, `/`
 - Column creation and modification
 
-**Validate Schema Transform** (`modules/transforms/validate.rs`):
+**Validate Schema** (`modules/transforms/validate.rs`) - Function: `validate.schema`
 - Required fields checking
 - Type validation
 - Null constraint enforcement
 - Unique value validation
 
-#### Sinks
+**HTTP Fetch** (`modules/transforms/http_fetch.rs`) - Function: `http.fetch`
+- Per-row or batch HTTP requests
+- Template-based URLs with Handlebars
+- Custom headers and timeout support
 
-**CSV Sink** (`modules/sinks/csv.rs`):
+**Window** (`modules/transforms/window.rs`) - Function: `window.apply`
+- Tumbling, sliding, and session windows
+- Stream processing support
+
+**Aggregate Stream** (`modules/transforms/aggregate_stream.rs`) - Function: `aggregate.stream`
+- Real-time aggregation (count, sum, avg, min, max)
+- Group-by support
+
+#### Sink Stages
+
+**CSV Writer** (`modules/sinks/csv.rs`) - Function: `csv.write`
 - Writes Polars DataFrame to CSV
 - Custom delimiters and headers
 - Automatic directory creation
+- `produces_output() = false`
 
-**JSON Sink** (`modules/sinks/json.rs`):
+**JSON Writer** (`modules/sinks/json.rs`) - Function: `json.write`
 - Multiple output formats
 - Pretty printing option
 - Efficient serialization
 
-**Stdout Sink** (`modules/sinks/stdout.rs`):
+**Stdout Writer** (`modules/sinks/stdout.rs`) - Function: `stdout.write`
 - Table, JSON, JSONL, CSV output formats
 - Row limiting for preview
 - Colorized output (potential future enhancement)
@@ -335,8 +361,12 @@ pub fn load_plugin(&mut self, name: &str) -> Result<()> {
 **Solution**: Used `async_trait` crate for clean async trait syntax:
 ```rust
 #[async_trait]
-pub trait DataSource: Send + Sync {
-    async fn read(&self, config: &HashMap<String, toml::Value>) -> Result<DataFormat>;
+pub trait Stage: Send + Sync {
+    async fn execute(
+        &self,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
+    ) -> Result<DataFormat>;
 }
 ```
 
@@ -579,9 +609,11 @@ Log levels:
    - Avoid nested tokio runtimes
    - async/await throughout the call chain
 
-3. **Modular Design**: Trait-based design enables extensibility
-   - Core traits: `DataSource`, `Transform`, `Sink`
-   - Plugin system built on dynamic trait object loading
+3. **Unified Architecture**: Stage-based design enables simplicity
+   - Single `Stage` trait replaces DataSource/Transform/Sink
+   - Function-based API: "csv.read", "filter.apply", "json.write"
+   - Simplified registry (26 methods → 6 methods)
+   - Plugin system built on dynamic Stage loading
    - Registry pattern for module management
 
 ### Plugin System Insights

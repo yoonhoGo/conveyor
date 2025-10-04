@@ -4,17 +4,22 @@ use polars::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::core::traits::{DataFormat, DataSource};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 pub struct CsvSource;
 
 #[async_trait]
-impl DataSource for CsvSource {
-    async fn name(&self) -> &str {
-        "csv"
+impl Stage for CsvSource {
+    fn name(&self) -> &str {
+        "csv.read"
     }
 
-    async fn read(&self, config: &HashMap<String, toml::Value>) -> Result<DataFormat> {
+    async fn execute(
+        &self,
+        _inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
+    ) -> Result<DataFormat> {
         let path = config
             .get("path")
             .and_then(|v| v.as_str())
@@ -90,7 +95,8 @@ mod tests {
         config.insert("headers".to_string(), toml::Value::Boolean(true));
 
         let source = CsvSource;
-        let result = source.read(&config).await;
+        let inputs = HashMap::new();
+        let result = source.execute(inputs, &config).await;
         assert!(result.is_ok());
 
         let data = result.unwrap();

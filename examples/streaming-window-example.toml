@@ -28,7 +28,7 @@ format = "jsonl"
 
 [[stages]]
 id = "tumbling_window"
-type = "transform.window"
+function = "window.apply"
 inputs = ["stream_source"]
 
 [stages.config]
@@ -37,7 +37,7 @@ size = 3  # Window size of 3 records
 
 [[stages]]
 id = "count_by_level"
-type = "transform.aggregate_stream"
+function = "aggregate.stream"
 inputs = ["tumbling_window"]
 
 [stages.config]
@@ -46,7 +46,7 @@ group_by = ["level"]
 
 [[stages]]
 id = "output"
-type = "sink.stdout_stream"
+function = "stdout.stream"
 inputs = ["count_by_level"]
 
 [stages.config]
