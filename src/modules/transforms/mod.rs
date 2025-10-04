@@ -1,4 +1,5 @@
 pub mod aggregate_stream;
+pub mod ai;
 pub mod distinct;
 pub mod filter;
 pub mod group_by;
