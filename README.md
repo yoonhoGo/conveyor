@@ -53,7 +53,7 @@ log_level = "info"
 # Stage 1: Load CSV data
 [[stages]]
 id = "load_data"
-type = "source.csv"
+function = "csv.read"
 inputs = []
 
 [stages.config]
@@ -62,7 +62,7 @@ path = "data/input.csv"
 # Stage 2: Filter data
 [[stages]]
 id = "filter"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["load_data"]
 
 [stages.config]
@@ -73,7 +73,7 @@ value = 100.0
 # Stage 3: Save to JSON
 [[stages]]
 id = "save"
-type = "sink.json"
+function = "json.write"
 inputs = ["filter"]
 
 [stages.config]
@@ -104,14 +104,14 @@ conveyor run -c pipeline.toml
 ```toml
 [[stages]]
 id = "load"
-type = "source.csv"
+function = "csv.read"
 inputs = []
 [stages.config]
 path = "sales.csv"
 
 [[stages]]
 id = "save"
-type = "sink.json"
+function = "json.write"
 inputs = ["load"]
 [stages.config]
 path = "output.json"
@@ -125,15 +125,14 @@ plugins = ["http"]
 
 [[stages]]
 id = "fetch"
-type = "plugin.http"
+function = "http.get"
 inputs = []
 [stages.config]
 url = "https://api.example.com/data"
-method = "GET"
 
 [[stages]]
 id = "save"
-type = "sink.json"
+function = "json.write"
 inputs = ["fetch"]
 [stages.config]
 path = "api_data.json"
@@ -144,12 +143,12 @@ path = "api_data.json"
 ```toml
 [[stages]]
 id = "users"
-type = "source.csv"
+function = "csv.read"
 inputs = []
 
 [[stages]]
 id = "fetch_profiles"
-type = "transform.http_fetch"
+function = "http.fetch"
 inputs = ["users"]
 [stages.config]
 url = "https://api.example.com/users/{{ id }}/profile"
@@ -157,7 +156,7 @@ result_field = "profile"
 
 [[stages]]
 id = "save"
-type = "sink.json"
+function = "json.write"
 inputs = ["fetch_profiles"]
 [stages.config]
 path = "enriched_users.json"
@@ -168,14 +167,14 @@ path = "enriched_users.json"
 ```toml
 [[stages]]
 id = "stream_source"
-type = "source.stdin_stream"
+function = "stdin.stream"
 inputs = []
 [stages.config]
 format = "jsonl"
 
 [[stages]]
 id = "filter"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["stream_source"]
 [stages.config]
 column = "value"
@@ -184,7 +183,7 @@ value = 100.0
 
 [[stages]]
 id = "output"
-type = "sink.stdout_stream"
+function = "stdout.stream"
 inputs = ["filter"]
 [stages.config]
 format = "jsonl"
@@ -195,14 +194,14 @@ format = "jsonl"
 ```toml
 [[stages]]
 id = "stream_source"
-type = "source.stdin_stream"
+function = "stdin.stream"
 inputs = []
 [stages.config]
 format = "jsonl"
 
 [[stages]]
 id = "window"
-type = "transform.window"
+function = "window.apply"
 inputs = ["stream_source"]
 [stages.config]
 type = "tumbling"
@@ -210,7 +209,7 @@ size = 10  # 10 records per window
 
 [[stages]]
 id = "aggregate"
-type = "transform.aggregate_stream"
+function = "aggregate.stream"
 inputs = ["window"]
 [stages.config]
 operation = "count"
@@ -218,7 +217,7 @@ group_by = ["level"]
 
 [[stages]]
 id = "output"
-type = "sink.stdout_stream"
+function = "stdout.stream"
 inputs = ["aggregate"]
 ```
 
@@ -249,29 +248,29 @@ conveyor stage edit pipeline.toml
 ## Available Modules
 
 ### Built-in Sources
-- `source.csv` - Read CSV files
-- `source.json` - Read JSON files
-- `source.stdin` - Read from standard input
-- `source.stdin_stream` - Streaming stdin (line-by-line)
-- `source.file_watch` - Monitor files for changes (polling-based)
+- `csv.read` - Read CSV files
+- `json.read` - Read JSON files
+- `stdin.read` - Read from standard input
+- `stdin.stream` - Streaming stdin (line-by-line)
+- `file.watch` - Monitor files for changes (polling-based)
 
 ### Built-in Transforms
-- `transform.filter` - Filter rows by conditions
-- `transform.map` - Transform columns with expressions
-- `transform.validate_schema` - Validate data schema
-- `transform.http_fetch` - Make HTTP requests per row
-- `transform.window` - Apply windowing (tumbling/sliding/session)
-- `transform.aggregate_stream` - Real-time aggregation (count/sum/avg/min/max)
+- `filter.apply` - Filter rows by conditions
+- `map.apply` - Transform columns with expressions
+- `validate.schema` - Validate data schema
+- `http.fetch` - Make HTTP requests per row
+- `window.apply` - Apply windowing (tumbling/sliding/session)
+- `aggregate.stream` - Real-time aggregation (count/sum/avg/min/max)
 
 ### Built-in Sinks
-- `sink.csv` - Write to CSV
-- `sink.json` - Write to JSON
-- `sink.stdout` - Display in terminal
-- `sink.stdout_stream` - Real-time streaming output
+- `csv.write` - Write to CSV
+- `json.write` - Write to JSON
+- `stdout.write` - Display in terminal
+- `stdout.stream` - Real-time streaming output
 
 ### Plugin Modules
-- `plugin.http` - HTTP source & sink (REST APIs)
-- `plugin.mongodb` - MongoDB source & sink
+- `http.get`, `http.post` - HTTP source (REST APIs)
+- `mongodb.find`, `mongodb.insert` - MongoDB operations
 
 See [Modules Reference](docs/modules-reference.md) for complete documentation.
 
