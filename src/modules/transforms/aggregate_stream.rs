@@ -4,8 +4,8 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use tracing::info;
 
-use crate::core::streaming::StreamProcessor;
 use crate::core::stage::Stage;
+use crate::core::streaming::StreamProcessor;
 use crate::core::traits::{DataFormat, RecordBatch};
 
 /// Aggregate stream transform for real-time aggregation

@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use tokio_stream::StreamExt;
 use tracing::info;
 
-use crate::core::streaming::{StreamProcessor, StreamWindower, WindowType};
 use crate::core::stage::Stage;
+use crate::core::streaming::{StreamProcessor, StreamWindower, WindowType};
 use crate::core::traits::DataFormat;
 
 /// Window transform for streaming data

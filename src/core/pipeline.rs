@@ -48,8 +48,8 @@ impl DagPipeline {
 
         // Build DAG executor with plugin loader
         let plugin_loader_arc = Arc::new(plugin_loader);
-        let builder = DagPipelineBuilder::new(registry.clone())
-            .with_plugin_loader(plugin_loader_arc.clone());
+        let builder =
+            DagPipelineBuilder::new(registry.clone()).with_plugin_loader(plugin_loader_arc.clone());
         let executor = builder.build(&config)?;
 
         Ok(Self {

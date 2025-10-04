@@ -36,10 +36,7 @@ impl ModuleRegistry {
         // Note: PipelineStage is registered dynamically in DagPipelineBuilder
         // to avoid circular dependencies with the registry
 
-        tracing::debug!(
-            "Registered {} functions",
-            self.stages.len()
-        );
+        tracing::debug!("Registered {} functions", self.stages.len());
 
         Ok(())
     }

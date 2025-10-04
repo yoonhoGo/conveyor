@@ -114,7 +114,6 @@ impl DataFormat {
     }
 }
 
-
 /// Streaming data source that produces a stream of data
 #[async_trait]
 pub trait StreamingDataSource: Send + Sync {

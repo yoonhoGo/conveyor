@@ -94,7 +94,6 @@ impl ErrorStrategy {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,5 +174,4 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(*call_count.lock().unwrap(), 3); // Initial + 2 retries
     }
-
 }

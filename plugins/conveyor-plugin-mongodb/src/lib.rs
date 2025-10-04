@@ -529,9 +529,7 @@ impl MongoDbStage {
                 Ok(Some(doc)) => {
                     if let Some(id) = doc.get("_id") {
                         let id_filter = mongodb::bson::doc! { "_id": id };
-                        if let Err(e) = collection
-                            .replace_one(id_filter, replacement.clone())
-                            .await
+                        if let Err(e) = collection.replace_one(id_filter, replacement.clone()).await
                         {
                             return RErr(RBoxError::from_fmt(&format_args!(
                                 "MongoDB replaceMany failed: {}",
@@ -631,10 +629,7 @@ impl MongoDbStage {
     }
 
     /// Convert JSON record to BSON document
-    fn json_record_to_bson(
-        &self,
-        record: &HashMap<String, Value>,
-    ) -> RResult<Document, RBoxError> {
+    fn json_record_to_bson(&self, record: &HashMap<String, Value>) -> RResult<Document, RBoxError> {
         let mut doc = Document::new();
         for (key, value) in record {
             if let Some(bson_val) = json_to_bson(value) {
@@ -1002,7 +997,9 @@ pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
     api_version: PLUGIN_API_VERSION,
     name: rstr!("mongodb"),
     version: rstr!("2.0.0"),
-    description: rstr!("MongoDB plugin with operation-based API (find, findOne, create, update, delete, replace)"),
+    description: rstr!(
+        "MongoDB plugin with operation-based API (find, findOne, create, update, delete, replace)"
+    ),
     get_capabilities,
 };
 
