@@ -15,6 +15,8 @@ A high-performance, TOML-based ETL (Extract, Transform, Load) CLI tool built in 
 - **🔌 Dynamic Plugin System**: Load plugins on-demand with version checking and panic isolation
 - **🔄 Async Processing**: Built on Tokio for efficient concurrent operations
 - **🌊 Stream Processing**: Real-time data processing with micro-batching and windowing support
+- **🤖 AI Integration**: LLM-powered transforms with OpenAI, Anthropic, OpenRouter, and Ollama support
+- **🔧 Global Variables**: Reusable variables with environment variable substitution
 - **🛡️ Type-Safe**: Rust's type system ensures reliability and safety
 - **📊 Multiple Data Formats**: Support for CSV, JSON, HTTP APIs, and more
 
@@ -221,6 +223,63 @@ function = "stdout.stream"
 inputs = ["aggregate"]
 ```
 
+### 6. AI-Powered Data Processing
+
+```toml
+[global.variables]
+api_key = "${OPENAI_API_KEY}"
+
+[[stages]]
+id = "load"
+function = "csv.read"
+inputs = []
+[stages.config]
+path = "reviews.csv"
+
+[[stages]]
+id = "classify"
+function = "ai.generate"
+inputs = ["load"]
+[stages.config]
+provider = "openai"
+model = "gpt-4"
+prompt = "Classify sentiment (positive/negative/neutral): {{text}}"
+output_column = "sentiment"
+max_tokens = 10
+
+[[stages]]
+id = "save"
+function = "json.write"
+inputs = ["classify"]
+[stages.config]
+path = "classified_reviews.json"
+```
+
+### 7. JSON Field Extraction
+
+```toml
+[[stages]]
+id = "load"
+function = "csv.read"
+inputs = []
+[stages.config]
+path = "logs.csv"
+
+[[stages]]
+id = "extract"
+function = "json.extract"
+inputs = ["load"]
+[stages.config]
+column = "payload"
+path = "meta.req.headers.user-agent"
+output_column = "user_agent"
+
+[[stages]]
+id = "save"
+function = "stdout.write"
+inputs = ["extract"]
+```
+
 See [examples/](examples/) for more complete pipelines.
 
 ## CLI Commands
@@ -257,8 +316,15 @@ conveyor stage edit pipeline.toml
 ### Built-in Transforms
 - `filter.apply` - Filter rows by conditions
 - `map.apply` - Transform columns with expressions
+- `select.apply` - Select specific columns
+- `groupby.apply` - Group and aggregate data
+- `sort.apply` - Sort by columns
+- `distinct.apply` - Remove duplicates
+- `json.extract` - Extract nested JSON fields
+- `ai.generate` - LLM-powered transformations (OpenAI, Anthropic, OpenRouter, Ollama)
 - `validate.schema` - Validate data schema
 - `http.fetch` - Make HTTP requests per row
+- `reduce.apply` - Reduce to single value
 - `window.apply` - Apply windowing (tumbling/sliding/session)
 - `aggregate.stream` - Real-time aggregation (count/sum/avg/min/max)
 
@@ -269,7 +335,7 @@ conveyor stage edit pipeline.toml
 - `stdout.stream` - Real-time streaming output
 
 ### Plugin Modules
-- `http.get`, `http.post` - HTTP source (REST APIs)
+- `http.get`, `http.post`, `http.put`, `http.patch`, `http.delete` - HTTP operations
 - `mongodb.find`, `mongodb.insert` - MongoDB operations
 
 See [Modules Reference](docs/modules-reference.md) for complete documentation.
@@ -349,6 +415,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 - Streaming sources (stdin_stream, file_watch)
 - Streaming sinks (stdout_stream)
 - Streaming transforms (window, aggregate_stream)
+- Data manipulation transforms (groupby, sort, select, distinct)
+- JSON extraction from nested fields
+- AI-powered transforms (OpenAI, Anthropic, OpenRouter, Ollama)
+- Global variables with environment substitution
 
 ### In Progress 🚧
 - MongoDB plugin

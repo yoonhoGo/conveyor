@@ -2,85 +2,131 @@
 
 Complete reference for all built-in and plugin modules in Conveyor.
 
-## Built-in Data Sources
+## Table of Contents
 
-### CSV Source
+- [Global Configuration](#global-configuration)
+- [Data Sources](#data-sources)
+- [Transforms](#transforms)
+- [Sinks](#sinks)
+- [Plugin Modules](#plugin-modules)
 
-Read data from CSV files.
+## Global Configuration
 
-**Type:** `source.csv`
+### Variables System
+
+Define reusable variables with environment variable substitution support.
 
 **Configuration:**
 
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `path` | ✅ Yes | - | Path to CSV file |
-| `headers` | No | `true` | First row contains headers |
-| `delimiter` | No | `,` | Column delimiter |
+```toml
+[global.variables]
+# Environment variable substitution: ${ENV_VAR}
+api_key = "${OPENAI_API_KEY}"
+base_url = "https://api.example.com"
+
+# Mix literal and environment variables
+auth_token = "Bearer ${API_TOKEN}"
+```
+
+**Variable Interpolation:**
+
+Use `{{var_name}}` in stage configurations to reference global variables.
+
+```toml
+[[stages]]
+id = "stage1"
+function = "http.get"
+
+[stages.config]
+url = "{{base_url}}/endpoint"
+headers = { "Authorization" = "{{auth_token}}" }
+```
+
+**Features:**
+- Environment variable substitution with `${ENV_VAR}` syntax
+- Variable interpolation with `{{var_name}}` syntax
+- Automatic resolution during pipeline loading
+- Clear error messages for missing variables
+
+---
+
+## Data Sources
+
+### csv.read
+
+Read data from CSV files using Polars.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `path` | String | ✅ Yes | - | Path to CSV file |
+| `has_headers` | Boolean | No | `true` | First row contains headers |
+| `delimiter` | String | No | `,` | Column delimiter character |
 
 **Example:**
 
 ```toml
 [[stages]]
 id = "load_csv"
-type = "source.csv"
+function = "csv.read"
 inputs = []
 
 [stages.config]
 path = "data/sales.csv"
-headers = true
+has_headers = true
 delimiter = ","
 ```
 
-### JSON Source
+---
+
+### json.read
 
 Read data from JSON files.
 
-**Type:** `source.json`
-
 **Configuration:**
 
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `path` | ✅ Yes | - | Path to JSON file |
-| `format` | No | `records` | Format: `records`, `jsonl`, `dataframe` |
-
-**Example:**
-
-```toml
-[[stages]]
-id = "load_json"
-type = "source.json"
-inputs = []
-
-[stages.config]
-path = "data/users.json"
-format = "records"  # Array of objects
-```
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `path` | String | ✅ Yes | - | Path to JSON file |
+| `format` | String | No | `records` | Format: `records`, `jsonl`, `dataframe` |
 
 **Formats:**
 - `records`: JSON array of objects `[{...}, {...}]`
 - `jsonl`: Newline-delimited JSON (one object per line)
 - `dataframe`: Polars DataFrame JSON format
 
-### Stdin Source
+**Example:**
 
-Read data from standard input.
+```toml
+[[stages]]
+id = "load_json"
+function = "json.read"
+inputs = []
 
-**Type:** `source.stdin`
+[stages.config]
+path = "data/users.json"
+format = "records"
+```
+
+---
+
+### stdin.read
+
+Read data from standard input (batch mode).
 
 **Configuration:**
 
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `format` | No | `json` | Format: `json`, `jsonl`, `csv`, `raw` |
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `format` | String | No | `json` | Format: `json`, `jsonl`, `csv`, `raw` |
 
 **Example:**
 
 ```toml
 [[stages]]
 id = "read_stdin"
-type = "source.stdin"
+function = "stdin.read"
 inputs = []
 
 [stages.config]
@@ -92,21 +138,73 @@ format = "jsonl"
 cat data.json | conveyor run -c pipeline.toml
 ```
 
-## Built-in Transforms
+---
 
-### Filter Transform
+### stdin.stream
 
-Filter rows based on conditions.
-
-**Type:** `transform.filter`
+Read data from standard input in streaming mode (line-by-line).
 
 **Configuration:**
 
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `column` | ✅ Yes | - | Column name to filter on |
-| `operator` | ✅ Yes | - | Comparison operator |
-| `value` | ✅ Yes | - | Value to compare against |
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `format` | String | No | `jsonl` | Format: `jsonl`, `json` |
+
+**Example:**
+
+```toml
+[[stages]]
+id = "stream_input"
+function = "stdin.stream"
+inputs = []
+
+[stages.config]
+format = "jsonl"
+```
+
+---
+
+### file.watch
+
+Monitor a file for changes using polling.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `path` | String | ✅ Yes | - | Path to file to monitor |
+| `format` | String | No | `jsonl` | Format: `jsonl`, `json`, `csv` |
+| `poll_interval_ms` | Integer | No | `1000` | Polling interval in milliseconds |
+
+**Example:**
+
+```toml
+[[stages]]
+id = "watch_logs"
+function = "file.watch"
+inputs = []
+
+[stages.config]
+path = "/var/log/app.log"
+format = "jsonl"
+poll_interval_ms = 500
+```
+
+---
+
+## Transforms
+
+### filter.apply
+
+Filter rows based on conditions.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `column` | String | ✅ Yes | - | Column name to filter on |
+| `operator` | String | ✅ Yes | - | Comparison operator |
+| `value` | Any | ✅ Yes | - | Value to compare against |
 
 **Operators:**
 - `==`: Equal
@@ -123,7 +221,7 @@ Filter rows based on conditions.
 ```toml
 [[stages]]
 id = "filter_high_value"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["data"]
 
 [stages.config]
@@ -132,50 +230,321 @@ operator = ">="
 value = 1000.0
 ```
 
-### Map Transform
+---
 
-Create or transform columns using expressions.
+### map.apply
 
-**Type:** `transform.map`
+Create or transform columns using simple expressions.
 
 **Configuration:**
 
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `expression` | ✅ Yes | - | Mathematical expression |
-| `output_column` | ✅ Yes | - | Name of the output column |
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `expression` | String | ✅ Yes | - | Mathematical expression |
+| `output_column` | String | ✅ Yes | - | Name of the output column |
 
 **Supported Operators:**
-- `+`, `-`, `*`, `/`: Arithmetic
+- `+`, `-`, `*`, `/`: Arithmetic (one operator per expression)
 - Column references by name
+- Column-to-column division
+
+**Examples:**
+
+```toml
+# Simple arithmetic
+[[stages]]
+id = "add_tax"
+function = "map.apply"
+inputs = ["sales"]
+
+[stages.config]
+expression = "price * 1.1"
+output_column = "price_with_tax"
+```
+
+```toml
+# Column division
+[[stages]]
+id = "calc_unit_price"
+function = "map.apply"
+inputs = ["data"]
+
+[stages.config]
+expression = "total_price / quantity"
+output_column = "unit_price"
+```
+
+---
+
+### select.apply
+
+Select specific columns from the data.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `columns` | String or Array | ✅ Yes | - | Column name(s) to select |
 
 **Example:**
 
 ```toml
 [[stages]]
-id = "add_tax"
-type = "transform.map"
-inputs = ["sales"]
+id = "select_fields"
+function = "select.apply"
+inputs = ["data"]
 
 [stages.config]
-expression = "amount * 1.1"
-output_column = "amount_with_tax"
+columns = ["name", "email", "age"]
 ```
 
-### Validate Schema Transform
+---
 
-Validate data schema and types.
+### groupby.apply
 
-**Type:** `transform.validate_schema`
+Group data and perform aggregations.
 
 **Configuration:**
 
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `required_fields` | No | `[]` | List of required field names |
-| `field_types` | No | `{}` | Field name → type mapping |
-| `non_nullable` | No | `[]` | Fields that cannot be null |
-| `unique` | No | `[]` | Fields that must be unique |
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `by` | String or Array | ✅ Yes | - | Column(s) to group by |
+| `aggregations` | Array | ✅ Yes | - | List of aggregation operations |
+
+**Aggregation Operations:**
+- `sum`, `avg`, `mean`, `count`, `min`, `max`
+- `median`, `std`, `var`, `first`, `last`
+
+**Each aggregation requires:**
+- `column`: Column to aggregate
+- `operation`: Aggregation operation
+- `output_column` (optional): Name for output column
+
+**Example:**
+
+```toml
+[[stages]]
+id = "sales_by_region"
+function = "groupby.apply"
+inputs = ["sales"]
+
+[stages.config]
+by = ["region", "category"]
+
+[[stages.config.aggregations]]
+column = "revenue"
+operation = "sum"
+output_column = "total_revenue"
+
+[[stages.config.aggregations]]
+column = "revenue"
+operation = "avg"
+output_column = "avg_revenue"
+
+[[stages.config.aggregations]]
+column = "order_id"
+operation = "count"
+output_column = "num_orders"
+```
+
+---
+
+### sort.apply
+
+Sort data by one or more columns.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `by` | String or Array | ✅ Yes | - | Column(s) to sort by |
+| `descending` | Boolean or Array | No | `false` | Sort order (per column if array) |
+
+**Example:**
+
+```toml
+# Single column sort
+[[stages]]
+id = "sort_by_date"
+function = "sort.apply"
+inputs = ["data"]
+
+[stages.config]
+by = "created_at"
+descending = true
+```
+
+```toml
+# Multi-column sort
+[[stages]]
+id = "sort_multi"
+function = "sort.apply"
+inputs = ["data"]
+
+[stages.config]
+by = ["category", "price"]
+descending = [false, true]  # category ascending, price descending
+```
+
+---
+
+### distinct.apply
+
+Remove duplicate rows based on specified columns.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `subset` | Array | No | All columns | Columns to consider for uniqueness |
+
+**Example:**
+
+```toml
+# Remove duplicates based on all columns
+[[stages]]
+id = "remove_dupes"
+function = "distinct.apply"
+inputs = ["data"]
+```
+
+```toml
+# Remove duplicates based on specific columns
+[[stages]]
+id = "unique_users"
+function = "distinct.apply"
+inputs = ["users"]
+
+[stages.config]
+subset = ["email"]
+```
+
+---
+
+### json.extract
+
+Extract nested fields from JSON strings.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `column` | String | ✅ Yes | - | Column containing JSON strings |
+| `path` | String | ✅ Yes | - | Dot-notation path to field |
+| `output_column` | String | ✅ Yes | - | Name for output column |
+
+**Example:**
+
+```toml
+[[stages]]
+id = "extract_trace_id"
+function = "json.extract"
+inputs = ["logs"]
+
+[stages.config]
+column = "payload"
+path = "meta.req.headers.x-trace-id"
+output_column = "trace_id"
+```
+
+**Features:**
+- Supports deeply nested JSON paths
+- Handles missing fields gracefully (returns null)
+- Supports strings, numbers, booleans, and complex types
+
+---
+
+### ai.generate
+
+Generate content using LLM APIs (OpenAI, Anthropic, OpenRouter, Ollama).
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `provider` | String | ✅ Yes | - | `openai`, `anthropic`, `openrouter`, `ollama` |
+| `model` | String | ✅ Yes | - | Model name (e.g., `gpt-4`, `claude-3-5-sonnet-20241022`) |
+| `prompt` | String | ✅ Yes | - | Prompt template with `{{column}}` placeholders |
+| `output_column` | String | ✅ Yes | - | Name for output column |
+| `api_key_env` | String | No | Auto-detected | Environment variable for API key |
+| `max_tokens` | Integer | No | - | Maximum tokens to generate |
+| `temperature` | Float | No | - | Sampling temperature (0.0-1.0) |
+| `api_base_url` | String | No | `http://localhost:11434` | Base URL (Ollama only) |
+
+**Default API Key Environment Variables:**
+- OpenAI: `OPENAI_API_KEY`
+- Anthropic: `ANTHROPIC_API_KEY`
+- OpenRouter: `OPENROUTER_API_KEY`
+- Ollama: No API key required
+
+**Examples:**
+
+```toml
+# OpenAI
+[[stages]]
+id = "summarize"
+function = "ai.generate"
+inputs = ["articles"]
+
+[stages.config]
+provider = "openai"
+model = "gpt-4"
+prompt = "Summarize this article in one sentence: {{content}}"
+output_column = "summary"
+max_tokens = 100
+temperature = 0.7
+```
+
+```toml
+# Anthropic
+[[stages]]
+id = "classify"
+function = "ai.generate"
+inputs = ["reviews"]
+
+[stages.config]
+provider = "anthropic"
+model = "claude-3-5-sonnet-20241022"
+prompt = "Classify sentiment (positive/negative/neutral): {{text}}"
+output_column = "sentiment"
+max_tokens = 10
+```
+
+```toml
+# Ollama (local)
+[[stages]]
+id = "extract_entities"
+function = "ai.generate"
+inputs = ["documents"]
+
+[stages.config]
+provider = "ollama"
+model = "llama2"
+prompt = "Extract named entities from: {{text}}"
+output_column = "entities"
+api_base_url = "http://localhost:11434"
+```
+
+**Features:**
+- Row-by-row processing with template prompts
+- Handlebars syntax for referencing columns
+- Support for multiple providers
+- Configurable parameters per request
+
+---
+
+### validate.schema
+
+Validate data schema and types.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `required_fields` | Array | No | `[]` | Required field names |
+| `field_types` | Object | No | `{}` | Field name → type mapping |
+| `non_nullable` | Array | No | `[]` | Fields that cannot be null |
+| `unique` | Array | No | `[]` | Fields that must be unique |
 
 **Field Types:**
 - `string`, `int`, `float`, `bool`, `date`
@@ -185,7 +554,7 @@ Validate data schema and types.
 ```toml
 [[stages]]
 id = "validate"
-type = "transform.validate_schema"
+function = "validate.schema"
 inputs = ["data"]
 
 [stages.config]
@@ -200,78 +569,189 @@ email = "string"
 age = "int"
 ```
 
-### HTTP Fetch Transform
+---
 
-Make HTTP requests using row data.
+### http.fetch
 
-**Type:** `transform.http_fetch`
+Make HTTP requests using row data with template URLs.
 
-See [HTTP Fetch Transform](http-fetch-transform.md) for detailed documentation.
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `url` | String | ✅ Yes | - | URL template with `{{ column }}` placeholders |
+| `method` | String | No | `GET` | HTTP method |
+| `result_field` | String | No | - | Field name to store response |
+| `headers` | Object | No | `{}` | Custom HTTP headers |
+| `timeout_seconds` | Integer | No | `30` | Request timeout |
 
 **Example:**
 
 ```toml
 [[stages]]
-id = "fetch_api"
-type = "transform.http_fetch"
+id = "fetch_profiles"
+function = "http.fetch"
 inputs = ["users"]
 
 [stages.config]
-url = "https://api.example.com/users/{{ id }}/posts"
+url = "https://api.example.com/users/{{ id }}/profile"
 method = "GET"
-result_field = "posts"
+result_field = "profile"
+timeout_seconds = 10
+
+[stages.config.headers]
+Authorization = "Bearer ${API_TOKEN}"
 ```
 
-## Built-in Sinks
+See [HTTP Fetch Transform](http-fetch-transform.md) for detailed documentation.
 
-### CSV Sink
+---
 
-Write data to CSV files.
+### reduce.apply
 
-**Type:** `sink.csv`
+Reduce data to a single aggregated row.
 
 **Configuration:**
 
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `path` | ✅ Yes | - | Output CSV file path |
-| `headers` | No | `true` | Write headers |
-| `delimiter` | No | `,` | Column delimiter |
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `column` | String | ✅ Yes | - | Column to reduce |
+| `operation` | String | ✅ Yes | - | Reduction operation |
+| `output_column` | String | No | Same as column | Output column name |
+
+**Operations:**
+- `sum`, `avg`, `min`, `max`, `count`
+
+**Example:**
+
+```toml
+[[stages]]
+id = "total_revenue"
+function = "reduce.apply"
+inputs = ["sales"]
+
+[stages.config]
+column = "revenue"
+operation = "sum"
+output_column = "total_revenue"
+```
+
+---
+
+### window.apply
+
+Apply windowing for stream processing.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `type` | String | ✅ Yes | - | Window type: `tumbling`, `sliding`, `session` |
+| `size` | Integer | ✅ Yes | - | Window size (records or seconds) |
+| `slide` | Integer | No | - | Slide size (sliding windows only) |
+| `gap` | Integer | No | `5` | Session gap in seconds |
+
+**Window Types:**
+- `tumbling`: Non-overlapping fixed-size windows
+- `sliding`: Overlapping windows with slide interval
+- `session`: Dynamic windows based on inactivity gap
+
+**Example:**
+
+```toml
+# Tumbling window
+[[stages]]
+id = "window"
+function = "window.apply"
+inputs = ["stream"]
+
+[stages.config]
+type = "tumbling"
+size = 100  # 100 records per window
+```
+
+---
+
+### aggregate.stream
+
+Real-time aggregation for streaming data.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `operation` | String | ✅ Yes | - | Aggregation operation |
+| `column` | String | No | - | Column to aggregate (some ops require) |
+| `group_by` | Array | No | `[]` | Columns to group by |
+
+**Operations:**
+- `count`: Count records
+- `sum`, `avg`, `min`, `max`: Numeric aggregations (require `column`)
+
+**Example:**
+
+```toml
+[[stages]]
+id = "aggregate"
+function = "aggregate.stream"
+inputs = ["windowed"]
+
+[stages.config]
+operation = "sum"
+column = "value"
+group_by = ["category"]
+```
+
+---
+
+## Sinks
+
+### csv.write
+
+Write data to CSV files.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `path` | String | ✅ Yes | - | Output CSV file path |
+| `has_headers` | Boolean | No | `true` | Write headers |
+| `delimiter` | String | No | `,` | Column delimiter |
 
 **Example:**
 
 ```toml
 [[stages]]
 id = "save_csv"
-type = "sink.csv"
+function = "csv.write"
 inputs = ["processed"]
 
 [stages.config]
 path = "output/results.csv"
-headers = true
+has_headers = true
 delimiter = ","
 ```
 
-### JSON Sink
+---
+
+### json.write
 
 Write data to JSON files.
 
-**Type:** `sink.json`
-
 **Configuration:**
 
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `path` | ✅ Yes | - | Output JSON file path |
-| `format` | No | `records` | Format: `records`, `jsonl` |
-| `pretty` | No | `false` | Pretty-print JSON |
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `path` | String | ✅ Yes | - | Output JSON file path |
+| `format` | String | No | `records` | Format: `records`, `jsonl` |
+| `pretty` | Boolean | No | `false` | Pretty-print JSON |
 
 **Example:**
 
 ```toml
 [[stages]]
 id = "save_json"
-type = "sink.json"
+function = "json.write"
 inputs = ["processed"]
 
 [stages.config]
@@ -280,93 +760,154 @@ format = "records"
 pretty = true
 ```
 
-### Stdout Sink
+---
 
-Write data to standard output.
+### stdout.write
 
-**Type:** `sink.stdout`
+Write data to standard output (batch mode).
 
 **Configuration:**
 
-| Option | Required | Default | Description |
-|--------|----------|---------|-------------|
-| `format` | No | `table` | Format: `table`, `json`, `jsonl`, `csv` |
-| `limit` | No | - | Maximum rows to display |
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `format` | String | No | `table` | Format: `table`, `json`, `jsonl`, `csv` |
+| `limit` | Integer | No | - | Maximum rows to display |
 
 **Example:**
 
 ```toml
 [[stages]]
 id = "display"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["results"]
 
 [stages.config]
 format = "table"
-limit = 10  # Show first 10 rows
+limit = 10
 ```
+
+---
+
+### stdout.stream
+
+Write data to standard output (streaming mode).
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `format` | String | No | `jsonl` | Format: `jsonl`, `json`, `table` |
+
+**Example:**
+
+```toml
+[[stages]]
+id = "stream_output"
+function = "stdout.stream"
+inputs = ["processed"]
+
+[stages.config]
+format = "jsonl"
+```
+
+---
 
 ## Plugin Modules
 
-### HTTP Plugin (Source & Sink)
+### HTTP Plugin
 
 **Plugin:** `http`
 
-See [Plugin System](plugin-system.md#http-plugin) for detailed documentation.
+**Functions:**
+- `http.get` - HTTP GET request (source)
+- `http.post` - HTTP POST request (source/sink)
+- `http.put` - HTTP PUT request (sink)
+- `http.patch` - HTTP PATCH request (sink)
+- `http.delete` - HTTP DELETE request (sink)
 
-**Source Example:**
+**Enable:**
 
 ```toml
 [global]
 plugins = ["http"]
+```
 
+**Source Example (GET):**
+
+```toml
 [[stages]]
 id = "fetch_api"
-type = "plugin.http"
+function = "http.get"
 inputs = []
 
 [stages.config]
 url = "https://api.example.com/data"
-method = "GET"
 format = "json"
+timeout_seconds = 30
+
+[stages.config.headers]
+Authorization = "Bearer ${API_TOKEN}"
+Accept = "application/json"
 ```
 
-**Sink Example:**
+**Sink Example (POST):**
 
 ```toml
 [[stages]]
-id = "send_results"
-type = "plugin.http"
+id = "send_webhook"
+function = "http.post"
 inputs = ["data"]
 
 [stages.config]
-url = "https://api.example.com/webhook"
-method = "POST"
+url = "https://webhook.example.com/events"
 format = "json"
+
+[stages.config.headers]
+Content-Type = "application/json"
 ```
 
-### MongoDB Plugin (Source & Sink)
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `url` | String | ✅ Yes | - | API endpoint URL |
+| `format` | String | No | `json` | Data format: `json`, `jsonl`, `csv` |
+| `headers` | Object | No | `{}` | Custom HTTP headers |
+| `timeout_seconds` | Integer | No | `30` | Request timeout |
+
+See [Plugin System](plugin-system.md#http-plugin) for detailed documentation.
+
+---
+
+### MongoDB Plugin
 
 **Plugin:** `mongodb`
 
-See [Plugin System](plugin-system.md#mongodb-plugin) for detailed documentation.
+**Functions:**
+- `mongodb.find` - Query documents (source)
+- `mongodb.insert` - Insert documents (sink)
 
-**Source Example:**
+**Enable:**
 
 ```toml
 [global]
 plugins = ["mongodb"]
+```
 
+**Source Example:**
+
+```toml
 [[stages]]
-id = "load_events"
-type = "plugin.mongodb"
+id = "load_users"
+function = "mongodb.find"
 inputs = []
 
 [stages.config]
 connection_string = "mongodb://localhost:27017"
-database = "analytics"
-collection = "events"
+database = "myapp"
+collection = "users"
 query = '{ "status": "active" }'
+limit = 1000
 ```
 
 **Sink Example:**
@@ -374,47 +915,37 @@ query = '{ "status": "active" }'
 ```toml
 [[stages]]
 id = "save_to_mongo"
-type = "plugin.mongodb"
+function = "mongodb.insert"
 inputs = ["processed"]
 
 [stages.config]
 connection_string = "mongodb://localhost:27017"
 database = "results"
-collection = "processed_data"
+collection = "analytics"
 ```
 
-## Special Stages
+**Configuration (mongodb.find):**
 
-### Pipeline Stage
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `connection_string` | String | ✅ Yes | - | MongoDB connection string |
+| `database` | String | ✅ Yes | - | Database name |
+| `collection` | String | ✅ Yes | - | Collection name |
+| `query` | String | No | `{}` | MongoDB query (JSON string) |
+| `limit` | Integer | No | - | Maximum documents to fetch |
+| `batch_size` | Integer | No | `1000` | Cursor batch size |
 
-Nest a complete pipeline within a stage.
+**Configuration (mongodb.insert):**
 
-**Type:** `stage.pipeline`
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `connection_string` | String | ✅ Yes | - | MongoDB connection string |
+| `database` | String | ✅ Yes | - | Database name |
+| `collection` | String | ✅ Yes | - | Collection name |
 
-**Configuration:**
+See [Plugin System](plugin-system.md#mongodb-plugin) for detailed documentation.
 
-A pipeline stage has its own complete pipeline configuration nested within it.
-
-**Example:**
-
-```toml
-[[stages]]
-id = "nested_pipeline"
-type = "stage.pipeline"
-inputs = ["data"]
-
-[stages.config]
-# Nested pipeline configuration
-[[stages.config.stages]]
-id = "sub_filter"
-type = "transform.filter"
-inputs = []  # Uses parent input
-
-[stages.config.stages.config]
-column = "value"
-operator = ">"
-value = 100
-```
+---
 
 ## Data Format Conversion
 
@@ -425,6 +956,7 @@ pub enum DataFormat {
     DataFrame(DataFrame),      // Polars DataFrame (columnar)
     RecordBatch(RecordBatch),  // Vec<HashMap> (row-based)
     Raw(Vec<u8>),              // Raw bytes
+    Stream(Stream),            // Async stream
 }
 ```
 
@@ -433,28 +965,29 @@ pub enum DataFormat {
 - HTTP/MongoDB → RecordBatch or DataFrame
 - Transforms work with any format (auto-convert)
 - Sinks accept any format (auto-convert)
+- Streaming sources → Stream
+
+---
 
 ## Module Discovery
 
 List available modules:
 
 ```bash
-# List all modules
+# List all functions
 conveyor list
 
-# List sources only
+# List by type
 conveyor list --module-type sources
-
-# List transforms only
 conveyor list --module-type transforms
-
-# List sinks only
 conveyor list --module-type sinks
 ```
+
+---
 
 ## See Also
 
 - [DAG Pipelines](dag-pipelines.md) - Pipeline composition
 - [HTTP Fetch Transform](http-fetch-transform.md) - Dynamic API calls
-- [Plugin System](plugin-system.md) - Plugin modules
+- [Plugin System](plugin-system.md) - Plugin development
 - [Configuration](configuration.md) - Pipeline configuration
