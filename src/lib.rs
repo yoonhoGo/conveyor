@@ -12,6 +12,7 @@ pub use core::config::DagPipelineConfig;
 pub use core::error::{ConveyorError, ConveyorResult};
 pub use core::pipeline::DagPipeline;
 pub use core::registry::ModuleRegistry;
-pub use core::traits::{DataFormat, DataSource, Sink, Transform};
+pub use core::stage::Stage;
+pub use core::traits::DataFormat;
 pub use plugin_loader::PluginLoader;
 pub use wasm_plugin_loader::WasmPluginLoader;

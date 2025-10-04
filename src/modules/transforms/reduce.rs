@@ -3,24 +3,24 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
-use crate::core::traits::{DataFormat, Transform};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 pub struct ReduceTransform;
 
 #[async_trait]
-impl Transform for ReduceTransform {
-    async fn name(&self) -> &str {
+impl Stage for ReduceTransform {
+    fn name(&self) -> &str {
         "reduce"
     }
 
-    async fn apply(
+    async fn execute(
         &self,
-        data: DataFormat,
-        config: &Option<HashMap<String, toml::Value>>,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Reduce transform requires configuration"))?;
+        
+            
 
         let column = config
             .get("column")
@@ -59,10 +59,9 @@ impl Transform for ReduceTransform {
         Ok(DataFormat::DataFrame(result_df))
     }
 
-    async fn validate_config(&self, config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Reduce transform requires configuration"))?;
+    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
+        
+            
 
         if !config.contains_key("column") {
             anyhow::bail!("Reduce requires 'column' configuration");

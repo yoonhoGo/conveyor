@@ -5,7 +5,8 @@ use tokio_stream::StreamExt;
 use tracing::info;
 
 use crate::core::streaming::{StreamProcessor, StreamWindower, WindowType};
-use crate::core::traits::{DataFormat, Transform};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 /// Window transform for streaming data
 pub struct WindowTransform;
@@ -76,19 +77,18 @@ impl WindowTransform {
 }
 
 #[async_trait]
-impl Transform for WindowTransform {
-    async fn name(&self) -> &str {
+impl Stage for WindowTransform {
+    fn name(&self) -> &str {
         "window"
     }
 
-    async fn apply(
+    async fn execute(
         &self,
-        data: DataFormat,
-        config: &Option<HashMap<String, toml::Value>>,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Window transform requires configuration"))?;
+        
+            
 
         let window_type = Self::parse_window_config(config)?;
 
@@ -130,10 +130,9 @@ impl Transform for WindowTransform {
         }
     }
 
-    async fn validate_config(&self, config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Window transform requires configuration"))?;
+    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
+        
+            
 
         // Try to parse the window config
         Self::parse_window_config(config)?;

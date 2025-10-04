@@ -4,17 +4,22 @@ use polars::prelude::*;
 use std::collections::HashMap;
 use std::io::{self, Read};
 
-use crate::core::traits::{DataFormat, DataSource, RecordBatch};
+use crate::core::stage::Stage;
+use crate::core::traits::{DataFormat, RecordBatch};
 
 pub struct StdinSource;
 
 #[async_trait]
-impl DataSource for StdinSource {
-    async fn name(&self) -> &str {
-        "stdin"
+impl Stage for StdinSource {
+    fn name(&self) -> &str {
+        "stdin.read"
     }
 
-    async fn read(&self, config: &HashMap<String, toml::Value>) -> Result<DataFormat> {
+    async fn execute(
+        &self,
+        _inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
+    ) -> Result<DataFormat> {
         let format = config
             .get("format")
             .and_then(|v| v.as_str())

@@ -3,25 +3,26 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
-use crate::core::traits::{DataFormat, Transform};
+use crate::core::stage::Stage;
+use crate::core::traits::DataFormat;
 
 pub struct DistinctTransform;
 
 #[async_trait]
-impl Transform for DistinctTransform {
-    async fn name(&self) -> &str {
+impl Stage for DistinctTransform {
+    fn name(&self) -> &str {
         "distinct"
     }
 
-    async fn apply(
+    async fn execute(
         &self,
-        data: DataFormat,
-        config: &Option<HashMap<String, toml::Value>>,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
         let df = data.as_dataframe()?;
 
         // Get optional subset of columns and keep strategy
-        let result = if let Some(config) = config {
+        let result = 
             let subset = if let Some(cols) = config.get("columns") {
                 Some(match cols {
                     toml::Value::String(s) => vec![s.clone()],
@@ -62,7 +63,7 @@ impl Transform for DistinctTransform {
         Ok(DataFormat::DataFrame(result))
     }
 
-    async fn validate_config(&self, _config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
+    async fn validate_config(&self, _config: &HashMap<String, toml::Value>) -> Result<()> {
         // Config is optional for distinct
         Ok(())
     }

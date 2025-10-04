@@ -2,13 +2,8 @@ use anyhow::Result;
 use std::collections::HashMap;
 
 use crate::core::stage::StageRef;
-use crate::core::traits::{DataSourceRef, SinkRef, TransformRef};
-use crate::modules::{sinks, sources, transforms};
 
 pub struct ModuleRegistry {
-    sources: HashMap<String, DataSourceRef>,
-    transforms: HashMap<String, TransformRef>,
-    sinks: HashMap<String, SinkRef>,
     stages: HashMap<String, StageRef>,
 }
 
@@ -21,9 +16,6 @@ impl Default for ModuleRegistry {
 impl ModuleRegistry {
     pub fn new() -> Self {
         Self {
-            sources: HashMap::new(),
-            transforms: HashMap::new(),
-            sinks: HashMap::new(),
             stages: HashMap::new(),
         }
     }
@@ -35,16 +27,7 @@ impl ModuleRegistry {
     }
 
     pub async fn register_default_modules(&mut self) -> Result<()> {
-        // Register built-in sources (legacy)
-        self.sources.extend(sources::register_sources());
-
-        // Register built-in transforms (legacy)
-        self.transforms.extend(transforms::register_transforms());
-
-        // Register built-in sinks (legacy)
-        self.sinks.extend(sinks::register_sinks());
-
-        // Register function-based modules (new preferred API)
+        // Register function-based modules
         let functions = crate::modules::register_functions();
         for (name, stage) in functions {
             self.stages.insert(name, stage);
@@ -54,28 +37,14 @@ impl ModuleRegistry {
         // to avoid circular dependencies with the registry
 
         tracing::debug!(
-            "Registered {} sources, {} transforms, {} sinks, {} functions",
-            self.sources.len(),
-            self.transforms.len(),
-            self.sinks.len(),
+            "Registered {} functions",
             self.stages.len()
         );
 
         Ok(())
     }
 
-    pub fn register_source(&mut self, name: String, source: DataSourceRef) {
-        self.sources.insert(name, source);
-    }
-
-    pub fn register_transform(&mut self, name: String, transform: TransformRef) {
-        self.transforms.insert(name, transform);
-    }
-
-    pub fn register_sink(&mut self, name: String, sink: SinkRef) {
-        self.sinks.insert(name, sink);
-    }
-
+    /// Register a stage (function-style)
     pub fn register_stage(&mut self, name: String, stage: StageRef) {
         self.stages.insert(name, stage);
     }
@@ -86,18 +55,7 @@ impl ModuleRegistry {
         self.stages.insert(function_name, stage);
     }
 
-    pub fn get_source(&self, name: &str) -> Option<&DataSourceRef> {
-        self.sources.get(name)
-    }
-
-    pub fn get_transform(&self, name: &str) -> Option<&TransformRef> {
-        self.transforms.get(name)
-    }
-
-    pub fn get_sink(&self, name: &str) -> Option<&SinkRef> {
-        self.sinks.get(name)
-    }
-
+    /// Get a stage by name
     pub fn get_stage(&self, name: &str) -> Option<&StageRef> {
         self.stages.get(name)
     }
@@ -108,29 +66,14 @@ impl ModuleRegistry {
         self.stages.get(function_name)
     }
 
-    pub fn list_sources(&self) -> Vec<String> {
-        self.sources.keys().cloned().collect()
-    }
-
-    pub fn list_transforms(&self) -> Vec<String> {
-        self.transforms.keys().cloned().collect()
-    }
-
-    pub fn list_sinks(&self) -> Vec<String> {
-        self.sinks.keys().cloned().collect()
-    }
-
+    /// List all registered stages/functions
     pub fn list_stages(&self) -> Vec<String> {
         self.stages.keys().cloned().collect()
     }
 
-    pub fn list_all_modules(&self) -> HashMap<String, Vec<String>> {
-        let mut modules = HashMap::new();
-        modules.insert("sources".to_string(), self.list_sources());
-        modules.insert("transforms".to_string(), self.list_transforms());
-        modules.insert("sinks".to_string(), self.list_sinks());
-        modules.insert("stages".to_string(), self.list_stages());
-        modules
+    /// List all registered functions (alias for list_stages)
+    pub fn list_functions(&self) -> Vec<String> {
+        self.list_stages()
     }
 }
 
@@ -141,36 +84,32 @@ mod tests {
     #[test]
     fn test_registry_initialization() {
         let registry = ModuleRegistry::new();
-        assert_eq!(registry.list_sources().len(), 0);
-        assert_eq!(registry.list_transforms().len(), 0);
-        assert_eq!(registry.list_sinks().len(), 0);
+        assert_eq!(registry.list_stages().len(), 0);
     }
 
     #[tokio::test]
     async fn test_registry_with_defaults() {
         let registry = ModuleRegistry::with_defaults().await.unwrap();
 
-        // Check that built-in modules are registered
-        assert!(registry.list_sources().len() > 0);
-        assert!(registry.list_transforms().len() > 0);
-        assert!(registry.list_sinks().len() > 0);
+        // Check that built-in functions are registered
+        assert!(registry.list_stages().len() > 0);
 
-        // Check specific modules
-        assert!(registry.get_source("csv").is_some());
-        assert!(registry.get_source("json").is_some());
-        assert!(registry.get_transform("filter").is_some());
-        assert!(registry.get_transform("map").is_some());
-        assert!(registry.get_sink("csv").is_some());
-        assert!(registry.get_sink("json").is_some());
+        // Check specific functions
+        assert!(registry.get_function("csv.read").is_some());
+        assert!(registry.get_function("csv.write").is_some());
+        assert!(registry.get_function("json.read").is_some());
+        assert!(registry.get_function("json.write").is_some());
+        assert!(registry.get_function("filter.apply").is_some());
+        assert!(registry.get_function("map.apply").is_some());
     }
 
     #[tokio::test]
-    async fn test_registry_list_all_modules() {
+    async fn test_registry_list_functions() {
         let registry = ModuleRegistry::with_defaults().await.unwrap();
-        let modules = registry.list_all_modules();
+        let functions = registry.list_functions();
 
-        assert!(modules.contains_key("sources"));
-        assert!(modules.contains_key("transforms"));
-        assert!(modules.contains_key("sinks"));
+        assert!(functions.contains(&"csv.read".to_string()));
+        assert!(functions.contains(&"json.write".to_string()));
+        assert!(functions.contains(&"filter.apply".to_string()));
     }
 }

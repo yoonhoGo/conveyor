@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use tracing::info;
 
 use crate::core::streaming::StreamProcessor;
-use crate::core::traits::{DataFormat, RecordBatch, Transform};
+use crate::core::stage::Stage;
+use crate::core::traits::{DataFormat, RecordBatch};
 
 /// Aggregate stream transform for real-time aggregation
 pub struct AggregateStreamTransform;
@@ -175,19 +176,18 @@ impl AggregateStreamTransform {
 }
 
 #[async_trait]
-impl Transform for AggregateStreamTransform {
-    async fn name(&self) -> &str {
+impl Stage for AggregateStreamTransform {
+    fn name(&self) -> &str {
         "aggregate_stream"
     }
 
-    async fn apply(
+    async fn execute(
         &self,
-        data: DataFormat,
-        config: &Option<HashMap<String, toml::Value>>,
+        inputs: HashMap<String, DataFormat>,
+        config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Aggregate stream transform requires configuration"))?;
+        
+            
 
         let operation = config
             .get("operation")
@@ -240,10 +240,9 @@ impl Transform for AggregateStreamTransform {
         }
     }
 
-    async fn validate_config(&self, config: &Option<HashMap<String, toml::Value>>) -> Result<()> {
-        let config = config
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Aggregate stream transform requires configuration"))?;
+    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
+        
+            
 
         // Validate operation
         if !config.contains_key("operation") {
