@@ -363,9 +363,8 @@ impl Stage for AiGenerateTransform {
             });
 
         let api_key = if !api_key_env.is_empty() {
-            env::var(api_key_env).map_err(|_| {
-                anyhow::anyhow!("Environment variable '{}' not set", api_key_env)
-            })?
+            env::var(api_key_env)
+                .map_err(|_| anyhow::anyhow!("Environment variable '{}' not set", api_key_env))?
         } else {
             String::new()
         };

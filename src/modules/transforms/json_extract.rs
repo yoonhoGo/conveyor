@@ -111,7 +111,8 @@ mod tests {
             r#"{"meta": {"req": {"headers": {"x-trace-id": "trace-456"}}}}"#,
         ];
 
-        let df = DataFrame::new(vec![Column::Series(Series::new("Line".into(), json_data))]).unwrap();
+        let df =
+            DataFrame::new(vec![Column::Series(Series::new("Line".into(), json_data))]).unwrap();
 
         let mut inputs = HashMap::new();
         inputs.insert("input".to_string(), DataFormat::DataFrame(df));
@@ -145,10 +146,11 @@ mod tests {
 
         let json_data = vec![
             r#"{"meta": {"req": {}}}"#, // missing headers
-            r#"{"other": "data"}"#,      // completely different structure
+            r#"{"other": "data"}"#,     // completely different structure
         ];
 
-        let df = DataFrame::new(vec![Column::Series(Series::new("Line".into(), json_data))]).unwrap();
+        let df =
+            DataFrame::new(vec![Column::Series(Series::new("Line".into(), json_data))]).unwrap();
 
         let mut inputs = HashMap::new();
         inputs.insert("input".to_string(), DataFormat::DataFrame(df));
