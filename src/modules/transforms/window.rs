@@ -87,8 +87,10 @@ impl Stage for WindowTransform {
         inputs: HashMap<String, DataFormat>,
         config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        
-            
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Window transform requires input data"))?;
 
         let window_type = Self::parse_window_config(config)?;
 
@@ -131,9 +133,6 @@ impl Stage for WindowTransform {
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
-        
-            
-
         // Try to parse the window config
         Self::parse_window_config(config)?;
 
@@ -194,7 +193,7 @@ mod tests {
         );
         config.insert("size".to_string(), toml::Value::Integer(100));
 
-        assert!(transform.validate_config(&Some(config)).await.is_ok());
+        assert!(transform.validate_config(&config).await.is_ok());
     }
 
     #[tokio::test]
@@ -207,6 +206,6 @@ mod tests {
             toml::Value::String("tumbling".to_string()),
         );
 
-        assert!(transform.validate_config(&Some(config)).await.is_err());
+        assert!(transform.validate_config(&config).await.is_err());
     }
 }

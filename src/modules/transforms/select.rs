@@ -18,8 +18,10 @@ impl Stage for SelectTransform {
         inputs: HashMap<String, DataFormat>,
         config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        
-            
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Select transform requires input data"))?;
 
         // Get columns to select
         let columns: Vec<String> = if let Some(cols) = config.get("columns") {
@@ -43,9 +45,6 @@ impl Stage for SelectTransform {
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
-        
-            
-
         if !config.contains_key("columns") {
             anyhow::bail!("Select requires 'columns' configuration");
         }

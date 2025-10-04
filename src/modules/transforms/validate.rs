@@ -19,8 +19,10 @@ impl Stage for ValidateSchemaTransform {
         inputs: HashMap<String, DataFormat>,
         config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        
-            
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Validate transform requires input data"))?;
 
         let df = data.as_dataframe()?;
 
@@ -131,7 +133,7 @@ impl Stage for ValidateSchemaTransform {
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
-        if config.is_none() {
+        if config.is_empty() {
             anyhow::bail!("Validate schema transform requires configuration");
         }
 

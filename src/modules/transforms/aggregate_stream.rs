@@ -186,8 +186,10 @@ impl Stage for AggregateStreamTransform {
         inputs: HashMap<String, DataFormat>,
         config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        
-            
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Aggregate stream requires input data"))?;
 
         let operation = config
             .get("operation")
@@ -241,9 +243,6 @@ impl Stage for AggregateStreamTransform {
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
-        
-            
-
         // Validate operation
         if !config.contains_key("operation") {
             anyhow::bail!("Missing required 'operation' parameter");
@@ -340,7 +339,7 @@ mod tests {
             toml::Value::String("count".to_string()),
         );
 
-        assert!(transform.validate_config(&Some(config)).await.is_ok());
+        assert!(transform.validate_config(&config).await.is_ok());
     }
 
     #[tokio::test]
@@ -353,6 +352,6 @@ mod tests {
             toml::Value::String("sum".to_string()),
         );
 
-        assert!(transform.validate_config(&Some(config)).await.is_err());
+        assert!(transform.validate_config(&config).await.is_err());
     }
 }

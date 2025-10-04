@@ -19,8 +19,10 @@ impl Stage for ReduceTransform {
         inputs: HashMap<String, DataFormat>,
         config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        
-            
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Reduce transform requires input data"))?;
 
         let column = config
             .get("column")
@@ -60,9 +62,6 @@ impl Stage for ReduceTransform {
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
-        
-            
-
         if !config.contains_key("column") {
             anyhow::bail!("Reduce requires 'column' configuration");
         }

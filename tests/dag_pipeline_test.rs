@@ -31,7 +31,7 @@ version = "1.0"
 
 [[stages]]
 id = "load_data"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -40,7 +40,7 @@ format = "records"
 
 [[stages]]
 id = "filter_active"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["load_data"]
 
 [stages.config]
@@ -50,7 +50,7 @@ value = "active"
 
 [[stages]]
 id = "save_data"
-type = "sink.json"
+function = "json.write"
 inputs = ["filter_active"]
 
 [stages.config]
@@ -104,7 +104,7 @@ version = "1.0"
 
 [[stages]]
 id = "load_data"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -113,7 +113,7 @@ format = "records"
 
 [[stages]]
 id = "save_copy1"
-type = "sink.json"
+function = "json.write"
 inputs = ["load_data"]
 
 [stages.config]
@@ -122,7 +122,7 @@ format = "records"
 
 [[stages]]
 id = "save_copy2"
-type = "sink.json"
+function = "json.write"
 inputs = ["load_data"]
 
 [stages.config]
@@ -155,7 +155,7 @@ version = "1.0"
 
 [[stages]]
 id = "stage1"
-type = "source.json"
+function = "json.read"
 inputs = ["stage2"]
 
 [stages.config]
@@ -163,7 +163,7 @@ path = "test.json"
 
 [[stages]]
 id = "stage2"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["stage1"]
 
 [stages.config]

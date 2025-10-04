@@ -254,20 +254,23 @@ impl DagExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::stage::SourceStageAdapter;
-    use crate::core::traits::DataSource;
+    use crate::core::stage::Stage;
     use async_trait::async_trait;
     use polars::prelude::DataFrame;
 
-    struct MockSource;
+    struct MockStage;
 
     #[async_trait]
-    impl DataSource for MockSource {
-        async fn name(&self) -> &str {
+    impl Stage for MockStage {
+        fn name(&self) -> &str {
             "mock"
         }
 
-        async fn read(&self, _config: &HashMap<String, toml::Value>) -> Result<DataFormat> {
+        async fn execute(
+            &self,
+            _inputs: HashMap<String, DataFormat>,
+            _config: &HashMap<String, toml::Value>,
+        ) -> Result<DataFormat> {
             Ok(DataFormat::DataFrame(DataFrame::empty()))
         }
 
@@ -280,10 +283,7 @@ mod tests {
     async fn test_dag_executor_basic() {
         let mut executor = DagExecutor::new(ErrorStrategy::Stop);
 
-        let stage1 = Arc::new(SourceStageAdapter::new(
-            "source1".to_string(),
-            Arc::new(MockSource),
-        ));
+        let stage1 = Arc::new(MockStage) as StageRef;
 
         executor
             .add_stage("stage1".to_string(), stage1, HashMap::new())
@@ -297,14 +297,8 @@ mod tests {
     async fn test_dag_executor_cycle_detection() {
         let mut executor = DagExecutor::new(ErrorStrategy::Stop);
 
-        let stage1 = Arc::new(SourceStageAdapter::new(
-            "source1".to_string(),
-            Arc::new(MockSource),
-        ));
-        let stage2 = Arc::new(SourceStageAdapter::new(
-            "source2".to_string(),
-            Arc::new(MockSource),
-        ));
+        let stage1 = Arc::new(MockStage) as StageRef;
+        let stage2 = Arc::new(MockStage) as StageRef;
 
         executor
             .add_stage("stage1".to_string(), stage1, HashMap::new())

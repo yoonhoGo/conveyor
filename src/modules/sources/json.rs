@@ -119,7 +119,7 @@ mod tests {
         );
 
         let source = JsonSource;
-        let result = source.read(&config).await;
+        let result = source.execute(HashMap::new(), &config).await;
         assert!(result.is_ok());
 
         let data = result.unwrap();

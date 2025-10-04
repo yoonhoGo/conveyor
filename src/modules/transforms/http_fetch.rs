@@ -48,8 +48,10 @@ impl Stage for HttpFetchTransform {
         inputs: HashMap<String, DataFormat>,
         config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        
-            
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("HTTP fetch requires input data"))?;
 
         // Parse configuration
         let url_template = config
@@ -120,9 +122,6 @@ impl Stage for HttpFetchTransform {
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
-        
-            
-
         // Validate required fields
         if !config.contains_key("url") {
             anyhow::bail!("http_fetch requires 'url' field");
@@ -303,7 +302,7 @@ mod tests {
         let transform = HttpFetchTransform::new();
 
         // Missing URL
-        let config = Some(HashMap::new());
+        let config = HashMap::new();
         assert!(transform.validate_config(&config).await.is_err());
 
         // Valid config
@@ -312,7 +311,7 @@ mod tests {
             "url".to_string(),
             toml::Value::String("http://example.com".to_string()),
         );
-        assert!(transform.validate_config(&Some(config)).await.is_ok());
+        assert!(transform.validate_config(&config).await.is_ok());
     }
 
     #[tokio::test]

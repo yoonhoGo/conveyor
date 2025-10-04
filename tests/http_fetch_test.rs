@@ -28,7 +28,7 @@ version = "1.0"
 
 [[stages]]
 id = "load_users"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -37,7 +37,7 @@ format = "records"
 
 [[stages]]
 id = "fetch_posts"
-type = "transform.http_fetch"
+function = "http.fetch"
 inputs = ["load_users"]
 
 [stages.config]
@@ -48,7 +48,7 @@ result_field = "posts"
 
 [[stages]]
 id = "save_result"
-type = "sink.json"
+function = "json.write"
 inputs = ["fetch_posts"]
 
 [stages.config]
@@ -97,7 +97,7 @@ version = "1.0"
 
 [[stages]]
 id = "load_data"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -106,7 +106,7 @@ format = "records"
 
 [[stages]]
 id = "fetch_data"
-type = "transform.http_fetch"
+function = "http.fetch"
 inputs = ["load_data"]
 
 [stages.config]
@@ -117,7 +117,7 @@ result_field = "post_data"
 
 [[stages]]
 id = "output"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["fetch_data"]
 
 [stages.config]
@@ -148,7 +148,7 @@ version = "1.0"
 
 [[stages]]
 id = "source"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -156,7 +156,7 @@ path = "test.json"
 
 [[stages]]
 id = "fetch"
-type = "transform.http_fetch"
+function = "http.fetch"
 inputs = ["source"]
 
 [stages.config]
@@ -175,7 +175,7 @@ version = "1.0"
 
 [[stages]]
 id = "source"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -183,7 +183,7 @@ path = "test.json"
 
 [[stages]]
 id = "fetch"
-type = "transform.http_fetch"
+function = "http.fetch"
 inputs = ["source"]
 
 [stages.config]

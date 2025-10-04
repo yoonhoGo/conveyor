@@ -19,8 +19,10 @@ impl Stage for SortTransform {
         inputs: HashMap<String, DataFormat>,
         config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        
-            
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Sort transform requires input data"))?;
 
         // Get columns to sort by (can be single string or array)
         let sort_columns: Vec<String> = if let Some(cols) = config.get("by") {
@@ -73,9 +75,6 @@ impl Stage for SortTransform {
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
-        
-            
-
         if !config.contains_key("by") {
             anyhow::bail!("Sort requires 'by' configuration");
         }

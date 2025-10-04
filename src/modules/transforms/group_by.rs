@@ -19,8 +19,10 @@ impl Stage for GroupByTransform {
         inputs: HashMap<String, DataFormat>,
         config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        
-            
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("GroupBy transform requires input data"))?;
 
         // Get group columns (can be single string or array)
         let group_columns: Vec<String> = if let Some(cols) = config.get("by") {
@@ -98,9 +100,6 @@ impl Stage for GroupByTransform {
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
-        
-            
-
         if !config.contains_key("by") {
             anyhow::bail!("GroupBy requires 'by' configuration");
         }

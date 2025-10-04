@@ -19,8 +19,10 @@ impl Stage for MapTransform {
         inputs: HashMap<String, DataFormat>,
         config: &HashMap<String, toml::Value>,
     ) -> Result<DataFormat> {
-        
-            
+        let data = inputs
+            .into_values()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Map transform requires input data"))?;
 
         let expression = config
             .get("expression")
@@ -140,9 +142,6 @@ impl Stage for MapTransform {
     }
 
     async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()> {
-        
-            
-
         if !config.contains_key("expression") {
             anyhow::bail!("Map requires 'expression' configuration");
         }
