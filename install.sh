@@ -91,6 +91,11 @@ install_binary() {
     # Make binary executable
     chmod +x "$temp_file"
 
+    # Remove quarantine attribute and apply ad-hoc signature
+    echo -e "${YELLOW}Removing quarantine and applying ad-hoc signature...${NC}"
+    xattr -d com.apple.quarantine "$temp_file" 2>/dev/null || true
+    codesign --force --sign - "$temp_file" 2>/dev/null || true
+
     # Try to move binary to install directory
     echo -e "${YELLOW}Installing to: ${install_path}${NC}"
     if mv "$temp_file" "$install_path" 2>/dev/null; then
