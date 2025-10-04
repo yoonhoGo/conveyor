@@ -355,7 +355,7 @@ impl Stage for AiGenerateTransform {
         let api_key_env = config
             .get("api_key_env")
             .and_then(|v| v.as_str())
-            .unwrap_or_else(|| match provider {
+            .unwrap_or(match provider {
                 AiProvider::OpenAI => "OPENAI_API_KEY",
                 AiProvider::Anthropic => "ANTHROPIC_API_KEY",
                 AiProvider::OpenRouter => "OPENROUTER_API_KEY",
