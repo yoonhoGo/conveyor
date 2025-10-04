@@ -21,7 +21,7 @@ timeout_seconds = 60  # Run for 60 seconds
 
 [[stages]]
 id = "watch_file"
-type = "source.file_watch"
+function = "file.watch"
 inputs = []
 
 [stages.config]
@@ -31,7 +31,7 @@ poll_interval = 1  # Check every 1 second
 
 [[stages]]
 id = "filter_errors"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["watch_file"]
 
 [stages.config]
@@ -41,7 +41,7 @@ value = "error"
 
 [[stages]]
 id = "count_errors"
-type = "transform.aggregate_stream"
+function = "aggregate.stream"
 inputs = ["filter_errors"]
 
 [stages.config]
@@ -49,7 +49,7 @@ operation = "count"
 
 [[stages]]
 id = "output"
-type = "sink.stdout_stream"
+function = "stdout.stream"
 inputs = ["count_errors"]
 
 [stages.config]

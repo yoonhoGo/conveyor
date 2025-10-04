@@ -14,7 +14,7 @@ timeout_seconds = 300
 # Stage 1: Load user data from local JSON file
 [[stages]]
 id = "load_users"
-type = "source.json"
+function = "json.read"
 inputs = []
 
 [stages.config]
@@ -24,7 +24,7 @@ format = "records"
 # Stage 2: Filter only active users
 [[stages]]
 id = "filter_active"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["load_users"]
 
 [stages.config]
@@ -36,7 +36,7 @@ value = "active"
 # This is the key stage - it uses data from previous stage to make API calls
 [[stages]]
 id = "fetch_user_posts"
-type = "transform.http_fetch"
+function = "http.fetch"
 inputs = ["filter_active"]
 
 [stages.config]
@@ -51,7 +51,7 @@ Accept = "application/json"
 # Stage 4: Transform the data (example: count posts)
 [[stages]]
 id = "process_posts"
-type = "transform.map"
+function = "map.apply"
 inputs = ["fetch_user_posts"]
 
 [stages.config]
@@ -61,7 +61,7 @@ inputs = ["fetch_user_posts"]
 # Stage 5: Save results to file
 [[stages]]
 id = "save_to_file"
-type = "sink.json"
+function = "json.write"
 inputs = ["fetch_user_posts"]
 
 [stages.config]
@@ -72,7 +72,7 @@ pretty = true
 # Stage 6: Also display to console (branching from same source)
 [[stages]]
 id = "display_results"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["fetch_user_posts"]
 
 [stages.config]

@@ -27,7 +27,7 @@ timeout = 30
 # Stage 2: Output to JSON file
 [[stages]]
 id = "json_output"
-type = "sink.json"
+function = "json.write"
 inputs = ["api_users"]
 
 [stages.config]

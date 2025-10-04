@@ -14,7 +14,7 @@ timeout_seconds = 300
 # Stage 1: Load CSV data
 [[stages]]
 id = "sales_data"
-type = "source.csv"
+function = "csv.read"
 inputs = []
 
 [stages.config]
@@ -25,7 +25,7 @@ delimiter = ","
 # Stage 2: Validate schema
 [[stages]]
 id = "validate_data"
-type = "transform.validate_schema"
+function = "validate.schema"
 inputs = ["sales_data"]
 
 [stages.config]
@@ -35,7 +35,7 @@ date_fields = ["date"]
 # Stage 3: Filter high value sales
 [[stages]]
 id = "filter_high_value"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["validate_data"]
 
 [stages.config]
@@ -46,7 +46,7 @@ value = 1000.0
 # Stage 4: Add tax calculation
 [[stages]]
 id = "add_tax"
-type = "transform.map"
+function = "map.apply"
 inputs = ["filter_high_value"]
 
 [stages.config]
@@ -56,7 +56,7 @@ output_column = "amount_with_tax"
 # Stage 5: Save to JSON
 [[stages]]
 id = "output_json"
-type = "sink.json"
+function = "json.write"
 inputs = ["add_tax"]
 
 [stages.config]
@@ -67,7 +67,7 @@ pretty = true
 # Stage 6: Also save to CSV (branching from add_tax)
 [[stages]]
 id = "high_value_csv"
-type = "sink.csv"
+function = "csv.write"
 inputs = ["add_tax"]
 
 [stages.config]
