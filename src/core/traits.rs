@@ -66,6 +66,24 @@ impl DataFormat {
                                     .map(|v| JsonValue::Number(v.into()))
                                     .unwrap_or(JsonValue::Null)
                             }
+                            DataType::Int32 => {
+                                let s = col.i32()?;
+                                s.get(i)
+                                    .map(|v| JsonValue::Number(v.into()))
+                                    .unwrap_or(JsonValue::Null)
+                            }
+                            DataType::UInt32 => {
+                                let s = col.u32()?;
+                                s.get(i)
+                                    .map(|v| JsonValue::Number(v.into()))
+                                    .unwrap_or(JsonValue::Null)
+                            }
+                            DataType::UInt64 => {
+                                let s = col.u64()?;
+                                s.get(i)
+                                    .map(|v| JsonValue::Number(v.into()))
+                                    .unwrap_or(JsonValue::Null)
+                            }
                             DataType::Float64 => {
                                 let s = col.f64()?;
                                 s.get(i)
