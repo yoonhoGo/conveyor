@@ -302,8 +302,7 @@ fn dataformat_to_wasm(data: &DataFormat) -> Result<WasmDataFormat> {
     match data {
         DataFormat::DataFrame(df) => {
             // Convert DataFrame to JSON records for WASM plugins
-            use polars::prelude::*;
-            use serde_json::{Map, Value as JsonValue};
+            use serde_json::Value as JsonValue;
             use std::collections::HashMap;
 
             let mut records: Vec<HashMap<String, JsonValue>> = Vec::new();
