@@ -48,6 +48,10 @@ pub struct GlobalConfig {
     #[serde(default)]
     pub plugins: Vec<String>,
 
+    /// List of WASM plugins to load (e.g., ["excel_wasm", "echo_wasm"])
+    #[serde(default)]
+    pub wasm_plugins: Vec<String>,
+
     /// Execution mode: batch or streaming
     #[serde(default)]
     pub execution_mode: ExecutionMode,
@@ -113,6 +117,7 @@ impl Default for GlobalConfig {
             max_parallel_tasks: default_max_parallel_tasks(),
             timeout_seconds: default_timeout_seconds(),
             plugins: Vec::new(),
+            wasm_plugins: Vec::new(),
             execution_mode: ExecutionMode::default(),
             stream_batch_size: default_stream_batch_size(),
             checkpoint_interval: default_checkpoint_interval(),

@@ -269,17 +269,59 @@ fn config_to_ffi(config: &HashMap<String, toml::Value>) -> Result<RHashMap<RStri
     Ok(ffi_config)
 }
 
+/// Convert Polars AnyValue to serde_json::Value
+fn anyvalue_to_json(value: &polars::prelude::AnyValue) -> serde_json::Value {
+    use polars::prelude::AnyValue;
+    use serde_json::Value as JsonValue;
+
+    match value {
+        AnyValue::Null => JsonValue::Null,
+        AnyValue::Boolean(b) => JsonValue::Bool(*b),
+        AnyValue::Int8(i) => JsonValue::Number((*i).into()),
+        AnyValue::Int16(i) => JsonValue::Number((*i).into()),
+        AnyValue::Int32(i) => JsonValue::Number((*i).into()),
+        AnyValue::Int64(i) => JsonValue::Number((*i).into()),
+        AnyValue::UInt8(i) => JsonValue::Number((*i).into()),
+        AnyValue::UInt16(i) => JsonValue::Number((*i).into()),
+        AnyValue::UInt32(i) => JsonValue::Number((*i).into()),
+        AnyValue::UInt64(i) => JsonValue::Number((*i).into()),
+        AnyValue::Float32(f) => serde_json::Number::from_f64(*f as f64)
+            .map(JsonValue::Number)
+            .unwrap_or(JsonValue::Null),
+        AnyValue::Float64(f) => serde_json::Number::from_f64(*f)
+            .map(JsonValue::Number)
+            .unwrap_or(JsonValue::Null),
+        AnyValue::String(s) => JsonValue::String(s.to_string()),
+        AnyValue::StringOwned(s) => JsonValue::String(s.to_string()),
+        _ => JsonValue::String(format!("{:?}", value)),
+    }
+}
+
 /// Convert DataFormat to WASM DataFormat
 fn dataformat_to_wasm(data: &DataFormat) -> Result<WasmDataFormat> {
     match data {
         DataFormat::DataFrame(df) => {
-            // Serialize DataFrame to Arrow IPC
-            let mut buf = Vec::new();
-            use polars::io::ipc::IpcWriter;
-            use polars::prelude::SerWriter;
-            let mut df_clone = df.clone();
-            IpcWriter::new(&mut buf).finish(&mut df_clone)?;
-            Ok(WasmDataFormat::ArrowIpc(buf))
+            // Convert DataFrame to JSON records for WASM plugins
+            use polars::prelude::*;
+            use serde_json::{Map, Value as JsonValue};
+            use std::collections::HashMap;
+
+            let mut records: Vec<HashMap<String, JsonValue>> = Vec::new();
+            let height = df.height();
+
+            for row_idx in 0..height {
+                let mut record = HashMap::new();
+                for col in df.get_columns() {
+                    let col_name = col.name().to_string();
+                    let value = col.get(row_idx)?;
+                    let json_value = anyvalue_to_json(&value);
+                    record.insert(col_name, json_value);
+                }
+                records.push(record);
+            }
+
+            let bytes = serde_json::to_vec(&records)?;
+            Ok(WasmDataFormat::JsonRecords(bytes))
         }
         DataFormat::RecordBatch(records) => {
             // Serialize records to JSON

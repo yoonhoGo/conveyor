@@ -1,0 +1,30 @@
+# Test pipeline: CSV to Excel
+# This creates a sample Excel file from CSV
+
+[pipeline]
+name = "csv-to-excel"
+description = "Convert CSV to Excel file"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 60
+wasm_plugins = ["excel_wasm"]
+
+[[stages]]
+id = "read_csv"
+function = "csv.read"
+
+[stages.config]
+path = "examples/excel-test/sample.csv"
+headers = true
+
+[[stages]]
+id = "write_excel"
+function = "excel.write"
+inputs = ["read_csv"]
+
+[stages.config]
+path = "examples/excel-test/output.xlsx"
+sheet = "TestData"
+write_headers = true

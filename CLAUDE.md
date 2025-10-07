@@ -281,6 +281,90 @@ pub fn load_plugin(&mut self, name: &str) -> Result<()> {
   - Connection pooling
   - Only loaded when `plugins = ["mongodb"]` is specified
 
+#### 7. WASM Plugin System (`wasm_plugin_loader.rs`)
+
+The WASM plugin system loads WebAssembly Component Model plugins at runtime:
+
+```rust
+pub struct WasmPluginLoader {
+    engine: Engine,
+    plugin_dir: PathBuf,
+    plugins: HashMap<String, WasmPluginHandle>,
+}
+
+pub struct WasmPluginHandle {
+    component: Component,
+    metadata: PluginMetadata,
+    capabilities: Vec<StageCapability>,
+}
+```
+
+**Architecture Overview**:
+
+1. **WASM Component Model**: Uses wasmtime with WASI Preview 2
+   ```toml
+   [global]
+   wasm_plugins = ["excel_wasm"]  # Load WASM plugins at runtime
+   ```
+
+2. **Sandboxed Execution**: Complete memory isolation from host
+3. **File System Access**: Uses WASI preopened directories for controlled file access
+   ```rust
+   let wasi = WasiCtxBuilder::new()
+       .inherit_stdio()
+       .preopened_dir(current_dir_str, ".", DirPerms::all(), FilePerms::all())?
+       .build();
+   ```
+
+**Key Features**:
+- Cross-platform: Same .wasm works on all platforms
+- Safe: Memory isolation prevents plugin crashes from affecting host
+- Version independent: No Rust compiler version requirements
+- Data exchange: JSON-based serialization for DataFrame ↔ WASM
+
+**WASM Plugin Examples**:
+
+- **Echo Plugin** (`plugins-wasm/conveyor-plugin-echo-wasm/`):
+  - Test plugin for WASM system validation
+  - Demonstrates source, transform, and sink operations
+  - Only loaded when `wasm_plugins = ["echo_wasm"]` is specified
+
+- **Excel Plugin** (`plugins-wasm/conveyor-plugin-excel-wasm/`):
+  - Read/write .xlsx and .xls files
+  - Multi-sheet support
+  - Complete data type mapping
+  - Uses calamine (read) and rust_xlsxwriter (write)
+  - Only loaded when `wasm_plugins = ["excel_wasm"]` is specified
+
+**Configuration Integration**:
+
+The `GlobalConfig` supports both FFI and WASM plugins:
+
+```rust
+pub struct GlobalConfig {
+    pub plugins: Vec<String>,       // FFI plugins (http, mongodb)
+    pub wasm_plugins: Vec<String>,  // WASM plugins (excel_wasm, echo_wasm)
+    // ...
+}
+```
+
+**Loading Process**:
+
+1. Pipeline initialization checks `config.global.wasm_plugins`
+2. `WasmPluginLoader::load_plugin()` compiles .wasm file with wasmtime
+3. Plugin metadata and capabilities are extracted
+4. Stages are registered in `DagPipelineBuilder`
+5. On execution, `WasmPluginStageAdapter` handles data conversion:
+   - DataFrame → JSON records → WASM
+   - WASM → JSON records → DataFrame
+
+**Key Challenge Solved - File System Access**:
+
+WASM sandbox requires explicit directory permissions:
+- Research via web search revealed `preopened_dir` API
+- Solution: Preopen current directory as "." for plugin access
+- Enables Excel plugin to read/write files in subdirectories
+
 ### Stage Implementation
 
 All built-in modules implement the `Stage` trait with function-based naming:
@@ -551,9 +635,10 @@ Conveyor supports two plugin architectures:
 
 **Performance Characteristics:**
 - 5-15% overhead vs FFI
-- Serialization required for data exchange (Arrow IPC, JSON)
+- Serialization required for data exchange (JSON records)
 - Memory-safe by design
 - Limited async support (WASI Preview 2 constraints)
+- Note: DataFrame is converted to JSON records (not Arrow IPC) for WASM compatibility
 
 **Constraints:**
 - Ecosystem still maturing
@@ -564,10 +649,18 @@ Conveyor supports two plugin architectures:
 
 **Key Organization Principles**:
 - **Dual Plugin Systems**: FFI for performance, WASM for security/portability
-- **Built-in vs Plugin**: CSV/JSON/Stdin are built-in, HTTP/MongoDB are FFI plugins
+- **Built-in vs Plugin**:
+  - Built-in: CSV/JSON/Stdin (core functionality)
+  - FFI Plugins: HTTP/MongoDB (performance-critical)
+  - WASM Plugins: Excel (cross-platform, sandboxed)
 - **Workspace Benefits**: Shared dependencies, independent compilation
 - **Plugin Isolation**: Each plugin is a self-contained crate
 - **Cross-platform**: WASM plugins compile once, run everywhere
+
+**Example Use Cases by Plugin Type**:
+- Use **built-in** for: Standard ETL operations (CSV, JSON)
+- Use **FFI plugins** for: High-performance I/O (HTTP, MongoDB)
+- Use **WASM plugins** for: Cross-platform file formats (Excel), untrusted code
 
 ## Error Handling Philosophy
 

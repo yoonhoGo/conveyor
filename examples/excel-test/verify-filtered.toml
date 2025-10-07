@@ -1,0 +1,28 @@
+# Verify filtered Excel output
+[pipeline]
+name = "verify-filtered"
+description = "Display filtered Excel file contents"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 60
+wasm_plugins = ["excel_wasm"]
+
+[[stages]]
+id = "read_filtered"
+function = "excel.read"
+
+[stages.config]
+path = "examples/excel-test/filtered.xlsx"
+sheet = "HighSalaries"
+has_headers = true
+
+[[stages]]
+id = "display"
+function = "stdout.write"
+inputs = ["read_filtered"]
+
+[stages.config]
+format = "table"
+limit = 10

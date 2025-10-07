@@ -1,0 +1,30 @@
+# Test pipeline: Excel to stdout
+# This reads the Excel file we created and displays it
+
+[pipeline]
+name = "excel-to-stdout"
+description = "Read Excel file and display contents"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 60
+wasm_plugins = ["excel_wasm"]
+
+[[stages]]
+id = "read_excel"
+function = "excel.read"
+
+[stages.config]
+path = "examples/excel-test/output.xlsx"
+sheet = "TestData"
+has_headers = true
+
+[[stages]]
+id = "display"
+function = "stdout.write"
+inputs = ["read_excel"]
+
+[stages.config]
+format = "table"
+limit = 10

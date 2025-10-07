@@ -11,6 +11,7 @@ use crate::core::dag_executor::DagExecutor;
 use crate::core::error::ConveyorError;
 use crate::core::registry::ModuleRegistry;
 use crate::plugin_loader::PluginLoader;
+use crate::wasm_plugin_loader::WasmPluginLoader;
 
 /// DAG-based pipeline supporting flexible stage composition
 pub struct DagPipeline {
@@ -20,6 +21,8 @@ pub struct DagPipeline {
     executor: DagExecutor,
     #[allow(dead_code)]
     plugin_loader: Option<Arc<PluginLoader>>,
+    #[allow(dead_code)]
+    wasm_plugin_loader: Option<Arc<WasmPluginLoader>>,
 }
 
 impl DagPipeline {
@@ -35,21 +38,36 @@ impl DagPipeline {
     pub async fn new(config: DagPipelineConfig) -> Result<Self> {
         let registry = Arc::new(ModuleRegistry::with_defaults().await?);
 
-        // Load plugins specified in config
+        // Load FFI plugins specified in config
         let mut plugin_loader = PluginLoader::new();
         if !config.global.plugins.is_empty() {
             info!(
-                "Loading {} plugin(s): {:?}",
+                "Loading {} FFI plugin(s): {:?}",
                 config.global.plugins.len(),
                 config.global.plugins
             );
             plugin_loader.load_plugins(&config.global.plugins)?;
         }
 
-        // Build DAG executor with plugin loader
+        // Load WASM plugins specified in config
+        let mut wasm_plugin_loader = WasmPluginLoader::new()?;
+        if !config.global.wasm_plugins.is_empty() {
+            info!(
+                "Loading {} WASM plugin(s): {:?}",
+                config.global.wasm_plugins.len(),
+                config.global.wasm_plugins
+            );
+            for plugin_name in &config.global.wasm_plugins {
+                wasm_plugin_loader.load_plugin(plugin_name).await?;
+            }
+        }
+
+        // Build DAG executor with plugin loaders
         let plugin_loader_arc = Arc::new(plugin_loader);
-        let builder =
-            DagPipelineBuilder::new(registry.clone()).with_plugin_loader(plugin_loader_arc.clone());
+        let wasm_plugin_loader_arc = Arc::new(wasm_plugin_loader);
+        let builder = DagPipelineBuilder::new(registry.clone())
+            .with_plugin_loader(plugin_loader_arc.clone())
+            .with_wasm_plugin_loader(wasm_plugin_loader_arc.clone());
         let executor = builder.build(&config)?;
 
         Ok(Self {
@@ -57,6 +75,7 @@ impl DagPipeline {
             registry,
             executor,
             plugin_loader: Some(plugin_loader_arc),
+            wasm_plugin_loader: Some(wasm_plugin_loader_arc),
         })
     }
 

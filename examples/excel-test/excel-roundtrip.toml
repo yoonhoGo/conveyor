@@ -1,0 +1,41 @@
+# Test pipeline: Excel roundtrip
+# Read Excel -> Transform -> Write new Excel
+
+[pipeline]
+name = "excel-roundtrip"
+description = "Read Excel, transform data, write new Excel"
+
+[global]
+log_level = "info"
+max_parallel_tasks = 4
+timeout_seconds = 60
+wasm_plugins = ["excel_wasm"]
+
+[[stages]]
+id = "read_excel"
+function = "excel.read"
+
+[stages.config]
+path = "examples/excel-test/output.xlsx"
+sheet = "TestData"
+has_headers = true
+
+[[stages]]
+id = "filter_high_salary"
+function = "filter.apply"
+inputs = ["read_excel"]
+
+[stages.config]
+column = "Salary"
+operator = ">"
+value = 70000
+
+[[stages]]
+id = "write_filtered"
+function = "excel.write"
+inputs = ["filter_high_salary"]
+
+[stages.config]
+path = "examples/excel-test/filtered.xlsx"
+sheet = "HighSalaries"
+write_headers = true

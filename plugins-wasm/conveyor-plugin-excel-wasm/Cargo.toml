@@ -1,0 +1,27 @@
+[package]
+name = "conveyor-plugin-excel-wasm"
+version = "0.1.0"
+edition = "2021"
+authors = ["Yoonho Go"]
+description = "Excel WASM plugin for Conveyor - read and write .xlsx and .xls files"
+license = "MIT"
+
+[dependencies]
+# WIT bindgen for WASM Component Model
+wit-bindgen = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Excel file handling
+calamine = { version = "0.31", default-features = false, features = ["dates"] }
+rust_xlsxwriter = { version = "0.83", default-features = false }
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = "z"      # Optimize for size
+lto = true           # Link-time optimization
+strip = true         # Strip symbols

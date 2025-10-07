@@ -123,8 +123,21 @@ impl WasmPluginLoader {
         let component = Component::from_file(&self.engine, &plugin_path)
             .with_context(|| format!("Failed to load WASM component from {:?}", plugin_path))?;
 
-        // Create store with WASI context
-        let wasi = WasiCtxBuilder::new().inherit_stdio().build();
+        // Create store with WASI context and file system access
+        let current_dir = std::env::current_dir()?;
+        let current_dir_str = current_dir
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Current directory path contains invalid UTF-8"))?;
+
+        let wasi = WasiCtxBuilder::new()
+            .inherit_stdio()
+            .preopened_dir(
+                current_dir_str,
+                ".",
+                wasmtime_wasi::DirPerms::all(),
+                wasmtime_wasi::FilePerms::all(),
+            )?
+            .build();
         let table = ResourceTable::new();
         let state = PluginState { wasi, table };
         let mut store = Store::new(&self.engine, state);
@@ -167,14 +180,15 @@ impl WasmPluginLoader {
                 .join(", ")
         );
 
-        // Store plugin handle
+        // Store plugin handle (use metadata name as key for consistency)
+        let plugin_name = metadata.name.clone();
         let handle = WasmPluginHandle {
             component,
             metadata,
             capabilities,
         };
 
-        self.plugins.insert(name.to_string(), handle);
+        self.plugins.insert(plugin_name, handle);
 
         Ok(())
     }
@@ -232,8 +246,21 @@ impl WasmPluginLoader {
             );
         }
 
-        // Create new store for this execution
-        let wasi = WasiCtxBuilder::new().inherit_stdio().build();
+        // Create new store for this execution with file system access
+        let current_dir = std::env::current_dir()?;
+        let current_dir_str = current_dir
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Current directory path contains invalid UTF-8"))?;
+
+        let wasi = WasiCtxBuilder::new()
+            .inherit_stdio()
+            .preopened_dir(
+                current_dir_str,
+                ".",
+                wasmtime_wasi::DirPerms::all(),
+                wasmtime_wasi::FilePerms::all(),
+            )?
+            .build();
         let table = ResourceTable::new();
         let state = PluginState { wasi, table };
         let mut store = Store::new(&self.engine, state);
@@ -280,8 +307,21 @@ impl WasmPluginLoader {
             );
         }
 
-        // Create new store for this execution
-        let wasi = WasiCtxBuilder::new().inherit_stdio().build();
+        // Create new store for this execution with file system access
+        let current_dir = std::env::current_dir()?;
+        let current_dir_str = current_dir
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Current directory path contains invalid UTF-8"))?;
+
+        let wasi = WasiCtxBuilder::new()
+            .inherit_stdio()
+            .preopened_dir(
+                current_dir_str,
+                ".",
+                wasmtime_wasi::DirPerms::all(),
+                wasmtime_wasi::FilePerms::all(),
+            )?
+            .build();
         let table = ResourceTable::new();
         let state = PluginState { wasi, table };
         let mut store = Store::new(&self.engine, state);
