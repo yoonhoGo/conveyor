@@ -58,7 +58,7 @@ futures = "0.3.31"
 
 [package]
 name = "conveyor"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 authors = ["Yoonho Go"]
 description = "A TOML-based ETL CLI tool for data pipelines"
