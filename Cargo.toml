@@ -113,6 +113,11 @@ base64 = "0.22.1"
 futures = { workspace = true }
 dirs = "5.0"
 
+# Cryptography
+aes-gcm = "0.10"
+chacha20poly1305 = "0.10"
+rand = "0.8"
+
 # HTTP client (for http_fetch transform)
 reqwest = { workspace = true }
 

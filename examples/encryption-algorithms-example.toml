@@ -1,0 +1,60 @@
+[pipeline]
+name = "encryption-algorithms-comparison"
+version = "1.0.0"
+description = "Example demonstrating different encryption algorithms"
+
+[global]
+log_level = "info"
+
+# Stage 1: Create test data
+[[stages]]
+id = "create_data"
+function = "json.read"
+inputs = []
+
+[stages.config]
+path = "examples/users-sensitive.json"
+
+# Stage 2: Encrypt with AES-256-GCM (default)
+[[stages]]
+id = "encrypt_aes256"
+function = "encrypt.apply"
+inputs = ["create_data"]
+
+[stages.config]
+column = "email"
+key = "12345678901234567890123456789012"  # 32 bytes
+output_column = "email_aes256"
+
+# Stage 3: Encrypt with AES-128-GCM
+[[stages]]
+id = "encrypt_aes128"
+function = "encrypt.apply"
+inputs = ["encrypt_aes256"]
+
+[stages.config]
+column = "name"
+key = "1234567890123456"  # 16 bytes
+algorithm = "aes-128-gcm"
+output_column = "name_aes128"
+
+# Stage 4: Encrypt with ChaCha20-Poly1305
+[[stages]]
+id = "encrypt_chacha"
+function = "encrypt.apply"
+inputs = ["encrypt_aes128"]
+
+[stages.config]
+column = "email"
+key = "abcdefghijklmnopqrstuvwxyz012345"  # 32 bytes
+algorithm = "chacha20-poly1305"
+output_column = "email_chacha"
+
+# Stage 5: Display all encrypted columns
+[[stages]]
+id = "display"
+function = "stdout.write"
+inputs = ["encrypt_chacha"]
+
+[stages.config]
+format = "table"

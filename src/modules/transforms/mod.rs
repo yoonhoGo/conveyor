@@ -1,6 +1,8 @@
 pub mod aggregate_stream;
 pub mod ai;
+pub mod decrypt;
 pub mod distinct;
+pub mod encrypt;
 pub mod filter;
 pub mod group_by;
 pub mod http_fetch;

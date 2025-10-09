@@ -266,6 +266,15 @@ mod tests {
             "mock"
         }
 
+        fn metadata(&self) -> crate::core::metadata::StageMetadata {
+            crate::core::metadata::StageMetadata::builder(
+                "mock",
+                crate::core::metadata::StageCategory::Transform,
+            )
+            .description("Mock stage for testing")
+            .build()
+        }
+
         async fn execute(
             &self,
             _inputs: HashMap<String, DataFormat>,

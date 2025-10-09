@@ -1,0 +1,47 @@
+[pipeline]
+name = "encryption-example"
+version = "1.0.0"
+description = "Example pipeline demonstrating encryption and decryption"
+
+[global]
+log_level = "info"
+
+# Stage 1: Create test data with sensitive information
+[[stages]]
+id = "create_data"
+function = "json.read"
+inputs = []
+
+[stages.config]
+path = "examples/users-sensitive.json"
+
+# Stage 2: Encrypt the email column
+[[stages]]
+id = "encrypt_email"
+function = "encrypt.apply"
+inputs = ["create_data"]
+
+[stages.config]
+column = "email"
+key = "12345678901234567890123456789012"  # 32-byte encryption key
+output_column = "email_encrypted"
+
+# Stage 3: Decrypt the email column (to verify it works)
+[[stages]]
+id = "decrypt_email"
+function = "decrypt.apply"
+inputs = ["encrypt_email"]
+
+[stages.config]
+column = "email_encrypted"
+key = "12345678901234567890123456789012"  # Same 32-byte key
+output_column = "email_decrypted"
+
+# Stage 4: Display results
+[[stages]]
+id = "display"
+function = "stdout.write"
+inputs = ["decrypt_email"]
+
+[stages.config]
+format = "table"
