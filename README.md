@@ -178,17 +178,16 @@ No need to search through documentation - all information is built into the CLI!
 
 ### User Guides
 - **[CLI Reference](docs/cli-reference.md)** - Complete CLI command documentation
-- **[Metadata System](docs/metadata-system.md)** - Self-documenting features and how to use them
-- **[DAG Pipelines](docs/dag-pipelines.md)** - Flexible pipeline composition with branching and parallelism
-- **[HTTP Fetch Transform](docs/http-fetch-transform.md)** - Dynamic API calls within pipelines
-- **[Modules Reference](docs/modules-reference.md)** - All built-in sources, transforms, and sinks
 - **[Configuration](docs/configuration.md)** - Complete configuration reference
+- **[DAG Pipelines](docs/dag-pipelines.md)** - Flexible pipeline composition with branching and parallelism
+- **[Modules Reference](docs/modules-reference.md)** - All built-in sources, transforms, and sinks
+- **[Metadata System](docs/metadata-system.md)** - Self-documenting features and how to use them
+- **[HTTP Fetch Transform](docs/http-fetch-transform.md)** - Dynamic API calls within pipelines
 
 ### Developer Guides
+- **[Development](docs/development.md)** - Building, testing, and contributing
 - **[Plugin System](docs/plugin-system.md)** - Create and use plugins (FFI & WASM)
-- **[Architecture](docs/architecture.md)** - System design and internals
-- **[Development](docs/development.md)** - Building and contributing
-- **[CLAUDE.md](CLAUDE.md)** - Technical implementation notes for AI agents
+- **[CLAUDE.md](CLAUDE.md)** - Technical implementation notes for AI agents and developers
 
 ## Examples
 

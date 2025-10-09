@@ -2,15 +2,89 @@
 
 This document provides technical details about the Conveyor project's architecture, implementation decisions, and development process for AI agents and developers working on the codebase.
 
+> **Document Purpose**: This file is specifically for AI agents (like Claude Code) and developers to understand architectural decisions, design patterns, and implementation challenges. It focuses on **WHY** and **HOW** decisions were made, not **WHAT** features exist.
+
+## Document Guidelines
+
+### ✅ SHOULD Include
+
+**Architecture & Design Decisions**
+- Why we chose specific technologies or patterns
+- Trade-offs considered and rationale for choices
+- Design patterns and their benefits
+- System boundaries and responsibilities
+
+**Implementation Challenges**
+- Real problems encountered during development
+- Creative solutions and workarounds
+- Failed approaches and why they didn't work
+- Critical discoveries (e.g., `rstr!` macro for FFI)
+
+**Lessons Learned**
+- Insights gained from experience
+- Best practices discovered
+- Anti-patterns to avoid
+- Performance considerations and optimizations
+
+**Quick Reference & Navigation**
+- References to detailed documentation (@docs/filename.md)
+- High-level component overview
+- Where to find specific information
+
+### ❌ SHOULD NOT Include
+
+**Detailed Usage Instructions**
+- Step-by-step user guides → @docs/cli-reference.md
+- Configuration examples → @docs/configuration.md
+- Module parameters → @docs/modules-reference.md
+
+**Implementation Details**
+- Specific code examples (unless illustrating a challenge)
+- API documentation → Generated from code
+- Complete function signatures → See source code
+
+**Frequently Changing Information**
+- Specific test counts (becomes outdated quickly)
+- Version-specific details
+- Temporary workarounds
+
+**Tool Usage Basics**
+- How to use `cargo`, `git`, etc. → @docs/development.md
+- Logging syntax → See source code
+- Standard Rust practices → External Rust documentation
+
+### 🎯 Decision Criteria
+
+**Ask yourself**:
+1. "Would this help an AI agent understand **why** the code is structured this way?"
+2. "Is this information about a **solved problem** or **design decision**?"
+3. "Would this be outdated if implementation details change?"
+
+**If YES to 1 or 2**: Include it in CLAUDE.md
+**If YES to 3**: Put it in specific docs or remove it
+
+---
+
 ## Table of Contents
 
+- [Project Overview](#project-overview)
 - [Architecture](#architecture)
-- [Metadata System](#metadata-system)
-- [Core Components](#core-components)
-- [Stage Implementation](#stage-implementation)
 - [Implementation Challenges & Solutions](#implementation-challenges--solutions)
-- [Testing Strategy](#testing-strategy)
 - [Lessons Learned](#lessons-learned)
+- [Documentation References](#documentation-references)
+
+## Project Overview
+
+Conveyor is a high-performance, TOML-based ETL (Extract, Transform, Load) CLI tool built in Rust featuring:
+
+- **📋 TOML Configuration**: Simple, declarative pipeline definitions
+- **🔀 DAG-Based Pipelines**: Flexible stage composition with automatic dependency resolution
+- **⚡ High Performance**: Built with Rust and Polars (10-100x faster than Python)
+- **🔌 Dual Plugin System**: FFI plugins for performance, WASM plugins for security/portability
+- **🔄 Async Processing**: Built on Tokio for efficient concurrent operations
+- **🌊 Stream Processing**: Real-time data processing with micro-batching and windowing
+- **🤖 AI Integration**: LLM-powered transforms with multiple provider support
+- **📊 Self-Documenting**: Metadata system enables CLI discovery and guided stage creation
 
 ## Architecture
 
@@ -53,8 +127,8 @@ conveyor/
 │   └── wasm_plugin_test.rs        # WASM plugin tests
 └── src/                           # Main application
     ├── main.rs
-    ├── core/
-    ├── modules/
+    ├── core/                      # Core pipeline engine
+    ├── modules/                   # Built-in modules
     ├── plugin_loader.rs           # FFI plugin loader
     └── wasm_plugin_loader.rs      # WASM plugin loader
 ```
@@ -64,613 +138,54 @@ conveyor/
 1. **Workspace Dependencies**: All common dependencies (serde, tokio, anyhow, etc.) are defined in `[workspace.dependencies]` for version consistency across all crates
 2. **Plugin Isolation**: Plugins are separate `cdylib` crates compiled as dynamic libraries, not linked into the main binary
 3. **Independent Compilation**: Each plugin can be built separately with `cargo build -p plugin-name`
-4. **Shared API Crate**: `conveyor-plugin-api` provides common types and traits used by both host and plugins
-
-## Metadata System
-
-**Added: 2025-01-10**
-
-Conveyor implements a comprehensive metadata system that provides self-documenting capabilities for all pipeline stages. This enables automatic documentation generation, guided stage creation, and better developer experience.
-
-### Architecture (`core/metadata.rs`)
-
-#### Core Structures
-
-```rust
-pub struct StageMetadata {
-    pub name: String,                      // "csv.read", "filter.apply"
-    pub category: StageCategory,           // Source/Transform/Sink
-    pub description: String,               // One-line description
-    pub long_description: Option<String>,  // Detailed explanation
-    pub parameters: Vec<ConfigParameter>,  // All configuration options
-    pub examples: Vec<ConfigExample>,      // Usage examples
-    pub tags: Vec<String>,                 // Searchable tags
-}
-
-pub struct ConfigParameter {
-    pub name: String,                      // Parameter name
-    pub param_type: ParameterType,         // Data type
-    pub required: bool,                    // Required vs optional
-    pub default: Option<String>,           // Default value if optional
-    pub description: String,               // What it does
-    pub validation: Option<ParameterValidation>, // Constraints
-}
-
-pub struct ParameterValidation {
-    pub min: Option<f64>,                  // Numeric minimum
-    pub max: Option<f64>,                  // Numeric maximum
-    pub allowed_values: Option<Vec<String>>, // Enum values
-    pub pattern: Option<String>,           // Regex pattern
-    pub min_length: Option<usize>,         // String/array min length
-    pub max_length: Option<usize>,         // String/array max length
-}
-```
-
-#### Builder Pattern
-
-Metadata uses a fluent builder API for convenience:
-
-```rust
-StageMetadata::builder("csv.read", StageCategory::Source)
-    .description("Read data from CSV files")
-    .long_description("Detailed explanation...")
-    .parameter(ConfigParameter::required(
-        "path",
-        ParameterType::String,
-        "Path to the CSV file to read"
-    ))
-    .parameter(ConfigParameter::optional(
-        "headers",
-        ParameterType::Boolean,
-        "true",
-        "Whether the first row contains column headers"
-    ))
-    .example(ConfigExample::new(
-        "Basic CSV reading",
-        example_config,
-        Some("Read a CSV file with headers")
-    ))
-    .tag("csv")
-    .tag("file")
-    .build()
-```
-
-### Stage Trait Integration
-
-All stages implement a `metadata()` method:
-
-```rust
-#[async_trait]
-pub trait Stage: Send + Sync {
-    fn name(&self) -> &str;
-    fn metadata(&self) -> StageMetadata;  // ← Added
-    async fn execute(...) -> Result<DataFormat>;
-    async fn validate_config(...) -> Result<()>;
-    fn produces_output(&self) -> bool;
-}
-```
-
-### CLI Integration
-
-The metadata system powers several CLI features:
-
-#### 1. Enhanced List Command (`conveyor list`)
-
-```bash
-$ conveyor list
-
-SOURCES:
-----------------------------------------------------------------------
-  • csv.read                  - Read data from CSV files
-  • json.read                 - Read data from JSON files
-```
-
-Implementation extracts metadata from each stage:
-```rust
-for func_name in &all_functions {
-    if let Some(stage) = registry.get_function(func_name) {
-        let metadata = stage.metadata();
-        println!("  • {:25} - {}", func_name, metadata.description);
-    }
-}
-```
-
-#### 2. Function Info Command (`conveyor info <function>`)
-
-Displays comprehensive information:
-- Function name and category
-- Short and long descriptions
-- Required/optional parameters with types and defaults
-- Validation rules (allowed values, ranges, constraints)
-- Usage examples
-- Tags
-
-#### 3. Interactive Builder (`conveyor build`)
-
-Provides guided stage creation:
-- Function selection with category grouping
-- Parameter collection with real-time validation
-- Type checking and constraint validation
-- Default value support
-- Error messages with retry logic
-- TOML generation
-
-Implementation (`cli/interactive_builder.rs`):
-```rust
-pub struct InteractiveBuilder {
-    registry: ModuleRegistry,
-}
-
-impl InteractiveBuilder {
-    pub async fn build_stage(&self) -> Result<HashMap<String, toml::Value>> {
-        // 1. Select function
-        let function_name = self.select_function()?;
-        let stage = self.registry.get_function(&function_name)?;
-        let metadata = stage.metadata();
-
-        // 2. Show summary
-        self.show_function_summary(&metadata);
-
-        // 3. Collect parameters with validation
-        let config = self.collect_parameters(&metadata)?;
-
-        Ok(config)
-    }
-
-    fn prompt_parameter(&self, param: &ConfigParameter, required: bool) -> Result<toml::Value> {
-        loop {
-            let input = self.prompt_input(&param.name, param.default.as_deref())?;
-
-            match self.parse_and_validate(&input, param) {
-                Ok(value) => return Ok(value),
-                Err(e) => {
-                    println!("  ❌ Invalid input: {}", e);
-                    continue;
-                }
-            }
-        }
-    }
-}
-```
-
-#### 4. JSON Export (`conveyor stage describe <function>`)
-
-Exports metadata as JSON for programmatic use:
-```bash
-$ conveyor stage describe csv.read | jq '.parameters'
-```
-
-### Plugin System Integration
-
-Both FFI and WASM plugins provide metadata:
-
-#### FFI Plugins
-
-Adapters extract metadata from `PluginCapability`:
-```rust
-pub struct FfiPluginStageAdapter {
-    name: String,
-    description: String,
-    stage_type: conveyor_plugin_api::traits::StageType,
-    // ...
-}
-
-impl Stage for FfiPluginStageAdapter {
-    fn metadata(&self) -> StageMetadata {
-        let category = match self.stage_type {
-            StageType::Source => StageCategory::Source,
-            StageType::Transform => StageCategory::Transform,
-            StageType::Sink => StageCategory::Sink,
-        };
-
-        StageMetadata::builder(&self.name, category)
-            .description(&self.description)
-            .tag("plugin")
-            .tag("ffi")
-            .build()
-    }
-}
-```
-
-#### WASM Plugins
-
-Similar pattern with `StageCapability` from WASM plugins.
-
-### Coverage
-
-**23 built-in stages** fully documented:
-- **Sources (3):** csv.read, json.read, stdin.read
-- **Transforms (18):** filter.apply, map.apply, select.apply, sort.apply, distinct.apply, group_by.apply, reduce.apply, json_extract, validate_schema, http_fetch, ai_generate, aggregate_stream, window.apply, etc.
-- **Sinks (4):** csv.write, json.write, stdout.write, stdout_stream
-
-### Benefits
-
-1. **Self-Documenting**: No need for external documentation lookup
-2. **Guided Experience**: Interactive builder prevents errors
-3. **Type Safety**: Validation before execution
-4. **Tooling Integration**: JSON export enables external tools
-5. **Consistency**: Single source of truth for all documentation
-6. **Discoverability**: Tags and descriptions make functions easy to find
+4. **Shared API Crate**: Plugin API crates provide common types and traits used by both host and plugins
 
 ### Core Components
 
-#### 1. Configuration System (`core/config.rs`)
+For detailed information about each component, see:
 
-The configuration system uses `serde` for TOML deserialization with strong typing. Conveyor uses a DAG-based pipeline configuration:
+- **Configuration System** → @docs/configuration.md
+- **DAG Pipeline Executor** → @docs/dag-pipelines.md
+- **Module Registry & Stages** → @docs/modules-reference.md
+- **CLI Commands** → @docs/cli-reference.md
+- **Metadata System** → @docs/metadata-system.md
+- **Plugin System** → @docs/plugin-system.md
+- **Development Workflow** → @docs/development.md
 
-```rust
-pub struct DagPipelineConfig {
-    pub pipeline: PipelineMetadata,
-    pub global: GlobalConfig,
-    pub stages: Vec<StageConfig>,
-    pub error_handling: ErrorHandlingConfig,
-}
+#### Quick Component Overview
 
-pub struct StageConfig {
-    pub id: String,              // Unique stage identifier
-    pub function: String,        // Function name: "csv.read", "filter.apply", "json.write"
-    pub inputs: Vec<String>,     // List of stage IDs this stage depends on
-    pub config: HashMap<String, toml::Value>,
-}
-```
+1. **Configuration System** (`core/config.rs`)
+   - TOML deserialization with strong typing
+   - DAG-based pipeline configuration
+   - Plugin loading specification
+   - Global variables with environment substitution
 
-Key features:
-- DAG-based execution with support for parallel stages and branching
-- Default values for optional fields
-- Comprehensive validation (cycle detection, unique IDs, valid inputs)
-- Support for nested configurations
-- Plugin loading via `GlobalConfig.plugins: Vec<String>`
+2. **Stage System** (`core/stage.rs`, `core/traits.rs`)
+   - Unified `Stage` trait for all modules
+   - Function-based naming: "csv.read", "filter.apply", "json.write"
+   - HashMap-based input/output passing
+   - Async execution with `async_trait`
 
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GlobalConfig {
-    pub log_level: String,
-    pub max_parallel_tasks: usize,
-    pub timeout_seconds: u64,
-
-    /// List of plugins to load dynamically (e.g., ["http", "mongodb"])
-    #[serde(default)]
-    pub plugins: Vec<String>,
-}
-```
-
-#### 2. Stage System (`core/stage.rs`, `core/traits.rs`)
-
-The core abstraction uses a unified **Stage** trait that replaces the legacy DataSource/Transform/Sink system:
-
-```rust
-#[async_trait]
-pub trait Stage: Send + Sync {
-    fn name(&self) -> &str;
-
-    async fn execute(
-        &self,
-        inputs: HashMap<String, DataFormat>,
-        config: &HashMap<String, toml::Value>,
-    ) -> Result<DataFormat>;
-
-    async fn validate_config(&self, config: &HashMap<String, toml::Value>) -> Result<()>;
-
-    fn produces_output(&self) -> bool {
-        true  // Most stages produce output; sinks override to return false
-    }
-}
-```
-
-**Key Benefits**:
-- **Unified API**: All modules (sources, transforms, sinks) implement the same trait
-- **Function-based naming**: Stages are registered as functions like "csv.read", "filter.apply", "json.write"
-- **Composability**: Easy to chain and combine stages in DAG pipelines
-- **Input flexibility**: `inputs` HashMap supports multiple inputs for advanced use cases
-
-**Design Decision**: Using `async_trait` for async methods in traits, enabling async I/O operations throughout the pipeline.
-
-#### 3. Data Format (`core/traits.rs`)
-
-The `DataFormat` enum handles different data representations:
-
-```rust
-pub enum DataFormat {
-    DataFrame(DataFrame),      // Polars DataFrame for structured data
-    RecordBatch(RecordBatch),  // Vec of HashMaps for flexible JSON-like data
-    Raw(Vec<u8>),              // Raw bytes for binary data
-}
-```
-
-This abstraction allows seamless conversion between formats while maintaining performance.
-
-#### 4. DAG Pipeline Executor (`core/pipeline.rs`, `core/dag_executor.rs`, `core/dag_builder.rs`)
-
-The DAG pipeline executor orchestrates data flow using directed acyclic graphs:
-
-```rust
-pub struct DagPipeline {
-    config: DagPipelineConfig,
-    registry: Arc<ModuleRegistry>,
-    executor: DagExecutor,
-    plugin_loader: PluginLoader,
-}
-```
-
-Features:
-- **DAG-based execution**: Supports parallel execution and branching
-- **Topological ordering**: Stages execute in dependency order
-- **Level-based parallelism**: Stages with no dependencies between them run in parallel
-- **Dynamic plugin loading** on initialization
-- **Data passing between stages** via HashMap
-- **Timeout handling** at pipeline level
-- **Error recovery** based on strategy (stop/continue/retry)
-- **Cycle detection** during validation
-
-**Plugin Integration**: The pipeline loads plugins specified in `config.global.plugins` during initialization:
-```rust
-pub async fn new(config: DagPipelineConfig) -> Result<Self> {
-    let registry = Arc::new(ModuleRegistry::with_defaults().await?);
-
-    // Load plugins dynamically
-    let mut plugin_loader = PluginLoader::new();
-    if !config.global.plugins.is_empty() {
-        plugin_loader.load_plugins(&config.global.plugins)?;
-    }
-
-    // Build DAG executor with cycle detection
-    let builder = DagPipelineBuilder::new(registry.clone());
-    let executor = builder.build(&config)?;
-
-    Ok(Self { config, registry, executor, plugin_loader })
-}
-```
-
-#### 5. Module Registry (`core/registry.rs`)
-
-The registry manages available stages using a function-based API:
-
-```rust
-pub struct ModuleRegistry {
-    stages: HashMap<String, StageRef>,
-}
-```
-
-**Function Registration**:
-- Built-in functions: "csv.read", "json.write", "filter.apply", etc.
-- Plugin functions: "mongodb.find", "http.get", etc.
-- Supports dynamic registration via plugin system
-
-**Simplified API**:
-- `register_stage(name, stage)` / `register_function(name, stage)`
-- `get_stage(name)` / `get_function(name)`
-- `list_stages()` / `list_functions()`
-
-Previous complex API (26 methods across sources/transforms/sinks) reduced to 6 core methods.
-
-#### 6. Dynamic Plugin System (`plugin_loader.rs`)
-
-The dynamic plugin system loads plugins at runtime as shared libraries:
-
-```rust
-pub struct PluginLoader {
-    plugin_dir: PathBuf,
-    plugins: HashMap<String, PluginHandle>,
-}
-
-struct PluginHandle {
-    _library: Library,
-    name: String,
-}
-```
-
-**Architecture Overview**:
-
-1. **On-Demand Loading**: Plugins are NOT compiled into the binary. They're loaded only when specified in TOML:
-   ```toml
-   [global]
-   plugins = ["http", "mongodb"]  # Load these plugins at runtime
-   ```
-
-2. **Dynamic Library Loading**: Plugins are `cdylib` crates compiled to:
-   - macOS: `libconveyor_plugin_*.dylib`
-
-3. **Zero Overhead**: Unused plugins are never loaded into memory, reducing binary size and startup time
-
-**Safety Features**:
-
-```rust
-/// Load a plugin with version checking and panic isolation
-pub fn load_plugin(&mut self, name: &str) -> Result<()> {
-    // Catch panics during plugin loading
-    let result = std::panic::catch_unwind(|| {
-        self.load_plugin_internal(&library_path, name)
-    });
-
-    match result {
-        Ok(Ok(())) => Ok(()),
-        Ok(Err(e)) => Err(e),
-        Err(panic_err) => {
-            Err(anyhow::anyhow!(
-                "Plugin '{}' panicked during loading: {}",
-                name, panic_msg
-            ))
-        }
-    }
-}
-```
-
-**Key Safety Features**:
-
-1. **Panic Isolation**: `std::panic::catch_unwind` prevents plugin crashes from affecting the host process
-2. **Version Checking**: Plugin API version is verified before loading (PLUGIN_API_VERSION constant)
-3. **Capability Verification**: Plugins must provide at least one module type (source/sink/transform)
-4. **Platform Detection**: Automatic library extension detection for cross-platform support
-
-**Plugin Examples**:
-
-- **HTTP Plugin** (`plugins/conveyor-plugin-http/`):
-  - REST API source and sink
-  - GET/POST/PUT/PATCH/DELETE methods
-  - JSON, JSONL, CSV, and raw formats
-  - Custom headers and timeouts
-  - Only loaded when `plugins = ["http"]` is specified
-
-- **MongoDB Plugin** (`plugins/conveyor-plugin-mongodb/`):
-  - Cursor-based pagination for large datasets
-  - Batch insert support
-  - Connection pooling
-  - Only loaded when `plugins = ["mongodb"]` is specified
-
-#### 7. WASM Plugin System (`wasm_plugin_loader.rs`)
-
-The WASM plugin system loads WebAssembly Component Model plugins at runtime:
-
-```rust
-pub struct WasmPluginLoader {
-    engine: Engine,
-    plugin_dir: PathBuf,
-    plugins: HashMap<String, WasmPluginHandle>,
-}
-
-pub struct WasmPluginHandle {
-    component: Component,
-    metadata: PluginMetadata,
-    capabilities: Vec<StageCapability>,
-}
-```
-
-**Architecture Overview**:
-
-1. **WASM Component Model**: Uses wasmtime with WASI Preview 2
-   ```toml
-   [global]
-   wasm_plugins = ["excel_wasm"]  # Load WASM plugins at runtime
-   ```
-
-2. **Sandboxed Execution**: Complete memory isolation from host
-3. **File System Access**: Uses WASI preopened directories for controlled file access
+3. **Data Format** (`core/traits.rs`)
    ```rust
-   let wasi = WasiCtxBuilder::new()
-       .inherit_stdio()
-       .preopened_dir(current_dir_str, ".", DirPerms::all(), FilePerms::all())?
-       .build();
+   pub enum DataFormat {
+       DataFrame(DataFrame),      // Polars DataFrame for structured data
+       RecordBatch(RecordBatch),  // Vec of HashMaps for flexible JSON-like data
+       Raw(Vec<u8>),              // Raw bytes for binary data
+       Stream(Stream),            // Async stream for real-time processing
+   }
    ```
 
-**Key Features**:
-- Cross-platform: Same .wasm works on all platforms
-- Safe: Memory isolation prevents plugin crashes from affecting host
-- Version independent: No Rust compiler version requirements
-- Data exchange: JSON-based serialization for DataFrame ↔ WASM
+4. **DAG Pipeline Executor** (`core/dag_executor.rs`)
+   - Topological ordering for dependency resolution
+   - Level-based parallelism for independent stages
+   - Cycle detection during validation
+   - Error recovery strategies (stop/continue/retry)
 
-**WASM Plugin Examples**:
-
-- **Echo Plugin** (`plugins-wasm/conveyor-plugin-echo-wasm/`):
-  - Test plugin for WASM system validation
-  - Demonstrates source, transform, and sink operations
-  - Only loaded when `wasm_plugins = ["echo_wasm"]` is specified
-
-- **Excel Plugin** (`plugins-wasm/conveyor-plugin-excel-wasm/`):
-  - Read/write .xlsx and .xls files
-  - Multi-sheet support
-  - Complete data type mapping
-  - Uses calamine (read) and rust_xlsxwriter (write)
-  - Only loaded when `wasm_plugins = ["excel_wasm"]` is specified
-
-**Configuration Integration**:
-
-The `GlobalConfig` supports both FFI and WASM plugins:
-
-```rust
-pub struct GlobalConfig {
-    pub plugins: Vec<String>,       // FFI plugins (http, mongodb)
-    pub wasm_plugins: Vec<String>,  // WASM plugins (excel_wasm, echo_wasm)
-    // ...
-}
-```
-
-**Loading Process**:
-
-1. Pipeline initialization checks `config.global.wasm_plugins`
-2. `WasmPluginLoader::load_plugin()` compiles .wasm file with wasmtime
-3. Plugin metadata and capabilities are extracted
-4. Stages are registered in `DagPipelineBuilder`
-5. On execution, `WasmPluginStageAdapter` handles data conversion:
-   - DataFrame → JSON records → WASM
-   - WASM → JSON records → DataFrame
-
-**Key Challenge Solved - File System Access**:
-
-WASM sandbox requires explicit directory permissions:
-- Research via web search revealed `preopened_dir` API
-- Solution: Preopen current directory as "." for plugin access
-- Enables Excel plugin to read/write files in subdirectories
-
-### Stage Implementation
-
-All built-in modules implement the `Stage` trait with function-based naming:
-
-#### Source Stages
-
-**CSV Reader** (`modules/sources/csv.rs`) - Function: `csv.read`
-- Uses Polars' `CsvReader` with optimizations
-- Supports custom delimiters and headers
-- Schema inference capabilities
-- Implements `Stage::execute()` with no inputs required
-
-**JSON Reader** (`modules/sources/json.rs`) - Function: `json.read`
-- Multiple format support (records, jsonl, dataframe)
-- Handles large files efficiently
-- Converts to appropriate DataFormat
-
-**Stdin Reader** (`modules/sources/stdin.rs`) - Function: `stdin.read`
-- Reads from standard input
-- Format detection (json, jsonl, csv, raw)
-- Enables pipeline chaining with Unix tools
-
-#### Transform Stages
-
-**Filter** (`modules/transforms/filter.rs`) - Function: `filter.apply`
-- Supports comparison operators: `==`, `!=`, `>`, `>=`, `<`, `<=`
-- String operations: `contains`, `in`
-- Works on DataFrame columns efficiently
-
-**Map** (`modules/transforms/map.rs`) - Function: `map.apply`
-- Simple expression evaluation
-- Arithmetic operations: `+`, `-`, `*`, `/`
-- Column creation and modification
-
-**Validate Schema** (`modules/transforms/validate.rs`) - Function: `validate.schema`
-- Required fields checking
-- Type validation
-- Null constraint enforcement
-- Unique value validation
-
-**HTTP Fetch** (`modules/transforms/http_fetch.rs`) - Function: `http.fetch`
-- Per-row or batch HTTP requests
-- Template-based URLs with Handlebars
-- Custom headers and timeout support
-
-**Window** (`modules/transforms/window.rs`) - Function: `window.apply`
-- Tumbling, sliding, and session windows
-- Stream processing support
-
-**Aggregate Stream** (`modules/transforms/aggregate_stream.rs`) - Function: `aggregate.stream`
-- Real-time aggregation (count, sum, avg, min, max)
-- Group-by support
-
-#### Sink Stages
-
-**CSV Writer** (`modules/sinks/csv.rs`) - Function: `csv.write`
-- Writes Polars DataFrame to CSV
-- Custom delimiters and headers
-- Automatic directory creation
-- `produces_output() = false`
-
-**JSON Writer** (`modules/sinks/json.rs`) - Function: `json.write`
-- Multiple output formats
-- Pretty printing option
-- Efficient serialization
-
-**Stdout Writer** (`modules/sinks/stdout.rs`) - Function: `stdout.write`
-- Table, JSON, JSONL, CSV output formats
-- Row limiting for preview
-- Colorized output (potential future enhancement)
+5. **Module Registry** (`core/registry.rs`)
+   - Function-based API: `register_function()`, `get_function()`, `list_functions()`
+   - Dynamic registration for plugin modules
+   - Simplified from legacy 26 methods to 6 core methods
 
 ## Implementation Challenges & Solutions
 
@@ -706,9 +221,9 @@ let value = config
 
 **Challenge**: Creating an FFI-safe plugin interface that works across Rust compiler versions.
 
-**Successful Solution**: Full FFI implementation using `abi_stable` crate
+**Successful Solution**: Full FFI implementation using `abi_stable` crate 0.11
 
-1. **abi_stable crate 0.11**: Provides ABI-stable types for cross-compiler compatibility
+1. **abi_stable crate**: Provides ABI-stable types for cross-compiler compatibility
    - `#[sabi_trait]` macro for FFI-safe trait objects
    - `StableAbi` derive macro for FFI-safe types
    - FFI-safe types: `RString`, `RVec`, `RResult`, `RBoxError`, `RHashMap`
@@ -756,16 +271,60 @@ let value = config
 - FFI in Rust is achievable with the right tools and patterns
 - Proper documentation and examples are crucial for plugin developers
 
-### 4. Workspace Dependency Management
+**Plugin Examples**:
+- **HTTP Plugin**: REST API source and sink (GET/POST/PUT/PATCH/DELETE)
+- **MongoDB Plugin**: Cursor-based pagination, batch inserts, connection pooling
 
-**Challenge**: Managing dependency versions across multiple crates (main binary, plugin API, plugins).
+### 4. WASM Plugin System
+
+**Challenge**: Provide secure, cross-platform plugin execution.
+
+**Solution**: WebAssembly Component Model with WASI Preview 2
+
+1. **Architecture**:
+   - Uses wasmtime runtime with WASI Preview 2
+   - Complete memory isolation from host
+   - WIT (WebAssembly Interface Types) definitions
+   - Capability-based security with ResourceTable
+
+2. **File System Access Challenge**:
+   WASM sandbox blocked file I/O with error:
+   ```
+   failed to find a pre-opened file descriptor
+   ```
+
+   **Solution**: Research via web search revealed WASI `preopened_dir` API:
+   ```rust
+   let wasi = WasiCtxBuilder::new()
+       .inherit_stdio()
+       .preopened_dir(current_dir_str, ".", DirPerms::all(), FilePerms::all())?
+       .build();
+   ```
+
+3. **Data Exchange**:
+   - DataFrame → JSON records → WASM
+   - WASM → JSON records → DataFrame
+   - Custom `anyvalue_to_json()` for comprehensive Polars type mapping
+
+4. **Performance Characteristics**:
+   - 5-15% overhead vs FFI (due to JSON serialization)
+   - Memory-safe by design
+   - Cross-platform: same .wasm works everywhere
+   - No Rust compiler version requirements
+
+**WASM Plugin Example**:
+- **Echo Plugin**: Test plugin for WASM system validation
+
+### 5. Workspace Dependency Management
+
+**Challenge**: Managing dependency versions across multiple crates (main binary, plugin APIs, plugins).
 
 **Solution**: Centralized workspace dependencies:
 ```toml
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.47", features = ["full"] }
-# ... other dependencies
+polars = { version = "0.45", features = ["json", "csv"] }
 
 [dependencies]
 serde = { workspace = true }  # Use workspace version
@@ -777,152 +336,6 @@ tokio = { workspace = true }
 - Easier dependency updates
 - Consistent feature flags across crates
 - Prevents version conflicts
-
-## Testing Strategy
-
-### Unit Tests
-
-Located in each module using `#[cfg(test)]`:
-- Config validation (5 tests)
-- Registry operations (3 tests)
-- Source modules (8 tests)
-- FFI plugin system (12 tests)
-- Total: 28+ unit tests
-
-### Integration Tests
-
-**Key Test Patterns**:
-1. **Positive tests**: Valid configurations and operations
-2. **Negative tests**: Invalid configs, missing fields
-3. **Edge cases**: Empty data, large files, special characters
-4. **Plugin lifecycle**: Load, execute, unload
-5. **Error recovery**: Graceful handling of plugin failures
-
-## Performance Considerations
-
-### 1. Zero-Copy Operations
-
-Polars uses Apache Arrow's columnar format, enabling zero-copy data access:
-```rust
-let column = df.column("name")?;  // No data copy
-```
-
-### 2. Lazy Evaluation
-
-Transforms use lazy evaluation when possible:
-```rust
-df.lazy()
-    .filter(condition)
-    .select(columns)
-    .collect()  // Executes optimized plan
-```
-
-### 3. Async I/O
-
-All I/O operations are async, preventing blocking:
-```rust
-#[tokio::main]
-async fn main() -> Result<()> {
-    let pipeline = Pipeline::from_file(&config).await?;
-    pipeline.execute(continue_on_error).await?;
-    Ok(())
-}
-```
-
-### 4. Memory Efficiency
-
-- Streaming support for large files (future)
-- In-place operations where possible
-- Efficient serialization with `serde`
-
-## Plugin Systems Comparison
-
-Conveyor supports two plugin architectures:
-
-### FFI Plugins (using `abi_stable`)
-
-**Technical Architecture:**
-- Dynamic library loading (.dylib, .so, .dll)
-- FFI-safe traits with `#[sabi_trait]` macro
-- Direct memory access between host and plugin
-- `#[repr(C)]` for C-compatible memory layout
-- `StableAbi` derive macro for FFI-safe types
-- FFI-safe types: `RString`, `RVec`, `RResult`, `RBoxError`, `RHashMap`
-
-**Performance Characteristics:**
-- Near-zero overhead, direct function calls
-- Native async/await support
-- No serialization overhead
-- Shared process memory (plugins not sandboxed)
-
-**Constraints:**
-- macOS-only support (.dylib)
-- Same or compatible Rust compiler version
-- Potential for version mismatches
-
-### WASM Plugins (using WebAssembly Component Model)
-
-**Technical Architecture:**
-- WebAssembly Component Model (WASI Preview 2)
-- WIT (WebAssembly Interface Types) definitions
-- Wasmtime runtime for execution
-- Complete memory isolation
-- Capability-based security with ResourceTable
-
-**Performance Characteristics:**
-- 5-15% overhead vs FFI
-- Serialization required for data exchange (JSON records)
-- Memory-safe by design
-- Limited async support (WASI Preview 2 constraints)
-- Note: DataFrame is converted to JSON records (not Arrow IPC) for WASM compatibility
-
-**Constraints:**
-- Ecosystem still maturing
-- Wasmtime dependency (28.0+)
-- `wasm32-wasip2` build target required
-
-## Code Organization
-
-**Key Organization Principles**:
-- **Dual Plugin Systems**: FFI for performance, WASM for security/portability
-- **Built-in vs Plugin**:
-  - Built-in: CSV/JSON/Stdin (core functionality)
-  - FFI Plugins: HTTP/MongoDB (performance-critical)
-  - WASM Plugins: Excel (cross-platform, sandboxed)
-- **Workspace Benefits**: Shared dependencies, independent compilation
-- **Plugin Isolation**: Each plugin is a self-contained crate
-- **Cross-platform**: WASM plugins compile once, run everywhere
-
-**Example Use Cases by Plugin Type**:
-- Use **built-in** for: Standard ETL operations (CSV, JSON)
-- Use **FFI plugins** for: High-performance I/O (HTTP, MongoDB)
-- Use **WASM plugins** for: Cross-platform file formats (Excel), untrusted code
-
-## Error Handling Philosophy
-
-1. **Early Validation**: Validate configurations before execution
-2. **Descriptive Errors**: Use `thiserror` for clear error messages
-3. **Graceful Degradation**: Support continue-on-error mode
-4. **Retry Logic**: Configurable retry with exponential backoff
-5. **Dead Letter Queue**: Save failed records for inspection
-
-## Logging Strategy
-
-Using `tracing` for structured logging:
-
-```rust
-tracing::info!("Loading pipeline configuration from {:?}", config);
-tracing::debug!("Registered {} sources", count);
-tracing::warn!("Source '{}' failed: {}", name, error);
-tracing::error!("Pipeline execution failed: {}", error);
-```
-
-Log levels:
-- `TRACE`: Detailed execution flow
-- `DEBUG`: Module operations
-- `INFO`: Major milestones
-- `WARN`: Recoverable errors
-- `ERROR`: Fatal errors
 
 ## Lessons Learned
 
@@ -943,7 +356,6 @@ Log levels:
    - Function-based API: "csv.read", "filter.apply", "json.write"
    - Simplified registry (26 methods → 6 methods)
    - Plugin system built on dynamic Stage loading
-   - Registry pattern for module management
 
 ### Plugin System Insights
 
@@ -958,17 +370,7 @@ Log levels:
    - `#[sabi_trait]` macro creates FFI-safe trait objects automatically
    - `rstr!` macro for const RStr initialization in static context
    - `#[repr(C)]` + `StableAbi` derive for FFI-safe types
-   - Key discovery: Use `RStr::from_str()` for const initialization was WRONG
-   - **Correct approach**: Use `rstr!("literal")` macro in static declarations
-   - Plugin declaration pattern:
-     ```rust
-     #[no_mangle]
-     pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
-         api_version: PLUGIN_API_VERSION,
-         name: rstr!("plugin_name"),  // Critical: rstr! macro for static
-         ...
-     };
-     ```
+   - Key discovery: Use `rstr!("literal")` macro in static declarations
 
 6. **Panic Isolation is Critical**: Plugins can crash without affecting host
    - `std::panic::catch_unwind` is essential for plugin systems
@@ -980,33 +382,165 @@ Log levels:
    - Reject incompatible plugins early
    - Clear error messages about version mismatches
 
+8. **WASM for Security and Portability**:
+   - Complete memory isolation (sandboxed execution)
+   - Cross-platform compatibility (write once, run anywhere)
+   - File system access requires explicit permissions (preopened_dir)
+   - JSON serialization adds 5-15% overhead but ensures safety
+
 ### Workspace Management
 
-8. **Workspace Dependencies**: Centralized version management
+9. **Workspace Dependencies**: Centralized version management
    - `[workspace.dependencies]` eliminates version conflicts
    - Single source of truth for dependency versions
    - Consistent feature flags across crates
    - Easier to update and maintain
 
-9. **Crate Organization**: Separation of concerns
-   - Plugin API as separate crate
-   - Each plugin as independent crate with `cdylib`
-   - Main binary doesn't depend on plugins
-   - Plugins depend only on plugin API
+10. **Crate Organization**: Separation of concerns
+    - Plugin API as separate crate
+    - Each plugin as independent crate with `cdylib`
+    - Main binary doesn't depend on plugins
+    - Plugins depend only on plugin API
 
 ### Development Practices
 
-10. **Test Early**: Tests help validate API compatibility
+11. **Test Early**: Tests help validate API compatibility
     - Polars API changes caught by tests
     - Integration tests validate end-to-end flows
     - Unit tests for each module
 
-11. **Performance Matters**: Polars' performance is a key differentiator
+12. **Performance Matters**: Polars' performance is a key differentiator
     - 10-100x faster than Python alternatives
     - Zero-copy operations with Arrow
     - Lazy evaluation for query optimization
 
-12. **Documentation as Development Tool**: Writing docs clarifies design
+13. **Documentation as Development Tool**: Writing docs clarifies design
     - README.md for users
-    - CLAUDE.md for technical details
+    - CLAUDE.md for technical details (this file)
+    - Detailed reference docs for each feature
     - Helps identify inconsistencies and gaps
+
+14. **Metadata System for Self-Documentation**:
+    - Embed documentation in code (StageMetadata)
+    - Enable CLI discovery and validation
+    - Interactive builder for guided stage creation
+    - Single source of truth for all documentation
+
+### Development Workflow
+
+15. **Debug vs Release Builds**:
+    - Use debug mode during active development for faster iteration
+    - Always run release build before completing work
+    - Release build catches optimization-related issues
+    - Workflow:
+      ```bash
+      # During development (fast iteration)
+      cargo build
+      cargo run -- run pipeline.toml
+
+      # Before completion (verify release compatibility)
+      cargo build --release
+      cargo run --release -- run pipeline.toml
+      ```
+
+16. **Code Quality Checks**:
+    - Always run format and lint before committing
+    - Format ensures consistent code style
+    - Clippy catches common mistakes and suggests improvements
+    - Standard workflow:
+      ```bash
+      # Format code
+      cargo fmt --all
+
+      # Run linter
+      cargo clippy --all-targets --all-features -- -D warnings
+
+      # Run tests
+      cargo test --all
+      ```
+    - Consider using pre-commit hooks for automation
+
+17. **Release Process**:
+    - When a release is requested, update version numbers and create a git tag
+    - Process:
+      1. Update version in `Cargo.toml` (workspace root and all crates)
+      2. Run `cargo build` to update `Cargo.lock`
+      3. Commit changes with message: "chore: bump version to X.Y.Z"
+      4. Create git tag: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
+      5. **DO NOT push** - leave push decision to the user
+    - Example workflow:
+      ```bash
+      # Update version in Cargo.toml files
+      # Run build to update Cargo.lock
+      cargo build
+
+      # Commit version bump
+      git add Cargo.toml Cargo.lock
+      git commit -m "chore: bump version to 0.9.0"
+
+      # Create annotated tag
+      git tag -a v0.9.0 -m "Release v0.9.0"
+
+      # User decides when to push
+      # git push && git push --tags
+      ```
+    - Rationale: User should control when releases are published to remote
+
+### Plugin Systems Comparison
+
+**Use FFI plugins when:**
+- Performance is critical (near-zero overhead)
+- Direct memory access needed
+- Native async/await required
+- Same platform/compiler version acceptable
+
+**Use WASM plugins when:**
+- Cross-platform compatibility required
+- Sandboxed execution needed
+- Untrusted code execution
+- Independent compiler versions
+- 5-15% overhead acceptable
+
+## Documentation References
+
+This document focuses on architecture decisions and implementation challenges. For detailed information about specific features:
+
+### User Documentation
+- **[@docs/cli-reference.md](docs/cli-reference.md)** - Complete CLI command reference
+- **[@docs/configuration.md](docs/configuration.md)** - Pipeline configuration guide
+- **[@docs/dag-pipelines.md](docs/dag-pipelines.md)** - DAG pipeline composition and execution
+- **[@docs/modules-reference.md](docs/modules-reference.md)** - All built-in sources, transforms, and sinks
+- **[@docs/metadata-system.md](docs/metadata-system.md)** - Self-documenting features and metadata API
+- **[@docs/http-fetch-transform.md](docs/http-fetch-transform.md)** - Dynamic HTTP API calls within pipelines
+
+### Developer Documentation
+- **[@docs/plugin-system.md](docs/plugin-system.md)** - Creating and using plugins (FFI & WASM)
+- **[@docs/development.md](docs/development.md)** - Building, testing, and contributing
+- **[README.md](README.md)** - Project overview and quick start
+
+### Testing Strategy
+
+All modules include comprehensive unit tests using `#[cfg(test)]`. Tests follow these key patterns:
+
+1. **Positive tests**: Valid configurations and operations
+2. **Negative tests**: Invalid configs, missing fields
+3. **Edge cases**: Empty data, large files, special characters
+4. **Plugin lifecycle**: Load, execute, unload
+5. **Error recovery**: Graceful handling of plugin failures
+
+See @docs/development.md for detailed testing workflow and best practices.
+
+## Performance Considerations
+
+Conveyor achieves high performance through:
+
+1. **Zero-Copy Operations**: Polars uses Apache Arrow's columnar format for efficient data access
+2. **Lazy Evaluation**: Query optimization through lazy execution plans
+3. **Async I/O**: Non-blocking operations with Tokio runtime
+4. **Memory Efficiency**: Streaming support, in-place operations, on-demand plugin loading
+
+For implementation details, see the codebase and @docs/development.md.
+
+---
+
+**Note**: This document is intended for AI agents (like Claude Code) and developers working on the codebase. For user-facing documentation, see the docs referenced above.
