@@ -5,7 +5,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::fs;
 
-use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
+use crate::core::metadata::{
+    ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata,
+};
 use crate::core::stage::Stage;
 use crate::core::traits::{DataFormat, RecordBatch};
 
@@ -19,12 +21,24 @@ impl Stage for JsonSource {
 
     fn metadata(&self) -> StageMetadata {
         let mut example1 = HashMap::new();
-        example1.insert("path".to_string(), toml::Value::String("data.json".to_string()));
-        example1.insert("format".to_string(), toml::Value::String("records".to_string()));
+        example1.insert(
+            "path".to_string(),
+            toml::Value::String("data.json".to_string()),
+        );
+        example1.insert(
+            "format".to_string(),
+            toml::Value::String("records".to_string()),
+        );
 
         let mut example2 = HashMap::new();
-        example2.insert("path".to_string(), toml::Value::String("logs.jsonl".to_string()));
-        example2.insert("format".to_string(), toml::Value::String("jsonl".to_string()));
+        example2.insert(
+            "path".to_string(),
+            toml::Value::String("logs.jsonl".to_string()),
+        );
+        example2.insert(
+            "format".to_string(),
+            toml::Value::String("jsonl".to_string()),
+        );
 
         StageMetadata::builder("json.read", StageCategory::Source)
             .description("Read data from JSON files")

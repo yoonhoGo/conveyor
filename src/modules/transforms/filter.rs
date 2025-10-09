@@ -3,7 +3,9 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
-use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
+use crate::core::metadata::{
+    ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata,
+};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -18,16 +20,28 @@ impl Stage for FilterTransform {
     fn metadata(&self) -> StageMetadata {
         let mut example1 = HashMap::new();
         example1.insert("column".to_string(), toml::Value::String("age".to_string()));
-        example1.insert("operator".to_string(), toml::Value::String(">=".to_string()));
+        example1.insert(
+            "operator".to_string(),
+            toml::Value::String(">=".to_string()),
+        );
         example1.insert("value".to_string(), toml::Value::Integer(18));
 
         let mut example2 = HashMap::new();
-        example2.insert("column".to_string(), toml::Value::String("status".to_string()));
-        example2.insert("operator".to_string(), toml::Value::String("in".to_string()));
-        example2.insert("value".to_string(), toml::Value::Array(vec![
-            toml::Value::String("active".to_string()),
-            toml::Value::String("pending".to_string()),
-        ]));
+        example2.insert(
+            "column".to_string(),
+            toml::Value::String("status".to_string()),
+        );
+        example2.insert(
+            "operator".to_string(),
+            toml::Value::String("in".to_string()),
+        );
+        example2.insert(
+            "value".to_string(),
+            toml::Value::Array(vec![
+                toml::Value::String("active".to_string()),
+                toml::Value::String("pending".to_string()),
+            ]),
+        );
 
         StageMetadata::builder("filter.apply", StageCategory::Transform)
             .description("Filter rows based on column values")

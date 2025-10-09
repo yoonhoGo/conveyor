@@ -3,7 +3,9 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
-use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
+use crate::core::metadata::{
+    ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata,
+};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -17,10 +19,16 @@ impl Stage for StdoutSink {
 
     fn metadata(&self) -> StageMetadata {
         let mut example1 = HashMap::new();
-        example1.insert("format".to_string(), toml::Value::String("table".to_string()));
+        example1.insert(
+            "format".to_string(),
+            toml::Value::String("table".to_string()),
+        );
 
         let mut example2 = HashMap::new();
-        example2.insert("format".to_string(), toml::Value::String("json".to_string()));
+        example2.insert(
+            "format".to_string(),
+            toml::Value::String("json".to_string()),
+        );
         example2.insert("pretty".to_string(), toml::Value::Boolean(true));
         example2.insert("limit".to_string(), toml::Value::Integer(10));
 

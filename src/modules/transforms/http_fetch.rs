@@ -7,7 +7,9 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
-use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
+use crate::core::metadata::{
+    ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata,
+};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -46,20 +48,44 @@ impl Stage for HttpFetchTransform {
 
     fn metadata(&self) -> StageMetadata {
         let mut example1 = HashMap::new();
-        example1.insert("url".to_string(), toml::Value::String("https://api.example.com/users/{{ user_id }}".to_string()));
+        example1.insert(
+            "url".to_string(),
+            toml::Value::String("https://api.example.com/users/{{ user_id }}".to_string()),
+        );
         example1.insert("method".to_string(), toml::Value::String("GET".to_string()));
-        example1.insert("mode".to_string(), toml::Value::String("per_row".to_string()));
-        example1.insert("result_field".to_string(), toml::Value::String("api_data".to_string()));
+        example1.insert(
+            "mode".to_string(),
+            toml::Value::String("per_row".to_string()),
+        );
+        example1.insert(
+            "result_field".to_string(),
+            toml::Value::String("api_data".to_string()),
+        );
 
         let mut example2 = HashMap::new();
-        example2.insert("url".to_string(), toml::Value::String("https://api.example.com/enrich".to_string()));
-        example2.insert("method".to_string(), toml::Value::String("POST".to_string()));
+        example2.insert(
+            "url".to_string(),
+            toml::Value::String("https://api.example.com/enrich".to_string()),
+        );
+        example2.insert(
+            "method".to_string(),
+            toml::Value::String("POST".to_string()),
+        );
         example2.insert("mode".to_string(), toml::Value::String("batch".to_string()));
-        example2.insert("body".to_string(), toml::Value::String(r#"{"data": {{ records }}}"#.to_string()));
+        example2.insert(
+            "body".to_string(),
+            toml::Value::String(r#"{"data": {{ records }}}"#.to_string()),
+        );
 
         let mut headers = toml::map::Map::new();
-        headers.insert("Authorization".to_string(), toml::Value::String("Bearer $TOKEN".to_string()));
-        headers.insert("Content-Type".to_string(), toml::Value::String("application/json".to_string()));
+        headers.insert(
+            "Authorization".to_string(),
+            toml::Value::String("Bearer $TOKEN".to_string()),
+        );
+        headers.insert(
+            "Content-Type".to_string(),
+            toml::Value::String("application/json".to_string()),
+        );
         example2.insert("headers".to_string(), toml::Value::Table(headers));
 
         StageMetadata::builder("http_fetch", StageCategory::Transform)

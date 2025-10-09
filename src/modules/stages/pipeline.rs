@@ -66,7 +66,10 @@ impl Stage for PipelineStage {
 
     fn metadata(&self) -> StageMetadata {
         let mut example1 = HashMap::new();
-        example1.insert("file".to_string(), toml::Value::String("pipelines/preprocess.toml".to_string()));
+        example1.insert(
+            "file".to_string(),
+            toml::Value::String("pipelines/preprocess.toml".to_string()),
+        );
 
         let mut example2 = HashMap::new();
         let inline_config = r#"
@@ -80,7 +83,10 @@ column = "status"
 operator = "!="
 value = "invalid"
 "#;
-        example2.insert("inline".to_string(), toml::Value::String(inline_config.to_string()));
+        example2.insert(
+            "inline".to_string(),
+            toml::Value::String(inline_config.to_string()),
+        );
 
         StageMetadata::builder("pipeline", StageCategory::Transform)
             .description("Execute a sub-pipeline")
@@ -88,29 +94,29 @@ value = "invalid"
                 "Executes another pipeline as a stage within the current pipeline. \
                 Supports both external pipeline files and inline pipeline definitions. \
                 Useful for modularizing complex pipelines and reusing common transformations. \
-                The sub-pipeline runs with its own configuration and stage graph."
+                The sub-pipeline runs with its own configuration and stage graph.",
             )
             .parameter(ConfigParameter::optional(
                 "file",
                 ParameterType::String,
                 "none",
-                "Path to external pipeline TOML file (mutually exclusive with 'inline')"
+                "Path to external pipeline TOML file (mutually exclusive with 'inline')",
             ))
             .parameter(ConfigParameter::optional(
                 "inline",
                 ParameterType::String,
                 "none",
-                "Inline TOML pipeline configuration (mutually exclusive with 'file')"
+                "Inline TOML pipeline configuration (mutually exclusive with 'file')",
             ))
             .example(crate::core::metadata::ConfigExample::new(
                 "Execute external pipeline",
                 example1,
-                Some("Load and execute a pipeline from an external file")
+                Some("Load and execute a pipeline from an external file"),
             ))
             .example(crate::core::metadata::ConfigExample::new(
                 "Inline sub-pipeline",
                 example2,
-                Some("Define and execute a pipeline inline")
+                Some("Define and execute a pipeline inline"),
             ))
             .tag("pipeline")
             .tag("composition")

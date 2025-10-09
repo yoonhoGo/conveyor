@@ -7,7 +7,9 @@ use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
-use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
+use crate::core::metadata::{
+    ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata,
+};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -21,12 +23,24 @@ impl Stage for JsonSink {
 
     fn metadata(&self) -> StageMetadata {
         let mut example1 = HashMap::new();
-        example1.insert("path".to_string(), toml::Value::String("output.json".to_string()));
-        example1.insert("format".to_string(), toml::Value::String("records".to_string()));
+        example1.insert(
+            "path".to_string(),
+            toml::Value::String("output.json".to_string()),
+        );
+        example1.insert(
+            "format".to_string(),
+            toml::Value::String("records".to_string()),
+        );
 
         let mut example2 = HashMap::new();
-        example2.insert("path".to_string(), toml::Value::String("output.jsonl".to_string()));
-        example2.insert("format".to_string(), toml::Value::String("jsonl".to_string()));
+        example2.insert(
+            "path".to_string(),
+            toml::Value::String("output.jsonl".to_string()),
+        );
+        example2.insert(
+            "format".to_string(),
+            toml::Value::String("jsonl".to_string()),
+        );
 
         StageMetadata::builder("json.write", StageCategory::Sink)
             .description("Write data to JSON files")

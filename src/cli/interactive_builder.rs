@@ -31,9 +31,10 @@ impl InteractiveBuilder {
         // Step 1: Select function
         let function_name = self.select_function()?;
 
-        let stage = self.registry.get_function(&function_name).ok_or_else(|| {
-            anyhow::anyhow!("Function '{}' not found", function_name)
-        })?;
+        let stage = self
+            .registry
+            .get_function(&function_name)
+            .ok_or_else(|| anyhow::anyhow!("Function '{}' not found", function_name))?;
 
         let metadata = stage.metadata();
 
@@ -42,7 +43,10 @@ impl InteractiveBuilder {
 
         // Step 3: Collect parameters
         let mut config = HashMap::new();
-        config.insert("function".to_string(), toml::Value::String(function_name.clone()));
+        config.insert(
+            "function".to_string(),
+            toml::Value::String(function_name.clone()),
+        );
 
         // Ask for stage ID
         let stage_id = self.prompt_input("Stage ID (unique identifier for this stage)", None)?;
@@ -116,7 +120,10 @@ impl InteractiveBuilder {
         let function_name = self.prompt_input("Enter function name", None)?;
 
         if !functions.contains(&function_name) {
-            anyhow::bail!("Function '{}' not found. Use 'conveyor list' to see available functions.", function_name);
+            anyhow::bail!(
+                "Function '{}' not found. Use 'conveyor list' to see available functions.",
+                function_name
+            );
         }
 
         Ok(function_name)
@@ -125,7 +132,11 @@ impl InteractiveBuilder {
     /// Show a summary of the selected function
     fn show_function_summary(&self, metadata: &StageMetadata) {
         println!("\n{}", "=".repeat(70));
-        println!("Function: {} ({})", metadata.name, metadata.category.as_str());
+        println!(
+            "Function: {} ({})",
+            metadata.name,
+            metadata.category.as_str()
+        );
         println!("{}", "=".repeat(70));
         println!("\n{}", metadata.description);
 
@@ -133,14 +144,18 @@ impl InteractiveBuilder {
             println!("\n{}", long_desc);
         }
 
-        println!("\n{} required parameter(s), {} optional parameter(s)",
+        println!(
+            "\n{} required parameter(s), {} optional parameter(s)",
             metadata.required_parameters().len(),
             metadata.optional_parameters().len()
         );
     }
 
     /// Collect all parameters for a stage
-    fn collect_parameters(&self, metadata: &StageMetadata) -> Result<toml::map::Map<String, toml::Value>> {
+    fn collect_parameters(
+        &self,
+        metadata: &StageMetadata,
+    ) -> Result<toml::map::Map<String, toml::Value>> {
         let mut config = toml::map::Map::new();
 
         println!("\n{}", "Configuring stage parameters:".to_uppercase());
@@ -197,7 +212,11 @@ impl InteractiveBuilder {
             }
 
             // Get input
-            let default_val = if required { None } else { param.default.as_deref() };
+            let default_val = if required {
+                None
+            } else {
+                param.default.as_deref()
+            };
             let input = self.prompt_input(&prompt, default_val)?;
 
             // Skip if empty and optional
@@ -223,12 +242,14 @@ impl InteractiveBuilder {
         let value = match param.param_type {
             ParameterType::String => toml::Value::String(input.to_string()),
             ParameterType::Integer => {
-                let i = input.parse::<i64>()
+                let i = input
+                    .parse::<i64>()
                     .map_err(|_| anyhow::anyhow!("Not a valid integer"))?;
                 toml::Value::Integer(i)
             }
             ParameterType::Float => {
-                let f = input.parse::<f64>()
+                let f = input
+                    .parse::<f64>()
                     .map_err(|_| anyhow::anyhow!("Not a valid float"))?;
                 toml::Value::Float(f)
             }

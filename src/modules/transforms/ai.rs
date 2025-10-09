@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 
-use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
+use crate::core::metadata::{
+    ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata,
+};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -309,18 +311,45 @@ impl Stage for AiGenerateTransform {
 
     fn metadata(&self) -> StageMetadata {
         let mut example1 = HashMap::new();
-        example1.insert("provider".to_string(), toml::Value::String("openai".to_string()));
-        example1.insert("model".to_string(), toml::Value::String("gpt-4".to_string()));
-        example1.insert("prompt".to_string(), toml::Value::String("Summarize this text: {{ content }}".to_string()));
-        example1.insert("output_column".to_string(), toml::Value::String("summary".to_string()));
+        example1.insert(
+            "provider".to_string(),
+            toml::Value::String("openai".to_string()),
+        );
+        example1.insert(
+            "model".to_string(),
+            toml::Value::String("gpt-4".to_string()),
+        );
+        example1.insert(
+            "prompt".to_string(),
+            toml::Value::String("Summarize this text: {{ content }}".to_string()),
+        );
+        example1.insert(
+            "output_column".to_string(),
+            toml::Value::String("summary".to_string()),
+        );
         example1.insert("max_tokens".to_string(), toml::Value::Integer(100));
 
         let mut example2 = HashMap::new();
-        example2.insert("provider".to_string(), toml::Value::String("ollama".to_string()));
-        example2.insert("model".to_string(), toml::Value::String("llama2".to_string()));
-        example2.insert("prompt".to_string(), toml::Value::String("Classify sentiment: {{ review_text }}".to_string()));
-        example2.insert("output_column".to_string(), toml::Value::String("sentiment".to_string()));
-        example2.insert("api_base_url".to_string(), toml::Value::String("http://localhost:11434".to_string()));
+        example2.insert(
+            "provider".to_string(),
+            toml::Value::String("ollama".to_string()),
+        );
+        example2.insert(
+            "model".to_string(),
+            toml::Value::String("llama2".to_string()),
+        );
+        example2.insert(
+            "prompt".to_string(),
+            toml::Value::String("Classify sentiment: {{ review_text }}".to_string()),
+        );
+        example2.insert(
+            "output_column".to_string(),
+            toml::Value::String("sentiment".to_string()),
+        );
+        example2.insert(
+            "api_base_url".to_string(),
+            toml::Value::String("http://localhost:11434".to_string()),
+        );
 
         StageMetadata::builder("ai_generate", StageCategory::Transform)
             .description("Generate text using AI models for each row")

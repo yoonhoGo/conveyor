@@ -4,7 +4,9 @@ use polars::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
+use crate::core::metadata::{
+    ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata,
+};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -18,9 +20,15 @@ impl Stage for CsvSink {
 
     fn metadata(&self) -> StageMetadata {
         let mut example_config = HashMap::new();
-        example_config.insert("path".to_string(), toml::Value::String("output.csv".to_string()));
+        example_config.insert(
+            "path".to_string(),
+            toml::Value::String("output.csv".to_string()),
+        );
         example_config.insert("headers".to_string(), toml::Value::Boolean(true));
-        example_config.insert("delimiter".to_string(), toml::Value::String(",".to_string()));
+        example_config.insert(
+            "delimiter".to_string(),
+            toml::Value::String(",".to_string()),
+        );
 
         StageMetadata::builder("csv.write", StageCategory::Sink)
             .description("Write data to CSV files")

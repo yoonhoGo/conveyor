@@ -20,48 +20,54 @@ impl Stage for SortTransform {
         example1.insert("by".to_string(), toml::Value::String("age".to_string()));
 
         let mut example2 = HashMap::new();
-        example2.insert("by".to_string(), toml::Value::Array(vec![
-            toml::Value::String("department".to_string()),
-            toml::Value::String("salary".to_string()),
-        ]));
-        example2.insert("descending".to_string(), toml::Value::Array(vec![
-            toml::Value::Boolean(false),
-            toml::Value::Boolean(true),
-        ]));
+        example2.insert(
+            "by".to_string(),
+            toml::Value::Array(vec![
+                toml::Value::String("department".to_string()),
+                toml::Value::String("salary".to_string()),
+            ]),
+        );
+        example2.insert(
+            "descending".to_string(),
+            toml::Value::Array(vec![
+                toml::Value::Boolean(false),
+                toml::Value::Boolean(true),
+            ]),
+        );
 
         StageMetadata::builder("sort", StageCategory::Transform)
             .description("Sort DataFrame rows")
             .long_description(
                 "Sorts DataFrame rows by one or more columns in ascending or descending order. \
                 Supports multi-column sorting with per-column sort direction. \
-                Can control null value placement (first or last)."
+                Can control null value placement (first or last).",
             )
             .parameter(ConfigParameter::required(
                 "by",
                 ParameterType::String,
-                "Column name(s) to sort by (string or array of strings)"
+                "Column name(s) to sort by (string or array of strings)",
             ))
             .parameter(ConfigParameter::optional(
                 "descending",
                 ParameterType::Boolean,
                 "false",
-                "Sort in descending order (boolean or array matching 'by' length)"
+                "Sort in descending order (boolean or array matching 'by' length)",
             ))
             .parameter(ConfigParameter::optional(
                 "nulls_last",
                 ParameterType::Boolean,
                 "false",
-                "Place null values last instead of first"
+                "Place null values last instead of first",
             ))
             .example(crate::core::metadata::ConfigExample::new(
                 "Simple sort",
                 example1,
-                Some("Sort by age in ascending order")
+                Some("Sort by age in ascending order"),
             ))
             .example(crate::core::metadata::ConfigExample::new(
                 "Multi-column sort",
                 example2,
-                Some("Sort by department (asc), then salary (desc)")
+                Some("Sort by department (asc), then salary (desc)"),
             ))
             .tag("sort")
             .tag("order")

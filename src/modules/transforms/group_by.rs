@@ -17,24 +17,43 @@ impl Stage for GroupByTransform {
 
     fn metadata(&self) -> StageMetadata {
         let mut example_config = HashMap::new();
-        example_config.insert("by".to_string(), toml::Value::Array(vec![
-            toml::Value::String("department".to_string()),
-        ]));
+        example_config.insert(
+            "by".to_string(),
+            toml::Value::Array(vec![toml::Value::String("department".to_string())]),
+        );
 
         let mut agg1 = toml::map::Map::new();
-        agg1.insert("column".to_string(), toml::Value::String("salary".to_string()));
-        agg1.insert("operation".to_string(), toml::Value::String("avg".to_string()));
-        agg1.insert("output_column".to_string(), toml::Value::String("avg_salary".to_string()));
+        agg1.insert(
+            "column".to_string(),
+            toml::Value::String("salary".to_string()),
+        );
+        agg1.insert(
+            "operation".to_string(),
+            toml::Value::String("avg".to_string()),
+        );
+        agg1.insert(
+            "output_column".to_string(),
+            toml::Value::String("avg_salary".to_string()),
+        );
 
         let mut agg2 = toml::map::Map::new();
-        agg2.insert("column".to_string(), toml::Value::String("employee_id".to_string()));
-        agg2.insert("operation".to_string(), toml::Value::String("count".to_string()));
-        agg2.insert("output_column".to_string(), toml::Value::String("employee_count".to_string()));
+        agg2.insert(
+            "column".to_string(),
+            toml::Value::String("employee_id".to_string()),
+        );
+        agg2.insert(
+            "operation".to_string(),
+            toml::Value::String("count".to_string()),
+        );
+        agg2.insert(
+            "output_column".to_string(),
+            toml::Value::String("employee_count".to_string()),
+        );
 
-        example_config.insert("aggregations".to_string(), toml::Value::Array(vec![
-            toml::Value::Table(agg1),
-            toml::Value::Table(agg2),
-        ]));
+        example_config.insert(
+            "aggregations".to_string(),
+            toml::Value::Array(vec![toml::Value::Table(agg1), toml::Value::Table(agg2)]),
+        );
 
         StageMetadata::builder("group_by", StageCategory::Transform)
             .description("Group rows and apply aggregations")

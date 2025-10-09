@@ -203,7 +203,9 @@ pub async fn list_modules(module_type: Option<String>) -> Result<()> {
             println!("  • {:25} - {}", name, desc);
         }
 
-        println!("\nUse 'conveyor info <function>' for detailed information about a specific function");
+        println!(
+            "\nUse 'conveyor info <function>' for detailed information about a specific function"
+        );
     }
 
     println!();

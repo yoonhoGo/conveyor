@@ -17,22 +17,34 @@ impl Stage for ValidateSchemaTransform {
 
     fn metadata(&self) -> StageMetadata {
         let mut example_config = HashMap::new();
-        example_config.insert("required_fields".to_string(), toml::Value::Array(vec![
-            toml::Value::String("id".to_string()),
-            toml::Value::String("name".to_string()),
-            toml::Value::String("email".to_string()),
-        ]));
+        example_config.insert(
+            "required_fields".to_string(),
+            toml::Value::Array(vec![
+                toml::Value::String("id".to_string()),
+                toml::Value::String("name".to_string()),
+                toml::Value::String("email".to_string()),
+            ]),
+        );
 
         let mut field_types = toml::map::Map::new();
         field_types.insert("id".to_string(), toml::Value::String("int".to_string()));
-        field_types.insert("name".to_string(), toml::Value::String("string".to_string()));
-        field_types.insert("created_at".to_string(), toml::Value::String("datetime".to_string()));
+        field_types.insert(
+            "name".to_string(),
+            toml::Value::String("string".to_string()),
+        );
+        field_types.insert(
+            "created_at".to_string(),
+            toml::Value::String("datetime".to_string()),
+        );
         example_config.insert("field_types".to_string(), toml::Value::Table(field_types));
 
-        example_config.insert("non_nullable".to_string(), toml::Value::Array(vec![
-            toml::Value::String("id".to_string()),
-            toml::Value::String("email".to_string()),
-        ]));
+        example_config.insert(
+            "non_nullable".to_string(),
+            toml::Value::Array(vec![
+                toml::Value::String("id".to_string()),
+                toml::Value::String("email".to_string()),
+            ]),
+        );
 
         StageMetadata::builder("validate_schema", StageCategory::Transform)
             .description("Validate DataFrame schema and constraints")

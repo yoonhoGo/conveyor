@@ -4,7 +4,9 @@ use std::collections::HashMap;
 use tokio_stream::StreamExt;
 use tracing::info;
 
-use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
+use crate::core::metadata::{
+    ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata,
+};
 use crate::core::stage::Stage;
 use crate::core::streaming::{StreamProcessor, StreamWindower, WindowType};
 use crate::core::traits::DataFormat;
@@ -85,16 +87,25 @@ impl Stage for WindowTransform {
 
     fn metadata(&self) -> StageMetadata {
         let mut example1 = HashMap::new();
-        example1.insert("type".to_string(), toml::Value::String("tumbling".to_string()));
+        example1.insert(
+            "type".to_string(),
+            toml::Value::String("tumbling".to_string()),
+        );
         example1.insert("size".to_string(), toml::Value::Integer(100));
 
         let mut example2 = HashMap::new();
-        example2.insert("type".to_string(), toml::Value::String("sliding".to_string()));
+        example2.insert(
+            "type".to_string(),
+            toml::Value::String("sliding".to_string()),
+        );
         example2.insert("size".to_string(), toml::Value::Integer(100));
         example2.insert("slide".to_string(), toml::Value::Integer(50));
 
         let mut example3 = HashMap::new();
-        example3.insert("type".to_string(), toml::Value::String("session".to_string()));
+        example3.insert(
+            "type".to_string(),
+            toml::Value::String("session".to_string()),
+        );
         example3.insert("gap".to_string(), toml::Value::Integer(300));
 
         StageMetadata::builder("window", StageCategory::Transform)

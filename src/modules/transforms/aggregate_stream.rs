@@ -4,7 +4,9 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use tracing::info;
 
-use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
+use crate::core::metadata::{
+    ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata,
+};
 use crate::core::stage::Stage;
 use crate::core::streaming::StreamProcessor;
 use crate::core::traits::{DataFormat, RecordBatch};
@@ -184,14 +186,24 @@ impl Stage for AggregateStreamTransform {
 
     fn metadata(&self) -> StageMetadata {
         let mut example1 = HashMap::new();
-        example1.insert("operation".to_string(), toml::Value::String("count".to_string()));
+        example1.insert(
+            "operation".to_string(),
+            toml::Value::String("count".to_string()),
+        );
 
         let mut example2 = HashMap::new();
-        example2.insert("operation".to_string(), toml::Value::String("avg".to_string()));
-        example2.insert("group_by".to_string(), toml::Value::Array(vec![
-            toml::Value::String("status".to_string()),
-        ]));
-        example2.insert("value_column".to_string(), toml::Value::String("response_time".to_string()));
+        example2.insert(
+            "operation".to_string(),
+            toml::Value::String("avg".to_string()),
+        );
+        example2.insert(
+            "group_by".to_string(),
+            toml::Value::Array(vec![toml::Value::String("status".to_string())]),
+        );
+        example2.insert(
+            "value_column".to_string(),
+            toml::Value::String("response_time".to_string()),
+        );
 
         StageMetadata::builder("aggregate_stream", StageCategory::Transform)
             .description("Apply real-time aggregations to streaming data")
@@ -200,36 +212,39 @@ impl Stage for AggregateStreamTransform {
                 Supports count, sum, avg, min, max operations. \
                 Can group by one or more columns. \
                 Processes data as it arrives for low-latency analytics. \
-                Works with Stream, RecordBatch, and DataFrame formats."
+                Works with Stream, RecordBatch, and DataFrame formats.",
             )
-            .parameter(ConfigParameter::required(
-                "operation",
-                ParameterType::String,
-                "Aggregation operation to perform"
-            ).with_validation(ParameterValidation::allowed_values([
-                "count", "sum", "avg", "min", "max"
-            ])))
+            .parameter(
+                ConfigParameter::required(
+                    "operation",
+                    ParameterType::String,
+                    "Aggregation operation to perform",
+                )
+                .with_validation(ParameterValidation::allowed_values([
+                    "count", "sum", "avg", "min", "max",
+                ])),
+            )
             .parameter(ConfigParameter::optional(
                 "group_by",
                 ParameterType::String,
                 "none",
-                "Column name(s) to group by (string or array of strings)"
+                "Column name(s) to group by (string or array of strings)",
             ))
             .parameter(ConfigParameter::optional(
                 "value_column",
                 ParameterType::String,
                 "none",
-                "Column to aggregate (required for sum, avg, min, max operations)"
+                "Column to aggregate (required for sum, avg, min, max operations)",
             ))
             .example(crate::core::metadata::ConfigExample::new(
                 "Count all records",
                 example1,
-                Some("Count total number of records in stream")
+                Some("Count total number of records in stream"),
             ))
             .example(crate::core::metadata::ConfigExample::new(
                 "Average by group",
                 example2,
-                Some("Calculate average response time grouped by status")
+                Some("Calculate average response time grouped by status"),
             ))
             .tag("aggregate")
             .tag("stream")

@@ -17,12 +17,24 @@ impl Stage for MapTransform {
 
     fn metadata(&self) -> StageMetadata {
         let mut example1 = HashMap::new();
-        example1.insert("expression".to_string(), toml::Value::String("price * 1.1".to_string()));
-        example1.insert("output_column".to_string(), toml::Value::String("price_with_tax".to_string()));
+        example1.insert(
+            "expression".to_string(),
+            toml::Value::String("price * 1.1".to_string()),
+        );
+        example1.insert(
+            "output_column".to_string(),
+            toml::Value::String("price_with_tax".to_string()),
+        );
 
         let mut example2 = HashMap::new();
-        example2.insert("expression".to_string(), toml::Value::String("quantity * price".to_string()));
-        example2.insert("output_column".to_string(), toml::Value::String("total".to_string()));
+        example2.insert(
+            "expression".to_string(),
+            toml::Value::String("quantity * price".to_string()),
+        );
+        example2.insert(
+            "output_column".to_string(),
+            toml::Value::String("total".to_string()),
+        );
 
         StageMetadata::builder("map", StageCategory::Transform)
             .description("Apply mathematical expressions to create new columns")
@@ -30,27 +42,27 @@ impl Stage for MapTransform {
                 "Creates new columns by applying mathematical expressions to existing columns. \
                 Supports basic arithmetic operations: +, -, *, /. \
                 Can operate on single columns with constants or between two columns. \
-                Useful for calculated fields and data transformations."
+                Useful for calculated fields and data transformations.",
             )
             .parameter(ConfigParameter::required(
                 "expression",
                 ParameterType::String,
-                "Mathematical expression (e.g., 'column * 2', 'col1 + col2')"
+                "Mathematical expression (e.g., 'column * 2', 'col1 + col2')",
             ))
             .parameter(ConfigParameter::required(
                 "output_column",
                 ParameterType::String,
-                "Name of the new column to create"
+                "Name of the new column to create",
             ))
             .example(crate::core::metadata::ConfigExample::new(
                 "Add tax calculation",
                 example1,
-                Some("Create price_with_tax column by multiplying price by 1.1")
+                Some("Create price_with_tax column by multiplying price by 1.1"),
             ))
             .example(crate::core::metadata::ConfigExample::new(
                 "Calculate total",
                 example2,
-                Some("Multiply quantity by price to get total")
+                Some("Multiply quantity by price to get total"),
             ))
             .tag("map")
             .tag("expression")
