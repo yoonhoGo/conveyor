@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -12,6 +13,56 @@ pub struct GroupByTransform;
 impl Stage for GroupByTransform {
     fn name(&self) -> &str {
         "group_by"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example_config = HashMap::new();
+        example_config.insert("by".to_string(), toml::Value::Array(vec![
+            toml::Value::String("department".to_string()),
+        ]));
+
+        let mut agg1 = toml::map::Map::new();
+        agg1.insert("column".to_string(), toml::Value::String("salary".to_string()));
+        agg1.insert("operation".to_string(), toml::Value::String("avg".to_string()));
+        agg1.insert("output_column".to_string(), toml::Value::String("avg_salary".to_string()));
+
+        let mut agg2 = toml::map::Map::new();
+        agg2.insert("column".to_string(), toml::Value::String("employee_id".to_string()));
+        agg2.insert("operation".to_string(), toml::Value::String("count".to_string()));
+        agg2.insert("output_column".to_string(), toml::Value::String("employee_count".to_string()));
+
+        example_config.insert("aggregations".to_string(), toml::Value::Array(vec![
+            toml::Value::Table(agg1),
+            toml::Value::Table(agg2),
+        ]));
+
+        StageMetadata::builder("group_by", StageCategory::Transform)
+            .description("Group rows and apply aggregations")
+            .long_description(
+                "Groups DataFrame rows by one or more columns and applies aggregation functions. \
+                Similar to SQL GROUP BY. Supports multiple aggregations: sum, avg/mean, count, min, max, \
+                median, std, var, first, last. Each aggregation can specify an output column name."
+            )
+            .parameter(ConfigParameter::required(
+                "by",
+                ParameterType::String,
+                "Column name(s) to group by (string or array of strings)"
+            ))
+            .parameter(ConfigParameter::required(
+                "aggregations",
+                ParameterType::String,
+                "Array of aggregation specifications (each with column, operation, and optional output_column)"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Group by department",
+                example_config,
+                Some("Calculate average salary and employee count per department")
+            ))
+            .tag("group_by")
+            .tag("aggregation")
+            .tag("sql")
+            .tag("transform")
+            .build()
     }
 
     async fn execute(

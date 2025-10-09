@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -12,6 +13,54 @@ pub struct DistinctTransform;
 impl Stage for DistinctTransform {
     fn name(&self) -> &str {
         "distinct"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let example1 = HashMap::new();
+
+        let mut example2 = HashMap::new();
+        example2.insert("columns".to_string(), toml::Value::Array(vec![
+            toml::Value::String("user_id".to_string()),
+            toml::Value::String("date".to_string()),
+        ]));
+        example2.insert("keep".to_string(), toml::Value::String("first".to_string()));
+
+        StageMetadata::builder("distinct", StageCategory::Transform)
+            .description("Remove duplicate rows from DataFrame")
+            .long_description(
+                "Removes duplicate rows based on all columns or a subset of columns. \
+                Can control which duplicate to keep (first, last, none, any). \
+                Similar to SQL DISTINCT or SELECT DISTINCT."
+            )
+            .parameter(ConfigParameter::optional(
+                "columns",
+                ParameterType::String,
+                "all columns",
+                "Column name(s) to check for duplicates (string or array of strings)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "keep",
+                ParameterType::String,
+                "first",
+                "Which duplicate to keep"
+            ).with_validation(ParameterValidation::allowed_values([
+                "first", "last", "none", "any"
+            ])))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Remove all duplicates",
+                example1,
+                Some("Keep only unique rows across all columns")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Distinct by specific columns",
+                example2,
+                Some("Remove duplicates based on user_id and date, keeping first occurrence")
+            ))
+            .tag("distinct")
+            .tag("unique")
+            .tag("deduplication")
+            .tag("transform")
+            .build()
     }
 
     async fn execute(
