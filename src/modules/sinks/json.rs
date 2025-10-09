@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -16,6 +17,59 @@ pub struct JsonSink;
 impl Stage for JsonSink {
     fn name(&self) -> &str {
         "json.write"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example1 = HashMap::new();
+        example1.insert("path".to_string(), toml::Value::String("output.json".to_string()));
+        example1.insert("format".to_string(), toml::Value::String("records".to_string()));
+
+        let mut example2 = HashMap::new();
+        example2.insert("path".to_string(), toml::Value::String("output.jsonl".to_string()));
+        example2.insert("format".to_string(), toml::Value::String("jsonl".to_string()));
+
+        StageMetadata::builder("json.write", StageCategory::Sink)
+            .description("Write data to JSON files")
+            .long_description(
+                "Writes DataFrame to JSON files in various formats. \
+                Supports standard JSON array (records), JSON Lines (jsonl), and nested DataFrame format. \
+                Can optionally pretty-print the output for better readability. \
+                Automatically creates parent directories if they don't exist."
+            )
+            .parameter(ConfigParameter::required(
+                "path",
+                ParameterType::String,
+                "Path to the output JSON file"
+            ))
+            .parameter(ConfigParameter::optional(
+                "format",
+                ParameterType::String,
+                "records",
+                "JSON output format"
+            ).with_validation(ParameterValidation::allowed_values([
+                "records", "jsonl", "dataframe"
+            ])))
+            .parameter(ConfigParameter::optional(
+                "pretty",
+                ParameterType::Boolean,
+                "false",
+                "Pretty-print the JSON output (not applicable to jsonl format)"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Standard JSON output",
+                example1,
+                Some("Write data as JSON array of objects")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "JSON Lines output",
+                example2,
+                Some("Write data in JSON Lines format (one object per line)")
+            ))
+            .tag("json")
+            .tag("file")
+            .tag("io")
+            .tag("sink")
+            .build()
     }
 
     fn produces_output(&self) -> bool {

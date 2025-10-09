@@ -4,6 +4,7 @@ use polars::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -13,6 +14,55 @@ pub struct CsvSink;
 impl Stage for CsvSink {
     fn name(&self) -> &str {
         "csv.write"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example_config = HashMap::new();
+        example_config.insert("path".to_string(), toml::Value::String("output.csv".to_string()));
+        example_config.insert("headers".to_string(), toml::Value::Boolean(true));
+        example_config.insert("delimiter".to_string(), toml::Value::String(",".to_string()));
+
+        StageMetadata::builder("csv.write", StageCategory::Sink)
+            .description("Write data to CSV files")
+            .long_description(
+                "Writes DataFrame to CSV (Comma-Separated Values) files with customizable options. \
+                Supports custom delimiters, header configuration, and automatic directory creation. \
+                Uses Polars' efficient CSV writer for high-performance output."
+            )
+            .parameter(ConfigParameter::required(
+                "path",
+                ParameterType::String,
+                "Path to the output CSV file"
+            ))
+            .parameter(ConfigParameter::optional(
+                "headers",
+                ParameterType::Boolean,
+                "true",
+                "Whether to include column headers in the first row"
+            ))
+            .parameter(ConfigParameter::optional(
+                "delimiter",
+                ParameterType::String,
+                ",",
+                "Field delimiter character (must be a single character)"
+            ).with_validation(ParameterValidation {
+                min: None,
+                max: None,
+                allowed_values: None,
+                pattern: None,
+                min_length: Some(1),
+                max_length: Some(1),
+            }))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Standard CSV output",
+                example_config,
+                Some("Write data to CSV with headers and comma delimiter")
+            ))
+            .tag("csv")
+            .tag("file")
+            .tag("io")
+            .tag("sink")
+            .build()
     }
 
     fn produces_output(&self) -> bool {

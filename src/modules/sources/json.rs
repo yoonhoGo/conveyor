@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::fs;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::{DataFormat, RecordBatch};
 
@@ -14,6 +15,52 @@ pub struct JsonSource;
 impl Stage for JsonSource {
     fn name(&self) -> &str {
         "json.read"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example1 = HashMap::new();
+        example1.insert("path".to_string(), toml::Value::String("data.json".to_string()));
+        example1.insert("format".to_string(), toml::Value::String("records".to_string()));
+
+        let mut example2 = HashMap::new();
+        example2.insert("path".to_string(), toml::Value::String("logs.jsonl".to_string()));
+        example2.insert("format".to_string(), toml::Value::String("jsonl".to_string()));
+
+        StageMetadata::builder("json.read", StageCategory::Source)
+            .description("Read data from JSON files")
+            .long_description(
+                "Reads JSON files in various formats and converts them into DataFrames or RecordBatches. \
+                Supports standard JSON arrays (records), JSON Lines (jsonl), and Polars DataFrame format. \
+                Handles large files efficiently with streaming options."
+            )
+            .parameter(ConfigParameter::required(
+                "path",
+                ParameterType::String,
+                "Path to the JSON file to read"
+            ))
+            .parameter(ConfigParameter::optional(
+                "format",
+                ParameterType::String,
+                "records",
+                "JSON input format"
+            ).with_validation(ParameterValidation::allowed_values([
+                "records", "jsonl", "dataframe"
+            ])))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Read JSON array",
+                example1,
+                Some("Read a JSON file containing an array of objects")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Read JSON Lines",
+                example2,
+                Some("Read a JSONL file with one JSON object per line")
+            ))
+            .tag("json")
+            .tag("file")
+            .tag("io")
+            .tag("source")
+            .build()
     }
 
     async fn execute(

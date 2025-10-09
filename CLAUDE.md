@@ -2,6 +2,16 @@
 
 This document provides technical details about the Conveyor project's architecture, implementation decisions, and development process for AI agents and developers working on the codebase.
 
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Metadata System](#metadata-system)
+- [Core Components](#core-components)
+- [Stage Implementation](#stage-implementation)
+- [Implementation Challenges & Solutions](#implementation-challenges--solutions)
+- [Testing Strategy](#testing-strategy)
+- [Lessons Learned](#lessons-learned)
+
 ## Architecture
 
 ### Workspace Structure
@@ -55,6 +65,232 @@ conveyor/
 2. **Plugin Isolation**: Plugins are separate `cdylib` crates compiled as dynamic libraries, not linked into the main binary
 3. **Independent Compilation**: Each plugin can be built separately with `cargo build -p plugin-name`
 4. **Shared API Crate**: `conveyor-plugin-api` provides common types and traits used by both host and plugins
+
+## Metadata System
+
+**Added: 2025-01-10**
+
+Conveyor implements a comprehensive metadata system that provides self-documenting capabilities for all pipeline stages. This enables automatic documentation generation, guided stage creation, and better developer experience.
+
+### Architecture (`core/metadata.rs`)
+
+#### Core Structures
+
+```rust
+pub struct StageMetadata {
+    pub name: String,                      // "csv.read", "filter.apply"
+    pub category: StageCategory,           // Source/Transform/Sink
+    pub description: String,               // One-line description
+    pub long_description: Option<String>,  // Detailed explanation
+    pub parameters: Vec<ConfigParameter>,  // All configuration options
+    pub examples: Vec<ConfigExample>,      // Usage examples
+    pub tags: Vec<String>,                 // Searchable tags
+}
+
+pub struct ConfigParameter {
+    pub name: String,                      // Parameter name
+    pub param_type: ParameterType,         // Data type
+    pub required: bool,                    // Required vs optional
+    pub default: Option<String>,           // Default value if optional
+    pub description: String,               // What it does
+    pub validation: Option<ParameterValidation>, // Constraints
+}
+
+pub struct ParameterValidation {
+    pub min: Option<f64>,                  // Numeric minimum
+    pub max: Option<f64>,                  // Numeric maximum
+    pub allowed_values: Option<Vec<String>>, // Enum values
+    pub pattern: Option<String>,           // Regex pattern
+    pub min_length: Option<usize>,         // String/array min length
+    pub max_length: Option<usize>,         // String/array max length
+}
+```
+
+#### Builder Pattern
+
+Metadata uses a fluent builder API for convenience:
+
+```rust
+StageMetadata::builder("csv.read", StageCategory::Source)
+    .description("Read data from CSV files")
+    .long_description("Detailed explanation...")
+    .parameter(ConfigParameter::required(
+        "path",
+        ParameterType::String,
+        "Path to the CSV file to read"
+    ))
+    .parameter(ConfigParameter::optional(
+        "headers",
+        ParameterType::Boolean,
+        "true",
+        "Whether the first row contains column headers"
+    ))
+    .example(ConfigExample::new(
+        "Basic CSV reading",
+        example_config,
+        Some("Read a CSV file with headers")
+    ))
+    .tag("csv")
+    .tag("file")
+    .build()
+```
+
+### Stage Trait Integration
+
+All stages implement a `metadata()` method:
+
+```rust
+#[async_trait]
+pub trait Stage: Send + Sync {
+    fn name(&self) -> &str;
+    fn metadata(&self) -> StageMetadata;  // ← Added
+    async fn execute(...) -> Result<DataFormat>;
+    async fn validate_config(...) -> Result<()>;
+    fn produces_output(&self) -> bool;
+}
+```
+
+### CLI Integration
+
+The metadata system powers several CLI features:
+
+#### 1. Enhanced List Command (`conveyor list`)
+
+```bash
+$ conveyor list
+
+SOURCES:
+----------------------------------------------------------------------
+  • csv.read                  - Read data from CSV files
+  • json.read                 - Read data from JSON files
+```
+
+Implementation extracts metadata from each stage:
+```rust
+for func_name in &all_functions {
+    if let Some(stage) = registry.get_function(func_name) {
+        let metadata = stage.metadata();
+        println!("  • {:25} - {}", func_name, metadata.description);
+    }
+}
+```
+
+#### 2. Function Info Command (`conveyor info <function>`)
+
+Displays comprehensive information:
+- Function name and category
+- Short and long descriptions
+- Required/optional parameters with types and defaults
+- Validation rules (allowed values, ranges, constraints)
+- Usage examples
+- Tags
+
+#### 3. Interactive Builder (`conveyor build`)
+
+Provides guided stage creation:
+- Function selection with category grouping
+- Parameter collection with real-time validation
+- Type checking and constraint validation
+- Default value support
+- Error messages with retry logic
+- TOML generation
+
+Implementation (`cli/interactive_builder.rs`):
+```rust
+pub struct InteractiveBuilder {
+    registry: ModuleRegistry,
+}
+
+impl InteractiveBuilder {
+    pub async fn build_stage(&self) -> Result<HashMap<String, toml::Value>> {
+        // 1. Select function
+        let function_name = self.select_function()?;
+        let stage = self.registry.get_function(&function_name)?;
+        let metadata = stage.metadata();
+
+        // 2. Show summary
+        self.show_function_summary(&metadata);
+
+        // 3. Collect parameters with validation
+        let config = self.collect_parameters(&metadata)?;
+
+        Ok(config)
+    }
+
+    fn prompt_parameter(&self, param: &ConfigParameter, required: bool) -> Result<toml::Value> {
+        loop {
+            let input = self.prompt_input(&param.name, param.default.as_deref())?;
+
+            match self.parse_and_validate(&input, param) {
+                Ok(value) => return Ok(value),
+                Err(e) => {
+                    println!("  ❌ Invalid input: {}", e);
+                    continue;
+                }
+            }
+        }
+    }
+}
+```
+
+#### 4. JSON Export (`conveyor stage describe <function>`)
+
+Exports metadata as JSON for programmatic use:
+```bash
+$ conveyor stage describe csv.read | jq '.parameters'
+```
+
+### Plugin System Integration
+
+Both FFI and WASM plugins provide metadata:
+
+#### FFI Plugins
+
+Adapters extract metadata from `PluginCapability`:
+```rust
+pub struct FfiPluginStageAdapter {
+    name: String,
+    description: String,
+    stage_type: conveyor_plugin_api::traits::StageType,
+    // ...
+}
+
+impl Stage for FfiPluginStageAdapter {
+    fn metadata(&self) -> StageMetadata {
+        let category = match self.stage_type {
+            StageType::Source => StageCategory::Source,
+            StageType::Transform => StageCategory::Transform,
+            StageType::Sink => StageCategory::Sink,
+        };
+
+        StageMetadata::builder(&self.name, category)
+            .description(&self.description)
+            .tag("plugin")
+            .tag("ffi")
+            .build()
+    }
+}
+```
+
+#### WASM Plugins
+
+Similar pattern with `StageCapability` from WASM plugins.
+
+### Coverage
+
+**23 built-in stages** fully documented:
+- **Sources (3):** csv.read, json.read, stdin.read
+- **Transforms (18):** filter.apply, map.apply, select.apply, sort.apply, distinct.apply, group_by.apply, reduce.apply, json_extract, validate_schema, http_fetch, ai_generate, aggregate_stream, window.apply, etc.
+- **Sinks (4):** csv.write, json.write, stdout.write, stdout_stream
+
+### Benefits
+
+1. **Self-Documenting**: No need for external documentation lookup
+2. **Guided Experience**: Interactive builder prevents errors
+3. **Type Safety**: Validation before execution
+4. **Tooling Integration**: JSON export enables external tools
+5. **Consistency**: Single source of truth for all documentation
+6. **Discoverability**: Tags and descriptions make functions easy to find
 
 ### Core Components
 

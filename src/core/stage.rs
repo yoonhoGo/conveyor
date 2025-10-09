@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::core::metadata::StageMetadata;
 use crate::core::traits::DataFormat;
 use crate::wasm_plugin_loader::{
     DataFormat as WasmDataFormat, ExecutionContext as WasmExecutionContext, WasmPluginLoader,
@@ -16,6 +17,13 @@ use conveyor_plugin_api::{FfiDataFormat, FfiExecutionContext, RBox, RHashMap, RS
 pub trait Stage: Send + Sync {
     /// Unique identifier for this stage type
     fn name(&self) -> &str;
+
+    /// Get metadata for this stage
+    ///
+    /// Returns information about the stage including description, parameters,
+    /// examples, and tags. This metadata is used by help commands and
+    /// interactive stage builders.
+    fn metadata(&self) -> StageMetadata;
 
     /// Execute the stage with given inputs and configuration
     ///
@@ -50,6 +58,8 @@ pub type StageRef = Arc<dyn Stage>;
 pub struct FfiPluginStageAdapter {
     name: String,
     stage_name: String,
+    description: String,
+    stage_type: conveyor_plugin_api::traits::StageType,
     stage_instance: FfiStage_TO<'static, RBox<()>>,
 }
 
@@ -57,11 +67,15 @@ impl FfiPluginStageAdapter {
     pub fn new(
         name: String,
         stage_name: String,
+        description: String,
+        stage_type: conveyor_plugin_api::traits::StageType,
         stage_instance: FfiStage_TO<'static, RBox<()>>,
     ) -> Self {
         Self {
             name,
             stage_name,
+            description,
+            stage_type,
             stage_instance,
         }
     }
@@ -71,6 +85,22 @@ impl FfiPluginStageAdapter {
 impl Stage for FfiPluginStageAdapter {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        use crate::core::metadata::StageCategory;
+
+        let category = match self.stage_type {
+            conveyor_plugin_api::traits::StageType::Source => StageCategory::Source,
+            conveyor_plugin_api::traits::StageType::Transform => StageCategory::Transform,
+            conveyor_plugin_api::traits::StageType::Sink => StageCategory::Sink,
+        };
+
+        StageMetadata::builder(&self.name, category)
+            .description(&self.description)
+            .tag("plugin")
+            .tag("ffi")
+            .build()
     }
 
     async fn execute(
@@ -131,6 +161,8 @@ pub struct WasmPluginStageAdapter {
     name: String,
     plugin_name: String,
     stage_name: String,
+    description: String,
+    stage_type: String,
     loader: Arc<WasmPluginLoader>,
 }
 
@@ -139,12 +171,16 @@ impl WasmPluginStageAdapter {
         name: String,
         plugin_name: String,
         stage_name: String,
+        description: String,
+        stage_type: String,
         loader: Arc<WasmPluginLoader>,
     ) -> Self {
         Self {
             name,
             plugin_name,
             stage_name,
+            description,
+            stage_type,
             loader,
         }
     }
@@ -154,6 +190,23 @@ impl WasmPluginStageAdapter {
 impl Stage for WasmPluginStageAdapter {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        use crate::core::metadata::StageCategory;
+
+        let category = match self.stage_type.as_str() {
+            "source" => StageCategory::Source,
+            "transform" => StageCategory::Transform,
+            "sink" => StageCategory::Sink,
+            _ => StageCategory::Transform,
+        };
+
+        StageMetadata::builder(&self.name, category)
+            .description(&self.description)
+            .tag("plugin")
+            .tag("wasm")
+            .build()
     }
 
     async fn execute(
@@ -385,6 +438,13 @@ mod tests {
     impl Stage for MockStage {
         fn name(&self) -> &str {
             "mock"
+        }
+
+        fn metadata(&self) -> StageMetadata {
+            use crate::core::metadata::StageCategory;
+            StageMetadata::builder("mock", StageCategory::Transform)
+                .description("Mock stage for testing")
+                .build()
         }
 
         async fn execute(

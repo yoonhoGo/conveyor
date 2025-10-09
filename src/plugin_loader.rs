@@ -264,6 +264,18 @@ impl PluginLoader {
         &self.plugins
     }
 
+    /// Find capability for a stage
+    ///
+    /// Searches all loaded plugins for a stage with the given name and returns its capability.
+    pub fn find_capability(&self, stage_name: &str) -> Option<&PluginCapability> {
+        for plugin in self.plugins.values() {
+            if let Some(cap) = plugin.capabilities.iter().find(|c| c.name.as_str() == stage_name) {
+                return Some(cap);
+            }
+        }
+        None
+    }
+
     /// Create a stage from any loaded plugin
     ///
     /// Searches all loaded plugins for a stage with the given name.

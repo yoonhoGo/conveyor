@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -12,6 +13,75 @@ pub struct ValidateSchemaTransform;
 impl Stage for ValidateSchemaTransform {
     fn name(&self) -> &str {
         "validate_schema"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example_config = HashMap::new();
+        example_config.insert("required_fields".to_string(), toml::Value::Array(vec![
+            toml::Value::String("id".to_string()),
+            toml::Value::String("name".to_string()),
+            toml::Value::String("email".to_string()),
+        ]));
+
+        let mut field_types = toml::map::Map::new();
+        field_types.insert("id".to_string(), toml::Value::String("int".to_string()));
+        field_types.insert("name".to_string(), toml::Value::String("string".to_string()));
+        field_types.insert("created_at".to_string(), toml::Value::String("datetime".to_string()));
+        example_config.insert("field_types".to_string(), toml::Value::Table(field_types));
+
+        example_config.insert("non_nullable".to_string(), toml::Value::Array(vec![
+            toml::Value::String("id".to_string()),
+            toml::Value::String("email".to_string()),
+        ]));
+
+        StageMetadata::builder("validate_schema", StageCategory::Transform)
+            .description("Validate DataFrame schema and constraints")
+            .long_description(
+                "Validates DataFrame against schema requirements and data constraints. \
+                Checks: required fields, data types, non-nullable constraints, date formats, and unique values. \
+                Fails the pipeline if validation fails. \
+                Useful for data quality checks and ensuring data integrity."
+            )
+            .parameter(ConfigParameter::optional(
+                "required_fields",
+                ParameterType::String,
+                "none",
+                "Array of column names that must be present"
+            ))
+            .parameter(ConfigParameter::optional(
+                "field_types",
+                ParameterType::String,
+                "none",
+                "Map of column names to expected types (string, int, float, bool, date, datetime)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "non_nullable",
+                ParameterType::String,
+                "none",
+                "Array of column names that must not contain null values"
+            ))
+            .parameter(ConfigParameter::optional(
+                "date_fields",
+                ParameterType::String,
+                "none",
+                "Array of column names that must be valid dates"
+            ))
+            .parameter(ConfigParameter::optional(
+                "unique_fields",
+                ParameterType::String,
+                "none",
+                "Array of column names that must have unique values"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Comprehensive schema validation",
+                example_config,
+                Some("Validate required fields, types, and constraints")
+            ))
+            .tag("validate")
+            .tag("schema")
+            .tag("quality")
+            .tag("transform")
+            .build()
     }
 
     async fn execute(

@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -12,6 +13,59 @@ pub struct ReduceTransform;
 impl Stage for ReduceTransform {
     fn name(&self) -> &str {
         "reduce"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example1 = HashMap::new();
+        example1.insert("column".to_string(), toml::Value::String("revenue".to_string()));
+        example1.insert("operation".to_string(), toml::Value::String("sum".to_string()));
+        example1.insert("output_column".to_string(), toml::Value::String("total_revenue".to_string()));
+
+        let mut example2 = HashMap::new();
+        example2.insert("column".to_string(), toml::Value::String("score".to_string()));
+        example2.insert("operation".to_string(), toml::Value::String("avg".to_string()));
+
+        StageMetadata::builder("reduce", StageCategory::Transform)
+            .description("Reduce column to a single aggregate value")
+            .long_description(
+                "Reduces an entire column to a single aggregate value using various operations. \
+                Supports sum, avg/mean, count, min, max, median, std, var. \
+                Returns a single-row DataFrame with the result. \
+                Similar to SQL aggregate functions without GROUP BY."
+            )
+            .parameter(ConfigParameter::required(
+                "column",
+                ParameterType::String,
+                "Column name to aggregate"
+            ))
+            .parameter(ConfigParameter::required(
+                "operation",
+                ParameterType::String,
+                "Aggregation operation"
+            ).with_validation(ParameterValidation::allowed_values([
+                "sum", "avg", "mean", "count", "min", "max", "median", "std", "var"
+            ])))
+            .parameter(ConfigParameter::optional(
+                "output_column",
+                ParameterType::String,
+                "result",
+                "Name for the output column"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Calculate total revenue",
+                example1,
+                Some("Sum all revenue values into total_revenue")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Calculate average score",
+                example2,
+                Some("Compute the average score across all rows")
+            ))
+            .tag("reduce")
+            .tag("aggregate")
+            .tag("summarize")
+            .tag("transform")
+            .build()
     }
 
     async fn execute(

@@ -4,6 +4,7 @@ use polars::prelude::*;
 use serde_json::Value;
 use std::collections::HashMap;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -13,6 +14,47 @@ pub struct JsonExtractTransform;
 impl Stage for JsonExtractTransform {
     fn name(&self) -> &str {
         "json_extract"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example_config = HashMap::new();
+        example_config.insert("column".to_string(), toml::Value::String("metadata".to_string()));
+        example_config.insert("path".to_string(), toml::Value::String("user.name".to_string()));
+        example_config.insert("output_column".to_string(), toml::Value::String("user_name".to_string()));
+
+        StageMetadata::builder("json_extract", StageCategory::Transform)
+            .description("Extract nested fields from JSON strings")
+            .long_description(
+                "Extracts nested fields from JSON string columns using dot notation paths. \
+                Parses JSON strings and navigates to the specified path. \
+                Useful for working with semi-structured data stored as JSON strings. \
+                Returns null for missing or invalid paths."
+            )
+            .parameter(ConfigParameter::required(
+                "column",
+                ParameterType::String,
+                "Column containing JSON strings"
+            ))
+            .parameter(ConfigParameter::required(
+                "path",
+                ParameterType::String,
+                "Dot-separated path to extract (e.g., 'meta.user.id')"
+            ))
+            .parameter(ConfigParameter::required(
+                "output_column",
+                ParameterType::String,
+                "Name for the extracted value column"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Extract user name from metadata",
+                example_config,
+                Some("Parse metadata JSON and extract user.name field")
+            ))
+            .tag("json")
+            .tag("extract")
+            .tag("parse")
+            .tag("transform")
+            .build()
     }
 
     async fn execute(

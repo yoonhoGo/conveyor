@@ -86,18 +86,109 @@ pretty = true
 Run it:
 
 ```bash
-conveyor run -c pipeline.toml
+conveyor run pipeline.toml
 ```
+
+## CLI Commands
+
+Conveyor provides an intuitive CLI with self-documenting features:
+
+### Core Commands
+
+```bash
+# Run a pipeline
+conveyor run pipeline.toml
+
+# Validate configuration without running
+conveyor validate pipeline.toml
+conveyor run pipeline.toml --dry-run
+
+# List all available functions
+conveyor list
+conveyor list -t sources     # Filter by type
+
+# Get detailed help for any function
+conveyor info csv.read
+conveyor info filter.apply
+
+# Build a stage interactively (guided prompts)
+conveyor build
+```
+
+### Discovery Workflow
+
+```bash
+# 1. Explore available functions with descriptions
+conveyor list
+
+# Output:
+# SOURCES:
+# ----------------------------------------------------------------------
+#   • csv.read                  - Read data from CSV files
+#   • json.read                 - Read data from JSON files
+#   ...
+
+# 2. Get detailed information about a function
+conveyor info filter.apply
+
+# Shows:
+# - Full description
+# - All parameters (required/optional)
+# - Parameter types and validation rules
+# - Usage examples
+# - Tags for search
+
+# 3. Build a stage interactively
+conveyor build
+
+# Interactive prompts guide you through:
+# - Function selection
+# - Stage configuration
+# - Parameter input with validation
+# - Generates ready-to-use TOML
+```
+
+### Stage Management
+
+```bash
+# Create a new pipeline template
+conveyor stage new -o pipeline.toml
+
+# Add a stage to existing pipeline
+conveyor stage add pipeline.toml
+
+# Edit pipeline interactively
+conveyor stage edit pipeline.toml
+
+# Export function metadata as JSON
+conveyor stage describe csv.read
+```
+
+### Self-Documenting Features
+
+Every function has rich metadata including:
+- **Description**: Clear explanation of what it does
+- **Parameters**: Type, default value, validation rules
+- **Examples**: Real-world usage scenarios
+- **Tags**: Searchable categorization
+
+No need to search through documentation - all information is built into the CLI!
 
 ## Documentation
 
+### User Guides
+- **[CLI Reference](docs/cli-reference.md)** - Complete CLI command documentation
+- **[Metadata System](docs/metadata-system.md)** - Self-documenting features and how to use them
 - **[DAG Pipelines](docs/dag-pipelines.md)** - Flexible pipeline composition with branching and parallelism
 - **[HTTP Fetch Transform](docs/http-fetch-transform.md)** - Dynamic API calls within pipelines
-- **[Plugin System](docs/plugin-system.md)** - Create and use plugins (FFI & WASM)
 - **[Modules Reference](docs/modules-reference.md)** - All built-in sources, transforms, and sinks
 - **[Configuration](docs/configuration.md)** - Complete configuration reference
+
+### Developer Guides
+- **[Plugin System](docs/plugin-system.md)** - Create and use plugins (FFI & WASM)
 - **[Architecture](docs/architecture.md)** - System design and internals
 - **[Development](docs/development.md)** - Building and contributing
+- **[CLAUDE.md](CLAUDE.md)** - Technical implementation notes for AI agents
 
 ## Examples
 

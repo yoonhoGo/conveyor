@@ -4,6 +4,7 @@ use polars::prelude::*;
 use std::collections::HashMap;
 use std::io::{self, Read};
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::{DataFormat, RecordBatch};
 
@@ -13,6 +14,58 @@ pub struct StdinSource;
 impl Stage for StdinSource {
     fn name(&self) -> &str {
         "stdin.read"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example1 = HashMap::new();
+        example1.insert("format".to_string(), toml::Value::String("json".to_string()));
+
+        let mut example2 = HashMap::new();
+        example2.insert("format".to_string(), toml::Value::String("csv".to_string()));
+        example2.insert("headers".to_string(), toml::Value::Boolean(true));
+
+        StageMetadata::builder("stdin.read", StageCategory::Source)
+            .description("Read data from standard input")
+            .long_description(
+                "Reads data from stdin, enabling pipeline composition with Unix tools. \
+                Supports JSON, JSON Lines, CSV, and raw binary formats. \
+                Ideal for integrating Conveyor with shell scripts and command-line workflows."
+            )
+            .parameter(ConfigParameter::optional(
+                "format",
+                ParameterType::String,
+                "json",
+                "Input data format"
+            ).with_validation(ParameterValidation::allowed_values([
+                "json", "jsonl", "csv", "raw"
+            ])))
+            .parameter(ConfigParameter::optional(
+                "headers",
+                ParameterType::Boolean,
+                "true",
+                "Whether CSV input has headers (only applies to 'csv' format)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "delimiter",
+                ParameterType::String,
+                ",",
+                "Field delimiter for CSV (only applies to 'csv' format)"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Read JSON from stdin",
+                example1,
+                Some("cat data.json | conveyor run pipeline.toml")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Read CSV from stdin",
+                example2,
+                Some("cat data.csv | conveyor run pipeline.toml")
+            ))
+            .tag("stdin")
+            .tag("input")
+            .tag("pipe")
+            .tag("source")
+            .build()
     }
 
     async fn execute(

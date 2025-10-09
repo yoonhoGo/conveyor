@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -12,6 +13,62 @@ pub struct FilterTransform;
 impl Stage for FilterTransform {
     fn name(&self) -> &str {
         "filter.apply"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example1 = HashMap::new();
+        example1.insert("column".to_string(), toml::Value::String("age".to_string()));
+        example1.insert("operator".to_string(), toml::Value::String(">=".to_string()));
+        example1.insert("value".to_string(), toml::Value::Integer(18));
+
+        let mut example2 = HashMap::new();
+        example2.insert("column".to_string(), toml::Value::String("status".to_string()));
+        example2.insert("operator".to_string(), toml::Value::String("in".to_string()));
+        example2.insert("value".to_string(), toml::Value::Array(vec![
+            toml::Value::String("active".to_string()),
+            toml::Value::String("pending".to_string()),
+        ]));
+
+        StageMetadata::builder("filter.apply", StageCategory::Transform)
+            .description("Filter rows based on column values")
+            .long_description(
+                "Filters DataFrame rows using various comparison operators. \
+                Supports numeric comparisons (>, >=, <, <=), equality checks (==, !=), \
+                string operations (contains), and set membership (in). \
+                Uses Polars' lazy evaluation for optimal performance."
+            )
+            .parameter(ConfigParameter::required(
+                "column",
+                ParameterType::String,
+                "Name of the column to filter on"
+            ))
+            .parameter(ConfigParameter::optional(
+                "operator",
+                ParameterType::String,
+                "==",
+                "Comparison operator to use"
+            ).with_validation(ParameterValidation::allowed_values([
+                "==", "=", "!=", "<>", ">", ">=", "<", "<=", "contains", "in"
+            ])))
+            .parameter(ConfigParameter::required(
+                "value",
+                ParameterType::String,
+                "Value to compare against (can be string, number, boolean, or array for 'in' operator)"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Filter adults (age >= 18)",
+                example1,
+                Some("Keep only rows where age is 18 or greater")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Filter by status list",
+                example2,
+                Some("Keep only rows where status is 'active' or 'pending'")
+            ))
+            .tag("filter")
+            .tag("transform")
+            .tag("dataframe")
+            .build()
     }
 
     async fn execute(

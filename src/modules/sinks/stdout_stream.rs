@@ -5,6 +5,7 @@ use tokio::io::{stdout, AsyncWriteExt};
 use tokio_stream::StreamExt;
 use tracing::{debug, info};
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -67,6 +68,52 @@ impl StdoutStreamSink {
 impl Stage for StdoutStreamSink {
     fn name(&self) -> &str {
         "stdout_stream"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example_config = HashMap::new();
+        example_config.insert("format".to_string(), toml::Value::String("jsonl".to_string()));
+        example_config.insert("pretty".to_string(), toml::Value::Boolean(false));
+        example_config.insert("flush_every".to_string(), toml::Value::Integer(10));
+
+        StageMetadata::builder("stdout_stream", StageCategory::Sink)
+            .description("Stream data to standard output in real-time")
+            .long_description(
+                "Outputs streaming data to stdout in real-time as records arrive. \
+                Supports JSON, JSON Lines, CSV, and plain text formats. \
+                Configurable flush interval for controlling output buffering. \
+                Ideal for real-time data processing pipelines and monitoring."
+            )
+            .parameter(ConfigParameter::optional(
+                "format",
+                ParameterType::String,
+                "jsonl",
+                "Output format for streaming records"
+            ).with_validation(ParameterValidation::allowed_values([
+                "json", "jsonl", "csv", "text"
+            ])))
+            .parameter(ConfigParameter::optional(
+                "pretty",
+                ParameterType::Boolean,
+                "false",
+                "Pretty-print JSON output (only applies to 'json' format)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "flush_every",
+                ParameterType::Integer,
+                "1",
+                "Flush stdout buffer after this many records (controls output latency)"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Streaming JSONL output",
+                example_config,
+                Some("Stream records as JSON Lines with periodic flushing")
+            ))
+            .tag("stdout")
+            .tag("stream")
+            .tag("real-time")
+            .tag("sink")
+            .build()
     }
 
     fn produces_output(&self) -> bool {

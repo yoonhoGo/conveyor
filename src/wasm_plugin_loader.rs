@@ -223,6 +223,16 @@ impl WasmPluginLoader {
         self.plugins.values().find(|p| p.has_stage(stage_name))
     }
 
+    /// Find capability for a stage
+    pub fn find_capability(&self, stage_name: &str) -> Option<&StageCapability> {
+        for plugin in self.plugins.values() {
+            if let Some(cap) = plugin.capabilities.iter().find(|c| c.name == stage_name) {
+                return Some(cap);
+            }
+        }
+        None
+    }
+
     /// Execute a stage from a WASM plugin
     ///
     /// This is the unified execution interface for all stages.

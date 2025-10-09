@@ -2,6 +2,7 @@ pub mod config;
 pub mod dag_builder;
 pub mod dag_executor;
 pub mod error;
+pub mod metadata;
 pub mod pipeline;
 pub mod registry;
 pub mod stage;

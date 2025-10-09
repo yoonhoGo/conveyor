@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use tokio_stream::StreamExt;
 use tracing::info;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::streaming::{StreamProcessor, StreamWindower, WindowType};
 use crate::core::traits::DataFormat;
@@ -80,6 +81,78 @@ impl WindowTransform {
 impl Stage for WindowTransform {
     fn name(&self) -> &str {
         "window"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example1 = HashMap::new();
+        example1.insert("type".to_string(), toml::Value::String("tumbling".to_string()));
+        example1.insert("size".to_string(), toml::Value::Integer(100));
+
+        let mut example2 = HashMap::new();
+        example2.insert("type".to_string(), toml::Value::String("sliding".to_string()));
+        example2.insert("size".to_string(), toml::Value::Integer(100));
+        example2.insert("slide".to_string(), toml::Value::Integer(50));
+
+        let mut example3 = HashMap::new();
+        example3.insert("type".to_string(), toml::Value::String("session".to_string()));
+        example3.insert("gap".to_string(), toml::Value::Integer(300));
+
+        StageMetadata::builder("window", StageCategory::Transform)
+            .description("Apply windowing to streaming data")
+            .long_description(
+                "Applies windowing strategies to streaming data for time-based or count-based grouping. \
+                Supports three window types:\n\
+                - Tumbling: Fixed-size, non-overlapping windows\n\
+                - Sliding: Fixed-size, overlapping windows with configurable slide interval\n\
+                - Session: Dynamic windows based on inactivity gaps\n\
+                Enables temporal aggregations and stream processing patterns."
+            )
+            .parameter(ConfigParameter::optional(
+                "type",
+                ParameterType::String,
+                "tumbling",
+                "Window type"
+            ).with_validation(ParameterValidation::allowed_values([
+                "tumbling", "sliding", "session"
+            ])))
+            .parameter(ConfigParameter::optional(
+                "size",
+                ParameterType::Integer,
+                "none",
+                "Window size in number of records (required for tumbling and sliding)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "slide",
+                ParameterType::Integer,
+                "none",
+                "Slide interval for sliding windows (required for sliding type)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "gap",
+                ParameterType::Integer,
+                "none",
+                "Inactivity gap in seconds for session windows (required for session type)"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Tumbling window",
+                example1,
+                Some("Group into fixed windows of 100 records")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Sliding window",
+                example2,
+                Some("Windows of 100 records, advancing 50 at a time")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Session window",
+                example3,
+                Some("Dynamic windows with 5-minute inactivity gaps")
+            ))
+            .tag("window")
+            .tag("stream")
+            .tag("time-series")
+            .tag("transform")
+            .build()
     }
 
     async fn execute(

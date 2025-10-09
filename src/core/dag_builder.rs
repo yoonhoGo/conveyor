@@ -82,7 +82,8 @@ impl DagPipelineBuilder {
 
         // 2. Try FFI plugin lookup
         if let Some(loader) = &self.plugin_loader {
-            if let Ok(stage_instance) = loader.create_stage(function_name) {
+            if let Some(capability) = loader.find_capability(function_name) {
+                let stage_instance = loader.create_stage(function_name)?;
                 tracing::debug!(
                     "Found function '{}' in FFI plugins for stage '{}'",
                     function_name,
@@ -91,6 +92,8 @@ impl DagPipelineBuilder {
                 return Ok(Arc::new(FfiPluginStageAdapter::new(
                     stage_config.id.clone(),
                     function_name.to_string(),
+                    capability.description.to_string(),
+                    capability.stage_type,
                     stage_instance,
                 )));
             }
@@ -98,18 +101,30 @@ impl DagPipelineBuilder {
 
         // 3. Try WASM plugin lookup
         if let Some(loader) = &self.wasm_plugin_loader {
-            if let Some(plugin) = loader.find_plugin_for_stage(function_name) {
-                tracing::debug!(
-                    "Found function '{}' in WASM plugins for stage '{}'",
-                    function_name,
-                    stage_config.id
-                );
-                return Ok(Arc::new(WasmPluginStageAdapter::new(
-                    stage_config.id.clone(),
-                    plugin.name().to_string(),
-                    function_name.to_string(),
-                    Arc::clone(loader),
-                )));
+            if let Some(capability) = loader.find_capability(function_name) {
+                if let Some(plugin) = loader.find_plugin_for_stage(function_name) {
+                    tracing::debug!(
+                        "Found function '{}' in WASM plugins for stage '{}'",
+                        function_name,
+                        stage_config.id
+                    );
+                    // Convert stage type to string
+                    use crate::wasm_plugin_loader::StageType as WasmStageType;
+                    let stage_type_str = match capability.stage_type {
+                        WasmStageType::Source => "source",
+                        WasmStageType::Transform => "transform",
+                        WasmStageType::Sink => "sink",
+                    };
+
+                    return Ok(Arc::new(WasmPluginStageAdapter::new(
+                        stage_config.id.clone(),
+                        plugin.name().to_string(),
+                        function_name.to_string(),
+                        capability.description.clone(),
+                        stage_type_str.to_string(),
+                        Arc::clone(loader),
+                    )));
+                }
             }
         }
 

@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -41,6 +42,87 @@ impl HttpFetchTransform {
 impl Stage for HttpFetchTransform {
     fn name(&self) -> &str {
         "http_fetch"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example1 = HashMap::new();
+        example1.insert("url".to_string(), toml::Value::String("https://api.example.com/users/{{ user_id }}".to_string()));
+        example1.insert("method".to_string(), toml::Value::String("GET".to_string()));
+        example1.insert("mode".to_string(), toml::Value::String("per_row".to_string()));
+        example1.insert("result_field".to_string(), toml::Value::String("api_data".to_string()));
+
+        let mut example2 = HashMap::new();
+        example2.insert("url".to_string(), toml::Value::String("https://api.example.com/enrich".to_string()));
+        example2.insert("method".to_string(), toml::Value::String("POST".to_string()));
+        example2.insert("mode".to_string(), toml::Value::String("batch".to_string()));
+        example2.insert("body".to_string(), toml::Value::String(r#"{"data": {{ records }}}"#.to_string()));
+
+        let mut headers = toml::map::Map::new();
+        headers.insert("Authorization".to_string(), toml::Value::String("Bearer $TOKEN".to_string()));
+        headers.insert("Content-Type".to_string(), toml::Value::String("application/json".to_string()));
+        example2.insert("headers".to_string(), toml::Value::Table(headers));
+
+        StageMetadata::builder("http_fetch", StageCategory::Transform)
+            .description("Fetch data from HTTP APIs for each row or batch")
+            .long_description(
+                "Makes HTTP requests to enrich data with external API calls. \
+                Supports two modes: per_row (one request per row) and batch (single request with all data). \
+                Uses Handlebars templates for dynamic URLs and request bodies. \
+                Supports GET, POST, PUT, PATCH, DELETE methods with custom headers. \
+                Timeout set to 30 seconds per request."
+            )
+            .parameter(ConfigParameter::required(
+                "url",
+                ParameterType::String,
+                "URL template with Handlebars placeholders (e.g., 'https://api.example.com/{{ id }}')"
+            ))
+            .parameter(ConfigParameter::optional(
+                "method",
+                ParameterType::String,
+                "GET",
+                "HTTP method"
+            ).with_validation(ParameterValidation::allowed_values([
+                "GET", "POST", "PUT", "PATCH", "DELETE"
+            ])))
+            .parameter(ConfigParameter::optional(
+                "mode",
+                ParameterType::String,
+                "per_row",
+                "Request mode: per_row (one request per row) or batch (single request)"
+            ).with_validation(ParameterValidation::allowed_values(["per_row", "batch"])))
+            .parameter(ConfigParameter::optional(
+                "result_field",
+                ParameterType::String,
+                "http_result",
+                "Column name for storing API response"
+            ))
+            .parameter(ConfigParameter::optional(
+                "body",
+                ParameterType::String,
+                "none",
+                "Request body template (for POST/PUT/PATCH methods)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "headers",
+                ParameterType::String,
+                "none",
+                "Map of HTTP headers to include in requests"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Per-row API enrichment",
+                example1,
+                Some("Fetch user data from API for each row using user_id")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Batch API call",
+                example2,
+                Some("Send all records in single POST request with custom headers")
+            ))
+            .tag("http")
+            .tag("api")
+            .tag("fetch")
+            .tag("transform")
+            .build()
     }
 
     async fn execute(

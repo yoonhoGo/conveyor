@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use polars::prelude::*;
 use std::collections::HashMap;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -12,6 +13,66 @@ pub struct StdoutSink;
 impl Stage for StdoutSink {
     fn name(&self) -> &str {
         "stdout.write"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example1 = HashMap::new();
+        example1.insert("format".to_string(), toml::Value::String("table".to_string()));
+
+        let mut example2 = HashMap::new();
+        example2.insert("format".to_string(), toml::Value::String("json".to_string()));
+        example2.insert("pretty".to_string(), toml::Value::Boolean(true));
+        example2.insert("limit".to_string(), toml::Value::Integer(10));
+
+        StageMetadata::builder("stdout.write", StageCategory::Sink)
+            .description("Write data to standard output")
+            .long_description(
+                "Outputs data to stdout in various formats for display or piping to other commands. \
+                Supports table, JSON, JSON Lines (jsonl), and CSV formats. \
+                Can limit output rows for preview purposes. \
+                Ideal for debugging pipelines or integrating with Unix tools."
+            )
+            .parameter(ConfigParameter::optional(
+                "format",
+                ParameterType::String,
+                "table",
+                "Output format"
+            ).with_validation(ParameterValidation::allowed_values([
+                "table", "json", "jsonl", "csv"
+            ])))
+            .parameter(ConfigParameter::optional(
+                "limit",
+                ParameterType::Integer,
+                "unlimited",
+                "Maximum number of rows to output (useful for preview)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "pretty",
+                ParameterType::Boolean,
+                "true",
+                "Pretty-print JSON output (only applies to 'json' format)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "delimiter",
+                ParameterType::String,
+                ",",
+                "Field delimiter for CSV format (only applies to 'csv' format)"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Table format output",
+                example1,
+                Some("Display data as formatted table")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "JSON preview",
+                example2,
+                Some("Output first 10 rows as pretty JSON")
+            ))
+            .tag("stdout")
+            .tag("output")
+            .tag("display")
+            .tag("sink")
+            .build()
     }
 
     fn produces_output(&self) -> bool {

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -304,6 +305,93 @@ impl AiGenerateTransform {
 impl Stage for AiGenerateTransform {
     fn name(&self) -> &str {
         "ai_generate"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example1 = HashMap::new();
+        example1.insert("provider".to_string(), toml::Value::String("openai".to_string()));
+        example1.insert("model".to_string(), toml::Value::String("gpt-4".to_string()));
+        example1.insert("prompt".to_string(), toml::Value::String("Summarize this text: {{ content }}".to_string()));
+        example1.insert("output_column".to_string(), toml::Value::String("summary".to_string()));
+        example1.insert("max_tokens".to_string(), toml::Value::Integer(100));
+
+        let mut example2 = HashMap::new();
+        example2.insert("provider".to_string(), toml::Value::String("ollama".to_string()));
+        example2.insert("model".to_string(), toml::Value::String("llama2".to_string()));
+        example2.insert("prompt".to_string(), toml::Value::String("Classify sentiment: {{ review_text }}".to_string()));
+        example2.insert("output_column".to_string(), toml::Value::String("sentiment".to_string()));
+        example2.insert("api_base_url".to_string(), toml::Value::String("http://localhost:11434".to_string()));
+
+        StageMetadata::builder("ai_generate", StageCategory::Transform)
+            .description("Generate text using AI models for each row")
+            .long_description(
+                "Generates AI-powered text for each row using various LLM providers. \
+                Supports OpenAI, Anthropic, OpenRouter, and Ollama. \
+                Uses Handlebars templates to inject row data into prompts. \
+                API keys are loaded from environment variables. \
+                Each row is processed independently with the AI model."
+            )
+            .parameter(ConfigParameter::required(
+                "provider",
+                ParameterType::String,
+                "AI provider name"
+            ).with_validation(ParameterValidation::allowed_values([
+                "openai", "anthropic", "openrouter", "ollama"
+            ])))
+            .parameter(ConfigParameter::required(
+                "model",
+                ParameterType::String,
+                "Model name (e.g., 'gpt-4', 'claude-3-opus-20240229', 'llama2')"
+            ))
+            .parameter(ConfigParameter::required(
+                "prompt",
+                ParameterType::String,
+                "Prompt template with Handlebars placeholders (e.g., 'Summarize: {{ text }}')"
+            ))
+            .parameter(ConfigParameter::required(
+                "output_column",
+                ParameterType::String,
+                "Column name for storing AI-generated responses"
+            ))
+            .parameter(ConfigParameter::optional(
+                "max_tokens",
+                ParameterType::Integer,
+                "provider default",
+                "Maximum number of tokens to generate"
+            ))
+            .parameter(ConfigParameter::optional(
+                "temperature",
+                ParameterType::Float,
+                "provider default",
+                "Sampling temperature (0.0-2.0, higher = more random)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "api_key_env",
+                ParameterType::String,
+                "auto-detected",
+                "Environment variable name for API key (defaults: OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)"
+            ))
+            .parameter(ConfigParameter::optional(
+                "api_base_url",
+                ParameterType::String,
+                "http://localhost:11434",
+                "Base URL for Ollama (only applies to Ollama provider)"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Text summarization with OpenAI",
+                example1,
+                Some("Summarize content for each row using GPT-4")
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Sentiment analysis with Ollama",
+                example2,
+                Some("Run local Llama2 model to classify sentiment")
+            ))
+            .tag("ai")
+            .tag("llm")
+            .tag("generate")
+            .tag("transform")
+            .build()
     }
 
     async fn execute(

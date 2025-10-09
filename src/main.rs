@@ -35,7 +35,7 @@ struct Cli {
 enum Commands {
     #[command(about = "Run a pipeline from a TOML configuration file")]
     Run {
-        #[arg(short = 'c', long, help = "Path to the TOML configuration file")]
+        #[arg(help = "Path to the TOML configuration file")]
         config: PathBuf,
 
         #[arg(long, help = "Validate configuration without running")]
@@ -44,7 +44,7 @@ enum Commands {
 
     #[command(about = "Validate a pipeline configuration")]
     Validate {
-        #[arg(short = 'c', long, help = "Path to the TOML configuration file")]
+        #[arg(help = "Path to the TOML configuration file")]
         config: PathBuf,
     },
 
@@ -53,6 +53,15 @@ enum Commands {
         #[arg(short = 't', long, help = "Filter by module type")]
         module_type: Option<String>,
     },
+
+    #[command(about = "Show detailed information about a function")]
+    Info {
+        #[arg(help = "Function name to get information for")]
+        function: String,
+    },
+
+    #[command(about = "Build a stage interactively with guided prompts")]
+    Build,
 
     #[command(about = "Stage management commands")]
     Stage {
@@ -85,6 +94,12 @@ enum StageCommands {
     Edit {
         #[arg(help = "Path to the pipeline TOML file")]
         pipeline: PathBuf,
+    },
+
+    #[command(about = "Describe a function in JSON format")]
+    Describe {
+        #[arg(help = "Function name to describe")]
+        function: String,
     },
 }
 
@@ -128,6 +143,16 @@ async fn main() -> Result<()> {
             cli::list_modules(module_type).await?;
         }
 
+        Commands::Info { function } => {
+            info!("Showing information for function: {}", function);
+            cli::show_function_help(&function).await?;
+        }
+
+        Commands::Build => {
+            info!("Starting interactive stage builder");
+            cli::build_stage_interactive().await?;
+        }
+
         Commands::Stage { command } => match command {
             StageCommands::New {
                 output,
@@ -145,6 +170,11 @@ async fn main() -> Result<()> {
             StageCommands::Edit { pipeline } => {
                 info!("Opening interactive pipeline editor: {:?}", pipeline);
                 cli::edit_pipeline_interactive(pipeline.clone()).await?;
+            }
+
+            StageCommands::Describe { function } => {
+                info!("Describing function: {}", function);
+                cli::describe_function_json(&function).await?;
             }
         },
 

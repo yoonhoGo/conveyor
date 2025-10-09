@@ -2,6 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 
+use crate::core::metadata::{ConfigParameter, ParameterType, StageCategory, StageMetadata};
 use crate::core::stage::Stage;
 use crate::core::traits::DataFormat;
 
@@ -11,6 +12,38 @@ pub struct SelectTransform;
 impl Stage for SelectTransform {
     fn name(&self) -> &str {
         "select"
+    }
+
+    fn metadata(&self) -> StageMetadata {
+        let mut example_config = HashMap::new();
+        example_config.insert("columns".to_string(), toml::Value::Array(vec![
+            toml::Value::String("id".to_string()),
+            toml::Value::String("name".to_string()),
+            toml::Value::String("email".to_string()),
+        ]));
+
+        StageMetadata::builder("select", StageCategory::Transform)
+            .description("Select specific columns from DataFrame")
+            .long_description(
+                "Selects a subset of columns from the input DataFrame, similar to SQL SELECT. \
+                Can specify columns as a single string or an array of strings. \
+                Useful for reducing data size and focusing on relevant fields."
+            )
+            .parameter(ConfigParameter::required(
+                "columns",
+                ParameterType::String,
+                "Column name(s) to select (string or array of strings)"
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Select multiple columns",
+                example_config,
+                Some("Keep only id, name, and email columns")
+            ))
+            .tag("select")
+            .tag("columns")
+            .tag("projection")
+            .tag("transform")
+            .build()
     }
 
     async fn execute(
