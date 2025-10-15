@@ -239,6 +239,5 @@ mod tests {
     #[test]
     fn test_edit_module_exists() {
         // Just ensure the module compiles
-        assert!(true);
     }
 }

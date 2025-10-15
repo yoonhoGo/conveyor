@@ -394,8 +394,7 @@ impl HttpFetchTransform {
 
         // Parse response as JSON
         let text = response.text().await?;
-        let json: JsonValue =
-            serde_json::from_str(&text).unwrap_or_else(|_| JsonValue::String(text));
+        let json: JsonValue = serde_json::from_str(&text).unwrap_or(JsonValue::String(text));
 
         Ok(json)
     }

@@ -6,8 +6,9 @@
 use conveyor_plugin_api::sabi_trait::prelude::*;
 use conveyor_plugin_api::traits::{FfiExecutionContext, FfiStage, FfiStage_TO};
 use conveyor_plugin_api::{
-    rstr, FfiDataFormat, PluginCapability, PluginDeclaration, RBox, RBoxError, RErr, RHashMap, ROk,
-    RResult, RString, RVec, StageType, PLUGIN_API_VERSION,
+    rstr, FfiConfigParameter, FfiDataFormat, FfiParameterType, FfiStageMetadata, PluginCapability,
+    PluginDeclaration, RBox, RBoxError, RErr, RHashMap, ROk, RResult, RString, RVec, StageType,
+    PLUGIN_API_VERSION,
 };
 use mongodb::{
     bson::Document,
@@ -924,69 +925,285 @@ pub extern "C" fn create_mongodb_replacemany() -> FfiStage_TO<'static, RBox<()>>
     )
 }
 
+// ============================================================================
+// Metadata Helper Functions
+// ============================================================================
+
+/// Create common MongoDB parameters (uri, database, collection)
+fn common_mongodb_parameters() -> Vec<FfiConfigParameter> {
+    vec![
+        FfiConfigParameter::required(
+            "uri",
+            FfiParameterType::String,
+            "MongoDB connection string (e.g., mongodb://localhost:27017)",
+        ),
+        FfiConfigParameter::required("database", FfiParameterType::String, "Database name"),
+        FfiConfigParameter::required("collection", FfiParameterType::String, "Collection name"),
+    ]
+}
+
+/// Create metadata for find operation
+fn create_find_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.extend(vec![
+        FfiConfigParameter::optional(
+            "query",
+            FfiParameterType::String,
+            "{}",
+            "MongoDB query filter as JSON string (e.g., '{\"status\": \"active\"}')",
+        ),
+        FfiConfigParameter::optional(
+            "limit",
+            FfiParameterType::Integer,
+            "",
+            "Maximum number of documents to return",
+        ),
+    ]);
+
+    FfiStageMetadata::new(
+        "mongodb.find",
+        "Find multiple documents from MongoDB collection",
+        "Executes a MongoDB find query and returns all matching documents. \
+         Supports filtering with MongoDB query syntax and limiting results. \
+         Uses cursor-based iteration for efficient large result sets.",
+        params,
+        vec!["mongodb", "database", "source", "find", "query"],
+    )
+}
+
+/// Create metadata for findOne operation
+fn create_findone_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.push(FfiConfigParameter::optional(
+        "query",
+        FfiParameterType::String,
+        "{}",
+        "MongoDB query filter as JSON string",
+    ));
+
+    FfiStageMetadata::new(
+        "mongodb.findOne",
+        "Find single document from MongoDB collection",
+        "Executes a MongoDB findOne query and returns the first matching document. \
+         Returns empty result if no document matches the query.",
+        params,
+        vec!["mongodb", "database", "source", "findOne", "query"],
+    )
+}
+
+/// Create metadata for createOne operation
+fn create_createone_metadata() -> FfiStageMetadata {
+    FfiStageMetadata::new(
+        "mongodb.createOne",
+        "Insert single document into MongoDB collection",
+        "Inserts a single document from the input data into MongoDB. \
+         Takes the first record from the input dataset.",
+        common_mongodb_parameters(),
+        vec!["mongodb", "database", "sink", "insert", "create"],
+    )
+}
+
+/// Create metadata for createMany operation
+fn create_createmany_metadata() -> FfiStageMetadata {
+    FfiStageMetadata::new(
+        "mongodb.createMany",
+        "Insert multiple documents into MongoDB collection",
+        "Inserts all documents from the input data into MongoDB in a single batch operation. \
+         Efficient for bulk inserts.",
+        common_mongodb_parameters(),
+        vec!["mongodb", "database", "sink", "insert", "create", "bulk"],
+    )
+}
+
+/// Create metadata for updateOne operation
+fn create_updateone_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.push(FfiConfigParameter::required(
+        "query",
+        FfiParameterType::String,
+        "MongoDB query filter to match the document to update",
+    ));
+
+    FfiStageMetadata::new(
+        "mongodb.updateOne",
+        "Update single document in MongoDB collection",
+        "Updates the first document matching the query filter using $set operator. \
+         Update fields are taken from the first record in input data.",
+        params,
+        vec!["mongodb", "database", "sink", "update"],
+    )
+}
+
+/// Create metadata for updateMany operation
+fn create_updatemany_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.push(FfiConfigParameter::required(
+        "query",
+        FfiParameterType::String,
+        "MongoDB query filter to match documents to update",
+    ));
+
+    FfiStageMetadata::new(
+        "mongodb.updateMany",
+        "Update multiple documents in MongoDB collection",
+        "Updates all documents matching the query filter using $set operator. \
+         Update fields are taken from the first record in input data.",
+        params,
+        vec!["mongodb", "database", "sink", "update", "bulk"],
+    )
+}
+
+/// Create metadata for deleteOne operation
+fn create_deleteone_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.push(FfiConfigParameter::required(
+        "query",
+        FfiParameterType::String,
+        "MongoDB query filter to match the document to delete",
+    ));
+
+    FfiStageMetadata::new(
+        "mongodb.deleteOne",
+        "Delete single document from MongoDB collection",
+        "Deletes the first document matching the query filter.",
+        params,
+        vec!["mongodb", "database", "sink", "delete"],
+    )
+}
+
+/// Create metadata for deleteMany operation
+fn create_deletemany_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.push(FfiConfigParameter::required(
+        "query",
+        FfiParameterType::String,
+        "MongoDB query filter to match documents to delete",
+    ));
+
+    FfiStageMetadata::new(
+        "mongodb.deleteMany",
+        "Delete multiple documents from MongoDB collection",
+        "Deletes all documents matching the query filter.",
+        params,
+        vec!["mongodb", "database", "sink", "delete", "bulk"],
+    )
+}
+
+/// Create metadata for replaceOne operation
+fn create_replaceone_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.push(FfiConfigParameter::required(
+        "query",
+        FfiParameterType::String,
+        "MongoDB query filter to match the document to replace",
+    ));
+
+    FfiStageMetadata::new(
+        "mongodb.replaceOne",
+        "Replace single document in MongoDB collection",
+        "Replaces the entire document matching the query filter with new document from input data. \
+         Unlike update, this replaces the whole document (except _id).",
+        params,
+        vec!["mongodb", "database", "sink", "replace"],
+    )
+}
+
+/// Create metadata for replaceMany operation
+fn create_replacemany_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.push(FfiConfigParameter::required(
+        "query",
+        FfiParameterType::String,
+        "MongoDB query filter to match documents to replace",
+    ));
+
+    FfiStageMetadata::new(
+        "mongodb.replaceMany",
+        "Replace multiple documents in MongoDB collection",
+        "Replaces all documents matching the query filter with new document from input data. \
+         Iterates through matching documents and replaces each one individually.",
+        params,
+        vec!["mongodb", "database", "sink", "replace", "bulk"],
+    )
+}
+
+// ============================================================================
+// Plugin Capabilities
+// ============================================================================
+
 // Plugin capabilities
 extern "C" fn get_capabilities() -> RVec<PluginCapability> {
     vec![
-        PluginCapability {
-            name: RString::from("mongodb-find"),
-            stage_type: StageType::Source,
-            description: RString::from("MongoDB find - read multiple documents"),
-            factory_symbol: RString::from("create_mongodb_find"),
-        },
-        PluginCapability {
-            name: RString::from("mongodb-findone"),
-            stage_type: StageType::Source,
-            description: RString::from("MongoDB findOne - read single document"),
-            factory_symbol: RString::from("create_mongodb_findone"),
-        },
-        PluginCapability {
-            name: RString::from("mongodb-createone"),
-            stage_type: StageType::Sink,
-            description: RString::from("MongoDB createOne - insert single document"),
-            factory_symbol: RString::from("create_mongodb_createone"),
-        },
-        PluginCapability {
-            name: RString::from("mongodb-createmany"),
-            stage_type: StageType::Sink,
-            description: RString::from("MongoDB createMany - insert multiple documents"),
-            factory_symbol: RString::from("create_mongodb_createmany"),
-        },
-        PluginCapability {
-            name: RString::from("mongodb-updateone"),
-            stage_type: StageType::Sink,
-            description: RString::from("MongoDB updateOne - update single document"),
-            factory_symbol: RString::from("create_mongodb_updateone"),
-        },
-        PluginCapability {
-            name: RString::from("mongodb-updatemany"),
-            stage_type: StageType::Sink,
-            description: RString::from("MongoDB updateMany - update multiple documents"),
-            factory_symbol: RString::from("create_mongodb_updatemany"),
-        },
-        PluginCapability {
-            name: RString::from("mongodb-deleteone"),
-            stage_type: StageType::Sink,
-            description: RString::from("MongoDB deleteOne - delete single document"),
-            factory_symbol: RString::from("create_mongodb_deleteone"),
-        },
-        PluginCapability {
-            name: RString::from("mongodb-deletemany"),
-            stage_type: StageType::Sink,
-            description: RString::from("MongoDB deleteMany - delete multiple documents"),
-            factory_symbol: RString::from("create_mongodb_deletemany"),
-        },
-        PluginCapability {
-            name: RString::from("mongodb-replaceone"),
-            stage_type: StageType::Sink,
-            description: RString::from("MongoDB replaceOne - replace single document"),
-            factory_symbol: RString::from("create_mongodb_replaceone"),
-        },
-        PluginCapability {
-            name: RString::from("mongodb-replacemany"),
-            stage_type: StageType::Sink,
-            description: RString::from("MongoDB replaceMany - replace multiple documents"),
-            factory_symbol: RString::from("create_mongodb_replacemany"),
-        },
+        PluginCapability::new(
+            "mongodb.find",
+            StageType::Source,
+            "MongoDB find - read multiple documents",
+            "create_mongodb_find",
+            create_find_metadata(),
+        ),
+        PluginCapability::new(
+            "mongodb.findOne",
+            StageType::Source,
+            "MongoDB findOne - read single document",
+            "create_mongodb_findone",
+            create_findone_metadata(),
+        ),
+        PluginCapability::new(
+            "mongodb.createOne",
+            StageType::Sink,
+            "MongoDB createOne - insert single document",
+            "create_mongodb_createone",
+            create_createone_metadata(),
+        ),
+        PluginCapability::new(
+            "mongodb.createMany",
+            StageType::Sink,
+            "MongoDB createMany - insert multiple documents",
+            "create_mongodb_createmany",
+            create_createmany_metadata(),
+        ),
+        PluginCapability::new(
+            "mongodb.updateOne",
+            StageType::Sink,
+            "MongoDB updateOne - update single document",
+            "create_mongodb_updateone",
+            create_updateone_metadata(),
+        ),
+        PluginCapability::new(
+            "mongodb.updateMany",
+            StageType::Sink,
+            "MongoDB updateMany - update multiple documents",
+            "create_mongodb_updatemany",
+            create_updatemany_metadata(),
+        ),
+        PluginCapability::new(
+            "mongodb.deleteOne",
+            StageType::Sink,
+            "MongoDB deleteOne - delete single document",
+            "create_mongodb_deleteone",
+            create_deleteone_metadata(),
+        ),
+        PluginCapability::new(
+            "mongodb.deleteMany",
+            StageType::Sink,
+            "MongoDB deleteMany - delete multiple documents",
+            "create_mongodb_deletemany",
+            create_deletemany_metadata(),
+        ),
+        PluginCapability::new(
+            "mongodb.replaceOne",
+            StageType::Sink,
+            "MongoDB replaceOne - replace single document",
+            "create_mongodb_replaceone",
+            create_replaceone_metadata(),
+        ),
+        PluginCapability::new(
+            "mongodb.replaceMany",
+            StageType::Sink,
+            "MongoDB replaceMany - replace multiple documents",
+            "create_mongodb_replacemany",
+            create_replacemany_metadata(),
+        ),
     ]
     .into()
 }
@@ -1024,26 +1241,26 @@ mod tests {
         assert_eq!(caps.len(), 10);
 
         // Check find operation
-        assert_eq!(caps[0].name.as_str(), "mongodb-find");
+        assert_eq!(caps[0].name.as_str(), "mongodb.find");
         assert_eq!(caps[0].stage_type, StageType::Source);
 
         // Check findOne operation
-        assert_eq!(caps[1].name.as_str(), "mongodb-findone");
+        assert_eq!(caps[1].name.as_str(), "mongodb.findOne");
         assert_eq!(caps[1].stage_type, StageType::Source);
 
         // Check createOne operation
-        assert_eq!(caps[2].name.as_str(), "mongodb-createone");
+        assert_eq!(caps[2].name.as_str(), "mongodb.createOne");
         assert_eq!(caps[2].stage_type, StageType::Sink);
 
         // Check createMany operation
-        assert_eq!(caps[3].name.as_str(), "mongodb-createmany");
+        assert_eq!(caps[3].name.as_str(), "mongodb.createMany");
         assert_eq!(caps[3].stage_type, StageType::Sink);
     }
 
     #[test]
     fn test_validation() {
         let stage = MongoDbStage::new(
-            "mongodb-find".to_string(),
+            "mongodb.find".to_string(),
             MongoOperation::Find,
             StageType::Source,
         );

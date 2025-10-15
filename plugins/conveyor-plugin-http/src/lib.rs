@@ -452,18 +452,18 @@ pub extern "C" fn create_http_sink() -> FfiStage_TO<'static, RBox<()>> {
 // Plugin capabilities
 extern "C" fn get_capabilities() -> RVec<PluginCapability> {
     vec![
-        PluginCapability {
-            name: RString::from("http"),
-            stage_type: StageType::Source,
-            description: RString::from("HTTP source - fetch data from REST APIs"),
-            factory_symbol: RString::from("create_http_source"),
-        },
-        PluginCapability {
-            name: RString::from("http"),
-            stage_type: StageType::Sink,
-            description: RString::from("HTTP sink - send data to REST APIs"),
-            factory_symbol: RString::from("create_http_sink"),
-        },
+        PluginCapability::simple(
+            "http",
+            StageType::Source,
+            "HTTP source - fetch data from REST APIs",
+            "create_http_source",
+        ),
+        PluginCapability::simple(
+            "http",
+            StageType::Sink,
+            "HTTP sink - send data to REST APIs",
+            "create_http_sink",
+        ),
     ]
     .into()
 }

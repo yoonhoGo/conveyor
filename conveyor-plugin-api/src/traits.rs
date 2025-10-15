@@ -194,6 +194,9 @@ pub struct PluginCapability {
     ///
     /// The host will use `libloading` to load this symbol from the plugin library.
     pub factory_symbol: RString,
+
+    /// Detailed metadata for this stage
+    pub metadata: crate::metadata::FfiStageMetadata,
 }
 
 impl PluginCapability {
@@ -202,12 +205,35 @@ impl PluginCapability {
         stage_type: StageType,
         description: impl Into<RString>,
         factory_symbol: impl Into<RString>,
+        metadata: crate::metadata::FfiStageMetadata,
     ) -> Self {
         Self {
             name: name.into(),
             stage_type,
             description: description.into(),
             factory_symbol: factory_symbol.into(),
+            metadata,
+        }
+    }
+
+    /// Create a simple capability without detailed metadata
+    pub fn simple(
+        name: impl Into<RString>,
+        stage_type: StageType,
+        description: impl Into<RString>,
+        factory_symbol: impl Into<RString>,
+    ) -> Self {
+        let name_str = name.into();
+        let desc_str = description.into();
+        let metadata =
+            crate::metadata::FfiStageMetadata::simple(name_str.clone(), desc_str.clone());
+
+        Self {
+            name: name_str,
+            stage_type,
+            description: desc_str,
+            factory_symbol: factory_symbol.into(),
+            metadata,
         }
     }
 }
@@ -341,7 +367,7 @@ mod tests {
 
     #[test]
     fn test_plugin_capability() {
-        let cap = PluginCapability::new(
+        let cap = PluginCapability::simple(
             "http",
             StageType::Source,
             "HTTP data source",

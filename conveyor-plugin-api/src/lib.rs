@@ -51,6 +51,7 @@
 //! ```
 
 pub mod data;
+pub mod metadata;
 pub mod traits;
 
 use serde::{Deserialize, Serialize};
@@ -65,6 +66,7 @@ pub use abi_stable::{
 
 // Re-export core trait types
 pub use data::FfiDataFormat;
+pub use metadata::{FfiConfigParameter, FfiParameterType, FfiStageMetadata};
 pub use traits::{FfiExecutionContext, FfiStage, PluginCapability, StageType};
 
 /// Plugin API version - increment when breaking changes occur

@@ -99,7 +99,7 @@ async fn test_multiple_plugins() {
     );
 
     assert!(
-        loader.list_plugins().len() >= 1,
+        !loader.list_plugins().is_empty(),
         "Should have at least 1 plugin"
     );
 }

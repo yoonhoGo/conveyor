@@ -89,7 +89,7 @@ mod tests {
         let registry = ModuleRegistry::with_defaults().await.unwrap();
 
         // Check that built-in functions are registered
-        assert!(registry.list_stages().len() > 0);
+        assert!(!registry.list_stages().is_empty());
 
         // Check specific functions
         assert!(registry.get_function("csv.read").is_some());

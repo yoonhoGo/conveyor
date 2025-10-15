@@ -97,24 +97,24 @@ pub extern "C" fn create_test_sink() -> FfiStage_TO<'static, RBox<()>> {
 // Plugin capabilities
 extern "C" fn get_capabilities() -> RVec<PluginCapability> {
     vec![
-        PluginCapability {
-            name: RString::from("test"),
-            stage_type: StageType::Source,
-            description: RString::from("Test source - returns simple test data"),
-            factory_symbol: RString::from("create_test_source"),
-        },
-        PluginCapability {
-            name: RString::from("test"),
-            stage_type: StageType::Transform,
-            description: RString::from("Test transform - passes data through"),
-            factory_symbol: RString::from("create_test_transform"),
-        },
-        PluginCapability {
-            name: RString::from("test"),
-            stage_type: StageType::Sink,
-            description: RString::from("Test sink - validates data"),
-            factory_symbol: RString::from("create_test_sink"),
-        },
+        PluginCapability::simple(
+            "test",
+            StageType::Source,
+            "Test source - returns simple test data",
+            "create_test_source",
+        ),
+        PluginCapability::simple(
+            "test",
+            StageType::Transform,
+            "Test transform - passes data through",
+            "create_test_transform",
+        ),
+        PluginCapability::simple(
+            "test",
+            StageType::Sink,
+            "Test sink - validates data",
+            "create_test_sink",
+        ),
     ]
     .into()
 }
