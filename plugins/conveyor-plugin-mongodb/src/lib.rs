@@ -23,8 +23,8 @@ use std::collections::HashMap;
 pub enum MongoOperation {
     Find,
     FindOne,
-    CreateOne,
-    CreateMany,
+    InsertOne,
+    InsertMany,
     UpdateOne,
     UpdateMany,
     DeleteOne,
@@ -169,8 +169,8 @@ impl MongoDbStage {
         )))
     }
 
-    /// Execute createOne operation - insert single document
-    async fn execute_create_one_async(
+    /// Execute insertOne operation - insert single document
+    async fn execute_insert_one_async(
         &self,
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
@@ -190,7 +190,7 @@ impl MongoDbStage {
 
         if records.is_empty() {
             return RErr(RBoxError::from_fmt(&format_args!(
-                "No data provided for createOne"
+                "No data provided for insertOne"
             )));
         }
 
@@ -204,14 +204,14 @@ impl MongoDbStage {
         match collection.insert_one(doc).await {
             Ok(_) => ROk(input_data.clone()),
             Err(e) => RErr(RBoxError::from_fmt(&format_args!(
-                "MongoDB createOne failed: {}",
+                "MongoDB insertOne failed: {}",
                 e
             ))),
         }
     }
 
-    /// Execute createMany operation - insert multiple documents
-    async fn execute_create_many_async(
+    /// Execute insertMany operation - insert multiple documents
+    async fn execute_insert_many_async(
         &self,
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
@@ -251,7 +251,7 @@ impl MongoDbStage {
         match collection.insert_many(documents).await {
             Ok(_) => ROk(input_data.clone()),
             Err(e) => RErr(RBoxError::from_fmt(&format_args!(
-                "MongoDB createMany failed: {}",
+                "MongoDB insertMany failed: {}",
                 e
             ))),
         }
@@ -679,27 +679,27 @@ impl FfiStage for MongoDbStage {
             match self.operation {
                 MongoOperation::Find => self.execute_find_async(&config).await,
                 MongoOperation::FindOne => self.execute_find_one_async(&config).await,
-                MongoOperation::CreateOne => {
+                MongoOperation::InsertOne => {
                     let input_data = match context.inputs.into_iter().next() {
                         Some(tuple) => tuple.1,
                         None => {
                             return RErr(RBoxError::from_fmt(&format_args!(
-                                "createOne requires input data"
+                                "insertOne requires input data"
                             )))
                         }
                     };
-                    self.execute_create_one_async(&input_data, &config).await
+                    self.execute_insert_one_async(&input_data, &config).await
                 }
-                MongoOperation::CreateMany => {
+                MongoOperation::InsertMany => {
                     let input_data = match context.inputs.into_iter().next() {
                         Some(tuple) => tuple.1,
                         None => {
                             return RErr(RBoxError::from_fmt(&format_args!(
-                                "createMany requires input data"
+                                "insertMany requires input data"
                             )))
                         }
                     };
-                    self.execute_create_many_async(&input_data, &config).await
+                    self.execute_insert_many_async(&input_data, &config).await
                 }
                 MongoOperation::UpdateOne => {
                     let input_data = match context.inputs.into_iter().next() {
@@ -830,11 +830,11 @@ pub extern "C" fn create_mongodb_findone() -> FfiStage_TO<'static, RBox<()>> {
 }
 
 #[no_mangle]
-pub extern "C" fn create_mongodb_createone() -> FfiStage_TO<'static, RBox<()>> {
+pub extern "C" fn create_mongodb_insertone() -> FfiStage_TO<'static, RBox<()>> {
     FfiStage_TO::from_value(
         MongoDbStage::new(
-            "mongodb-createone".to_string(),
-            MongoOperation::CreateOne,
+            "mongodb-insertone".to_string(),
+            MongoOperation::InsertOne,
             StageType::Sink,
         ),
         TD_Opaque,
@@ -842,11 +842,11 @@ pub extern "C" fn create_mongodb_createone() -> FfiStage_TO<'static, RBox<()>> {
 }
 
 #[no_mangle]
-pub extern "C" fn create_mongodb_createmany() -> FfiStage_TO<'static, RBox<()>> {
+pub extern "C" fn create_mongodb_insertmany() -> FfiStage_TO<'static, RBox<()>> {
     FfiStage_TO::from_value(
         MongoDbStage::new(
-            "mongodb-createmany".to_string(),
-            MongoOperation::CreateMany,
+            "mongodb-insertmany".to_string(),
+            MongoOperation::InsertMany,
             StageType::Sink,
         ),
         TD_Opaque,
@@ -991,27 +991,27 @@ fn create_findone_metadata() -> FfiStageMetadata {
     )
 }
 
-/// Create metadata for createOne operation
-fn create_createone_metadata() -> FfiStageMetadata {
+/// Create metadata for insertOne operation
+fn create_insertone_metadata() -> FfiStageMetadata {
     FfiStageMetadata::new(
-        "mongodb.createOne",
+        "mongodb.insertOne",
         "Insert single document into MongoDB collection",
         "Inserts a single document from the input data into MongoDB. \
          Takes the first record from the input dataset.",
         common_mongodb_parameters(),
-        vec!["mongodb", "database", "sink", "insert", "create"],
+        vec!["mongodb", "database", "sink", "insert"],
     )
 }
 
-/// Create metadata for createMany operation
-fn create_createmany_metadata() -> FfiStageMetadata {
+/// Create metadata for insertMany operation
+fn create_insertmany_metadata() -> FfiStageMetadata {
     FfiStageMetadata::new(
-        "mongodb.createMany",
+        "mongodb.insertMany",
         "Insert multiple documents into MongoDB collection",
         "Inserts all documents from the input data into MongoDB in a single batch operation. \
          Efficient for bulk inserts.",
         common_mongodb_parameters(),
-        vec!["mongodb", "database", "sink", "insert", "create", "bulk"],
+        vec!["mongodb", "database", "sink", "insert", "bulk"],
     )
 }
 
@@ -1149,18 +1149,18 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
             create_findone_metadata(),
         ),
         PluginCapability::new(
-            "mongodb.createOne",
+            "mongodb.insertOne",
             StageType::Sink,
-            "MongoDB createOne - insert single document",
-            "create_mongodb_createone",
-            create_createone_metadata(),
+            "MongoDB insertOne - insert single document",
+            "create_mongodb_insertone",
+            create_insertone_metadata(),
         ),
         PluginCapability::new(
-            "mongodb.createMany",
+            "mongodb.insertMany",
             StageType::Sink,
-            "MongoDB createMany - insert multiple documents",
-            "create_mongodb_createmany",
-            create_createmany_metadata(),
+            "MongoDB insertMany - insert multiple documents",
+            "create_mongodb_insertmany",
+            create_insertmany_metadata(),
         ),
         PluginCapability::new(
             "mongodb.updateOne",
@@ -1215,7 +1215,7 @@ pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
     name: rstr!("mongodb"),
     version: rstr!("2.0.0"),
     description: rstr!(
-        "MongoDB plugin with operation-based API (find, findOne, create, update, delete, replace)"
+        "MongoDB plugin with operation-based API (find, findOne, insert, update, delete, replace)"
     ),
     get_capabilities,
 };
@@ -1248,12 +1248,12 @@ mod tests {
         assert_eq!(caps[1].name.as_str(), "mongodb.findOne");
         assert_eq!(caps[1].stage_type, StageType::Source);
 
-        // Check createOne operation
-        assert_eq!(caps[2].name.as_str(), "mongodb.createOne");
+        // Check insertOne operation
+        assert_eq!(caps[2].name.as_str(), "mongodb.insertOne");
         assert_eq!(caps[2].stage_type, StageType::Sink);
 
-        // Check createMany operation
-        assert_eq!(caps[3].name.as_str(), "mongodb.createMany");
+        // Check insertMany operation
+        assert_eq!(caps[3].name.as_str(), "mongodb.insertMany");
         assert_eq!(caps[3].stage_type, StageType::Sink);
     }
 

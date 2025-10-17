@@ -30,12 +30,12 @@ plugins = ["http", "mongodb"]  # Load these plugins
 
 ### 2. Use Plugin Stages
 
-Reference plugin stages with the `plugin.` prefix:
+Reference plugin stages by their function name:
 
 ```toml
 [[stages]]
 id = "fetch_api"
-type = "plugin.http"  # HTTP plugin
+function = "http"  # HTTP plugin
 inputs = []
 
 [stages.config]
@@ -53,14 +53,14 @@ plugins = ["http"]
 
 [[stages]]
 id = "api_data"
-type = "plugin.http"
+function = "http"
 inputs = []
 
 [stages.config]
 url = "https://jsonplaceholder.typicode.com/users"
 method = "GET"
-format = "json"  # json, jsonl, csv, raw
-timeout = 30
+format = "json"  # json, jsonl, raw
+timeout_seconds = 30
 
 [stages.config.headers]
 Authorization = "Bearer YOUR_TOKEN"
@@ -72,7 +72,7 @@ Accept = "application/json"
 ```toml
 [[stages]]
 id = "send_results"
-type = "plugin.http"
+function = "http"
 inputs = ["processed_data"]
 
 [stages.config]
@@ -90,15 +90,31 @@ X-API-Key = "YOUR_KEY"
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
 | `url` | ✅ Yes | - | Target URL |
-| `method` | No | `GET` | HTTP method (GET, POST, PUT, PATCH, DELETE) |
-| `format` | No | `json` | Data format (json, jsonl, csv, raw) |
-| `timeout` | No | 30 | Request timeout in seconds |
+| `method` | No | `GET` for source, `POST` for sink | HTTP method (GET, POST, PUT, PATCH, DELETE) |
+| `format` | No | `json` | Data format (json, jsonl, raw) |
+| `timeout_seconds` | No | 30 | Request timeout in seconds |
 | `headers` | No | - | Custom HTTP headers (table) |
 | `body` | No | - | Request body (for POST/PUT/PATCH) |
 
 ## MongoDB Plugin
 
-### Source (Read Data)
+MongoDB plugin provides 10 operations for complete database interaction:
+
+**Sources (read operations):**
+- `mongodb.find` - Find multiple documents
+- `mongodb.findOne` - Find single document
+
+**Sinks (write operations):**
+- `mongodb.insertOne` - Insert single document
+- `mongodb.insertMany` - Insert multiple documents
+- `mongodb.updateOne` - Update single document
+- `mongodb.updateMany` - Update multiple documents
+- `mongodb.deleteOne` - Delete single document
+- `mongodb.deleteMany` - Delete multiple documents
+- `mongodb.replaceOne` - Replace single document
+- `mongodb.replaceMany` - Replace multiple documents
+
+### Source Example (find)
 
 ```toml
 [global]
@@ -106,48 +122,66 @@ plugins = ["mongodb"]
 
 [[stages]]
 id = "user_events"
-type = "plugin.mongodb"
+function = "mongodb.find"
 inputs = []
 
 [stages.config]
-connection_string = "mongodb://localhost:27017"
+uri = "mongodb://localhost:27017"
 database = "analytics"
 collection = "events"
 query = '{ "event_type": "purchase" }'
-
-# Cursor-based pagination
-cursor_field = "_id"
-batch_size = 5000
 limit = 10000  # Optional
 ```
 
-### Sink (Write Data)
+### Sink Example (insertMany)
 
 ```toml
 [[stages]]
 id = "save_to_mongo"
-type = "plugin.mongodb"
+function = "mongodb.insertMany"
 inputs = ["processed"]
 
 [stages.config]
-connection_string = "mongodb://localhost:27017"
+uri = "mongodb://localhost:27017"
 database = "results"
 collection = "processed_events"
-batch_size = 1000  # Batch inserts
 ```
 
-### Configuration Options
+### Update Example
+
+```toml
+[[stages]]
+id = "update_status"
+function = "mongodb.updateMany"
+inputs = ["updates"]
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "myapp"
+collection = "users"
+query = '{ "status": "pending" }'
+```
+
+### Common Configuration (all operations)
 
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
-| `connection_string` | ✅ Yes | - | MongoDB connection URI |
+| `uri` | ✅ Yes | - | MongoDB connection URI |
 | `database` | ✅ Yes | - | Database name |
 | `collection` | ✅ Yes | - | Collection name |
-| `query` | No | `{}` | Query filter (JSON string) |
-| `cursor_field` | No | `_id` | Field for pagination |
-| `cursor_value` | No | - | Starting cursor value |
-| `batch_size` | No | 1000 | Documents per batch |
-| `limit` | No | - | Total document limit |
+
+### Additional Options (find operations)
+
+| Option | Required | Default | Description |
+|--------|----------|---------|-------------|
+| `query` | No | `{}` | MongoDB query filter (JSON string) |
+| `limit` | No | - | Maximum documents to fetch |
+
+### Additional Options (update/delete/replace operations)
+
+| Option | Required | Default | Description |
+|--------|----------|---------|-------------|
+| `query` | ✅ Yes | - | MongoDB query filter (JSON string) |
 
 ## Plugin Safety
 
@@ -294,7 +328,7 @@ plugins = ["custom"]
 
 [[stages]]
 id = "use_custom"
-type = "plugin.custom"
+function = "custom"
 inputs = []
 ```
 

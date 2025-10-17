@@ -818,12 +818,7 @@ format = "jsonl"
 
 **Plugin:** `http`
 
-**Functions:**
-- `http.get` - HTTP GET request (source)
-- `http.post` - HTTP POST request (source/sink)
-- `http.put` - HTTP PUT request (sink)
-- `http.patch` - HTTP PATCH request (sink)
-- `http.delete` - HTTP DELETE request (sink)
+**Function:** `http` (source or sink, determined by stage inputs)
 
 **Enable:**
 
@@ -832,16 +827,17 @@ format = "jsonl"
 plugins = ["http"]
 ```
 
-**Source Example (GET):**
+**Source Example (fetch data):**
 
 ```toml
 [[stages]]
 id = "fetch_api"
-function = "http.get"
+function = "http"
 inputs = []
 
 [stages.config]
 url = "https://api.example.com/data"
+method = "GET"
 format = "json"
 timeout_seconds = 30
 
@@ -850,16 +846,17 @@ Authorization = "Bearer ${API_TOKEN}"
 Accept = "application/json"
 ```
 
-**Sink Example (POST):**
+**Sink Example (send data):**
 
 ```toml
 [[stages]]
 id = "send_webhook"
-function = "http.post"
+function = "http"
 inputs = ["data"]
 
 [stages.config]
 url = "https://webhook.example.com/events"
+method = "POST"
 format = "json"
 
 [stages.config.headers]
@@ -871,7 +868,8 @@ Content-Type = "application/json"
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `url` | String | ✅ Yes | - | API endpoint URL |
-| `format` | String | No | `json` | Data format: `json`, `jsonl`, `csv` |
+| `method` | String | No | `GET` for source, `POST` for sink | HTTP method (GET, POST, PUT, PATCH, DELETE) |
+| `format` | String | No | `json` | Data format: `json`, `jsonl`, `raw` |
 | `headers` | Object | No | `{}` | Custom HTTP headers |
 | `timeout_seconds` | Integer | No | `30` | Request timeout |
 
@@ -884,8 +882,18 @@ See [Plugin System](plugin-system.md#http-plugin) for detailed documentation.
 **Plugin:** `mongodb`
 
 **Functions:**
-- `mongodb.find` - Query documents (source)
-- `mongodb.insert` - Insert documents (sink)
+- **Sources:**
+  - `mongodb.find` - Find multiple documents
+  - `mongodb.findOne` - Find single document
+- **Sinks:**
+  - `mongodb.insertOne` - Insert single document
+  - `mongodb.insertMany` - Insert multiple documents
+  - `mongodb.updateOne` - Update single document
+  - `mongodb.updateMany` - Update multiple documents
+  - `mongodb.deleteOne` - Delete single document
+  - `mongodb.deleteMany` - Delete multiple documents
+  - `mongodb.replaceOne` - Replace single document
+  - `mongodb.replaceMany` - Replace multiple documents
 
 **Enable:**
 
@@ -894,7 +902,7 @@ See [Plugin System](plugin-system.md#http-plugin) for detailed documentation.
 plugins = ["mongodb"]
 ```
 
-**Source Example:**
+**Source Example (find):**
 
 ```toml
 [[stages]]
@@ -903,45 +911,62 @@ function = "mongodb.find"
 inputs = []
 
 [stages.config]
-connection_string = "mongodb://localhost:27017"
+uri = "mongodb://localhost:27017"
 database = "myapp"
 collection = "users"
 query = '{ "status": "active" }'
 limit = 1000
 ```
 
-**Sink Example:**
+**Sink Example (insertMany):**
 
 ```toml
 [[stages]]
 id = "save_to_mongo"
-function = "mongodb.insert"
+function = "mongodb.insertMany"
 inputs = ["processed"]
 
 [stages.config]
-connection_string = "mongodb://localhost:27017"
+uri = "mongodb://localhost:27017"
 database = "results"
 collection = "analytics"
 ```
 
-**Configuration (mongodb.find):**
+**Update Example:**
+
+```toml
+[[stages]]
+id = "update_status"
+function = "mongodb.updateMany"
+inputs = ["updates"]
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "myapp"
+collection = "users"
+query = '{ "status": "pending" }'
+```
+
+**Common Configuration (all operations):**
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `connection_string` | String | ✅ Yes | - | MongoDB connection string |
+| `uri` | String | ✅ Yes | - | MongoDB connection URI |
 | `database` | String | ✅ Yes | - | Database name |
 | `collection` | String | ✅ Yes | - | Collection name |
+
+**Additional Options (find operations):**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
 | `query` | String | No | `{}` | MongoDB query (JSON string) |
 | `limit` | Integer | No | - | Maximum documents to fetch |
-| `batch_size` | Integer | No | `1000` | Cursor batch size |
 
-**Configuration (mongodb.insert):**
+**Additional Options (update/delete/replace operations):**
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `connection_string` | String | ✅ Yes | - | MongoDB connection string |
-| `database` | String | ✅ Yes | - | Database name |
-| `collection` | String | ✅ Yes | - | Collection name |
+| `query` | String | ✅ Yes | - | MongoDB query filter (JSON string) |
 
 See [Plugin System](plugin-system.md#mongodb-plugin) for detailed documentation.
 

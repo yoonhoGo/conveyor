@@ -303,7 +303,7 @@ Use environment variables in configuration:
 
 ```toml
 [stages.config]
-connection_string = "{{ env.MONGODB_URI }}"
+uri = "{{ env.MONGODB_URI }}"
 
 [stages.config.headers]
 Authorization = "Bearer {{ env.API_TOKEN }}"
@@ -413,20 +413,20 @@ plugins = ["http", "mongodb"]
 # Stage 1: Load events from MongoDB
 [[stages]]
 id = "load_events"
-type = "plugin.mongodb"
+function = "mongodb.find"
 inputs = []
 
 [stages.config]
-connection_string = "{{ env.MONGODB_URI }}"
+uri = "{{ env.MONGODB_URI }}"
 database = "analytics"
 collection = "events"
 query = '{ "event_type": "purchase" }'
-batch_size = 5000
+limit = 5000
 
 # Stage 2: Validate data
 [[stages]]
 id = "validate"
-type = "transform.validate_schema"
+function = "validate.schema"
 inputs = ["load_events"]
 
 [stages.config]
@@ -440,7 +440,7 @@ amount = "float"
 # Stage 3: Filter high-value events
 [[stages]]
 id = "filter_high_value"
-type = "transform.filter"
+function = "filter.apply"
 inputs = ["validate"]
 
 [stages.config]
@@ -451,7 +451,7 @@ value = 100.0
 # Stage 4: Enrich with user data via API
 [[stages]]
 id = "enrich_users"
-type = "transform.http_fetch"
+function = "http.fetch"
 inputs = ["filter_high_value"]
 
 [stages.config]
@@ -464,7 +464,7 @@ Authorization = "Bearer {{ env.API_TOKEN }}"
 # Stage 5: Save to JSON (branch 1)
 [[stages]]
 id = "save_json"
-type = "sink.json"
+function = "json.write"
 inputs = ["enrich_users"]
 
 [stages.config]
@@ -474,7 +474,7 @@ format = "jsonl"
 # Stage 6: Display preview (branch 2)
 [[stages]]
 id = "preview"
-type = "sink.stdout"
+function = "stdout.write"
 inputs = ["enrich_users"]
 
 [stages.config]
