@@ -61,8 +61,8 @@ impl Registry {
 
     /// Load registry from local cache
     pub fn load_cached(cache_path: &PathBuf) -> Result<Self> {
-        let content = std::fs::read_to_string(cache_path)
-            .context("Failed to read cached registry")?;
+        let content =
+            std::fs::read_to_string(cache_path).context("Failed to read cached registry")?;
 
         let registry: Registry =
             serde_json::from_str(&content).context("Failed to parse cached registry")?;
@@ -76,8 +76,7 @@ impl Registry {
             std::fs::create_dir_all(parent).context("Failed to create cache directory")?;
         }
 
-        let content = serde_json::to_string_pretty(self)
-            .context("Failed to serialize registry")?;
+        let content = serde_json::to_string_pretty(self).context("Failed to serialize registry")?;
 
         std::fs::write(cache_path, content).context("Failed to write registry cache")?;
 

@@ -102,16 +102,14 @@ impl PluginManager {
         }
 
         // Create plugins directory if it doesn't exist
-        std::fs::create_dir_all(&self.plugins_dir)
-            .context("Failed to create plugins directory")?;
+        std::fs::create_dir_all(&self.plugins_dir).context("Failed to create plugins directory")?;
 
         // Determine plugin filename
         let filename = format!("libconveyor_plugin_{}.dylib", name);
         let plugin_path = self.plugins_dir.join(&filename);
 
         // Write plugin file
-        std::fs::write(&plugin_path, &plugin_data)
-            .context("Failed to write plugin file")?;
+        std::fs::write(&plugin_path, &plugin_data).context("Failed to write plugin file")?;
 
         info!("✓ Plugin installed to {}", plugin_path.display());
 
@@ -184,8 +182,8 @@ impl PluginManager {
             return Ok(VersionsFile::default());
         }
 
-        let content = std::fs::read_to_string(&self.versions_file)
-            .context("Failed to read versions file")?;
+        let content =
+            std::fs::read_to_string(&self.versions_file).context("Failed to read versions file")?;
 
         let versions: VersionsFile =
             serde_json::from_str(&content).context("Failed to parse versions file")?;
@@ -206,7 +204,9 @@ impl PluginManager {
     // Helper: Update versions file with new plugin
     fn update_versions_file(&self, name: &str, version: &str) -> Result<()> {
         let mut versions = self.load_versions_file()?;
-        versions.plugins.insert(name.to_string(), version.to_string());
+        versions
+            .plugins
+            .insert(name.to_string(), version.to_string());
         self.save_versions_file(&versions)?;
         Ok(())
     }
