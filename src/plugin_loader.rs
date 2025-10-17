@@ -117,7 +117,26 @@ impl PluginLoader {
         }
 
         let library_name = get_library_name(name);
-        let library_path = self.plugin_dir.join(&library_name);
+
+        // Search for plugin in multiple locations
+        let search_paths = get_plugin_search_paths();
+        let mut library_path = None;
+
+        for search_dir in search_paths {
+            let candidate = search_dir.join(&library_name);
+            if candidate.exists() {
+                library_path = Some(candidate);
+                break;
+            }
+        }
+
+        let library_path = library_path.ok_or_else(|| {
+            anyhow!(
+                "Plugin library '{}' not found in any search path. Try 'conveyor plugin install {}'",
+                library_name,
+                name
+            )
+        })?;
 
         tracing::info!(
             "Loading plugin: {} from {:?} (API v{})",
@@ -125,11 +144,6 @@ impl PluginLoader {
             library_path,
             PLUGIN_API_VERSION
         );
-
-        // Check if plugin file exists
-        if !library_path.exists() {
-            return Err(anyhow!("Plugin library not found at {:?}", library_path));
-        }
 
         // Load the library with panic isolation
         let (library, declaration) = self.load_library_safe(&library_path, name)?;
@@ -320,6 +334,25 @@ impl Default for PluginLoader {
 /// Get platform-specific library name (macOS only)
 fn get_library_name(plugin_name: &str) -> String {
     format!("libconveyor_plugin_{}.dylib", plugin_name)
+}
+
+/// Get plugin search paths in priority order
+fn get_plugin_search_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    // 1. System-wide plugins: ~/.conveyor/plugins
+    if let Some(home_dir) = dirs::home_dir() {
+        paths.push(home_dir.join(".conveyor").join("plugins"));
+    }
+
+    // 2. Development plugins: ./target/release or ./target/debug
+    if cfg!(debug_assertions) {
+        paths.push(PathBuf::from("target/debug"));
+    } else {
+        paths.push(PathBuf::from("target/release"));
+    }
+
+    paths
 }
 
 #[cfg(test)]

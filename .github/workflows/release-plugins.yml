@@ -1,0 +1,90 @@
+name: Release Plugins
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-plugins-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build HTTP Plugin
+        run: cargo build --release -p conveyor-plugin-http
+
+      - name: Build MongoDB Plugin
+        run: cargo build --release -p conveyor-plugin-mongodb
+
+      - name: Generate checksums
+        run: |
+          cd target/release
+          shasum -a 256 libconveyor_plugin_http.dylib > libconveyor_plugin_http.dylib.sha256
+          shasum -a 256 libconveyor_plugin_mongodb.dylib > libconveyor_plugin_mongodb.dylib.sha256
+
+      - name: Upload HTTP Plugin
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: target/release/libconveyor_plugin_http.dylib
+          asset_name: libconveyor_plugin_http.dylib
+          asset_content_type: application/octet-stream
+
+      - name: Upload HTTP Plugin Checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: target/release/libconveyor_plugin_http.dylib.sha256
+          asset_name: libconveyor_plugin_http.dylib.sha256
+          asset_content_type: text/plain
+
+      - name: Upload MongoDB Plugin
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: target/release/libconveyor_plugin_mongodb.dylib
+          asset_name: libconveyor_plugin_mongodb.dylib
+          asset_content_type: application/octet-stream
+
+      - name: Upload MongoDB Plugin Checksum
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: target/release/libconveyor_plugin_mongodb.dylib.sha256
+          asset_name: libconveyor_plugin_mongodb.dylib.sha256
+          asset_content_type: text/plain

@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "registry_url": "https://raw.githubusercontent.com/yoonhoGo/conveyor/main/registry.json",
+  "plugins": {
+    "http": {
+      "name": "http",
+      "version": "0.2.0",
+      "description": "HTTP source and sink plugin for REST API integration",
+      "author": "Conveyor Team",
+      "repository": "https://github.com/yoonhoGo/conveyor",
+      "downloads": {
+        "darwin-aarch64": {
+          "url": "https://github.com/yoonhoGo/conveyor/releases/download/v0.10.0/libconveyor_plugin_http.dylib",
+          "checksum": ""
+        }
+      }
+    },
+    "mongodb": {
+      "name": "mongodb",
+      "version": "0.2.0",
+      "description": "MongoDB source and sink plugin for database operations",
+      "author": "Conveyor Team",
+      "repository": "https://github.com/yoonhoGo/conveyor",
+      "downloads": {
+        "darwin-aarch64": {
+          "url": "https://github.com/yoonhoGo/conveyor/releases/download/v0.10.0/libconveyor_plugin_mongodb.dylib",
+          "checksum": ""
+        }
+      }
+    }
+  }
+}

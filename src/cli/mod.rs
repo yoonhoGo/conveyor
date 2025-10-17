@@ -5,6 +5,7 @@ use crate::core::registry::ModuleRegistry;
 pub mod add_stage;
 pub mod edit;
 pub mod interactive_builder;
+pub mod plugin;
 pub mod scaffold;
 
 pub use add_stage::add_stage_to_pipeline;

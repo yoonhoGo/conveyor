@@ -69,6 +69,12 @@ enum Commands {
         command: StageCommands,
     },
 
+    #[command(about = "Plugin management commands")]
+    Plugin {
+        #[command(subcommand)]
+        command: cli::plugin::PluginCommand,
+    },
+
     #[command(about = "Update conveyor to the latest version")]
     Update,
 }
@@ -177,6 +183,10 @@ async fn main() -> Result<()> {
                 cli::describe_function_json(&function).await?;
             }
         },
+
+        Commands::Plugin { command } => {
+            command.execute().await?;
+        }
 
         Commands::Update => {
             update::install_update().await?;

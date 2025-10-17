@@ -4,6 +4,8 @@ pub mod dag_executor;
 pub mod error;
 pub mod metadata;
 pub mod pipeline;
+pub mod plugin_manager;
+pub mod plugin_registry;
 pub mod registry;
 pub mod stage;
 pub mod strategy;
