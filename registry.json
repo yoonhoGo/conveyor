@@ -10,8 +10,8 @@
       "repository": "https://github.com/yoonhoGo/conveyor",
       "downloads": {
         "darwin-aarch64": {
-          "url": "https://github.com/yoonhoGo/conveyor/releases/download/v0.10.0/libconveyor_plugin_http.dylib",
-          "checksum": ""
+          "url": "https://github.com/yoonhoGo/conveyor/releases/download/v0.11.0/libconveyor_plugin_http.dylib",
+          "checksum": "sha256:563a8f506321e033fa17b7b924e324822d807c8c3dc96213df9f438ed12d14d2"
         }
       }
     },
@@ -23,8 +23,8 @@
       "repository": "https://github.com/yoonhoGo/conveyor",
       "downloads": {
         "darwin-aarch64": {
-          "url": "https://github.com/yoonhoGo/conveyor/releases/download/v0.10.0/libconveyor_plugin_mongodb.dylib",
-          "checksum": ""
+          "url": "https://github.com/yoonhoGo/conveyor/releases/download/v0.11.0/libconveyor_plugin_mongodb.dylib",
+          "checksum": "sha256:4c33e840d1a42ea506d3945beadab4f235a55ed418a34a194eb4717d1585a1f4"
         }
       }
     }
