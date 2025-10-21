@@ -116,7 +116,9 @@ impl Stage for FfiPluginStageAdapter {
         }
 
         // Convert config to FFI format
+        tracing::debug!("Original config before conversion: {:?}", config);
         let ffi_config = config_to_ffi(config)?;
+        tracing::debug!("FFI config after conversion: {:?}", ffi_config);
 
         // Create execution context
         let context = FfiExecutionContext::new(ffi_inputs, ffi_config);
@@ -306,19 +308,58 @@ fn ffi_to_dataformat(ffi_data: &FfiDataFormat) -> Result<DataFormat> {
     }
 }
 
-/// Convert config HashMap to FFI RHashMap
+/// Convert config HashMap to FFI RHashMap with nested table flattening
 fn config_to_ffi(config: &HashMap<String, toml::Value>) -> Result<RHashMap<RString, RString>> {
     let mut ffi_config = RHashMap::new();
-    for (key, value) in config {
-        let value_str = match value {
-            toml::Value::String(s) => s.clone(),
-            toml::Value::Integer(i) => i.to_string(),
-            toml::Value::Float(f) => f.to_string(),
-            toml::Value::Boolean(b) => b.to_string(),
-            other => other.to_string(),
-        };
-        ffi_config.insert(RString::from(key.clone()), RString::from(value_str));
+
+    fn flatten_value(prefix: &str, value: &toml::Value, result: &mut RHashMap<RString, RString>) {
+        match value {
+            toml::Value::String(s) => {
+                result.insert(RString::from(prefix.to_string()), RString::from(s.clone()));
+            }
+            toml::Value::Integer(i) => {
+                result.insert(
+                    RString::from(prefix.to_string()),
+                    RString::from(i.to_string()),
+                );
+            }
+            toml::Value::Float(f) => {
+                result.insert(
+                    RString::from(prefix.to_string()),
+                    RString::from(f.to_string()),
+                );
+            }
+            toml::Value::Boolean(b) => {
+                result.insert(
+                    RString::from(prefix.to_string()),
+                    RString::from(b.to_string()),
+                );
+            }
+            toml::Value::Table(table) => {
+                // Recursively flatten nested tables
+                for (key, val) in table {
+                    let new_prefix = if prefix.is_empty() {
+                        key.clone()
+                    } else {
+                        format!("{}.{}", prefix, key)
+                    };
+                    flatten_value(&new_prefix, val, result);
+                }
+            }
+            other => {
+                // For arrays and other types, convert to string
+                result.insert(
+                    RString::from(prefix.to_string()),
+                    RString::from(other.to_string()),
+                );
+            }
+        }
     }
+
+    for (key, value) in config {
+        flatten_value(key, value, &mut ffi_config);
+    }
+
     Ok(ffi_config)
 }
 

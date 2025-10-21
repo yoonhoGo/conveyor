@@ -75,9 +75,12 @@ impl HttpStage {
         // Build request
         let mut request = client.request(method_enum, url);
 
-        // Add custom headers
+        // Add custom headers (supports both "header." and "headers." prefixes)
         for (key, value) in config.iter() {
-            if key.starts_with("header.") {
+            if key.starts_with("headers.") {
+                let header_name = key.strip_prefix("headers.").unwrap();
+                request = request.header(header_name, value);
+            } else if key.starts_with("header.") {
                 let header_name = key.strip_prefix("header.").unwrap();
                 request = request.header(header_name, value);
             }
@@ -297,9 +300,12 @@ impl HttpStage {
             .header("Content-Type", "application/json")
             .body(body);
 
-        // Add custom headers
+        // Add custom headers (supports both "header." and "headers." prefixes)
         for (key, value) in config.iter() {
-            if key.starts_with("header.") {
+            if key.starts_with("headers.") {
+                let header_name = key.strip_prefix("headers.").unwrap();
+                request = request.header(header_name, value);
+            } else if key.starts_with("header.") {
                 let header_name = key.strip_prefix("header.").unwrap();
                 request = request.header(header_name, value);
             }
