@@ -3,6 +3,12 @@ name: Release Plugins
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v0.11.1)'
+        required: true
+        type: string
 
 jobs:
   build-plugins-macos:
@@ -49,42 +55,22 @@ jobs:
           shasum -a 256 libconveyor_plugin_http.dylib > libconveyor_plugin_http.dylib.sha256
           shasum -a 256 libconveyor_plugin_mongodb.dylib > libconveyor_plugin_mongodb.dylib.sha256
 
-      - name: Upload HTTP Plugin
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: target/release/libconveyor_plugin_http.dylib
-          asset_name: libconveyor_plugin_http.dylib
-          asset_content_type: application/octet-stream
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Upload HTTP Plugin Checksum
-        uses: actions/upload-release-asset@v1
+      - name: Upload plugins to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: target/release/libconveyor_plugin_http.dylib.sha256
-          asset_name: libconveyor_plugin_http.dylib.sha256
-          asset_content_type: text/plain
-
-      - name: Upload MongoDB Plugin
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: target/release/libconveyor_plugin_mongodb.dylib
-          asset_name: libconveyor_plugin_mongodb.dylib
-          asset_content_type: application/octet-stream
-
-      - name: Upload MongoDB Plugin Checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: target/release/libconveyor_plugin_mongodb.dylib.sha256
-          asset_name: libconveyor_plugin_mongodb.dylib.sha256
-          asset_content_type: text/plain
+        run: |
+          gh release upload ${{ steps.tag.outputs.tag }} \
+            target/release/libconveyor_plugin_http.dylib \
+            target/release/libconveyor_plugin_http.dylib.sha256 \
+            target/release/libconveyor_plugin_mongodb.dylib \
+            target/release/libconveyor_plugin_mongodb.dylib.sha256 \
+            --clobber
