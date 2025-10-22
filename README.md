@@ -128,8 +128,13 @@ url = "https://api.example.com/data"
 ```
 
 Available plugins:
+
+**FFI Plugins** (High Performance):
 - **HTTP**: REST API integration ([docs](docs/plugins/http.md))
 - **MongoDB**: Database operations ([docs](docs/plugins/mongodb.md))
+
+**WASM Plugins** (Cross-Platform, Sandboxed):
+- **JavaScript**: Inline JavaScript code execution ([docs](plugins-wasm/conveyor-plugin-js-wasm/README.md))
 
 Create your own: [Plugin Development Guide](docs/plugin-system.md)
 
@@ -179,9 +184,11 @@ Supports: OpenAI, Anthropic, OpenRouter, Ollama
 
 ### Plugin Functions
 
-**HTTP Plugin**: `http.get`, `http.post`, `http.put`, `http.patch`, `http.delete` ([docs](docs/plugins/http.md))
+**HTTP Plugin** (FFI): `http.get`, `http.post`, `http.put`, `http.patch`, `http.delete` ([docs](docs/plugins/http.md))
 
-**MongoDB Plugin**: `mongodb.find`, `mongodb.findOne`, `mongodb.insertOne`, `mongodb.insertMany`, `mongodb.updateOne`, `mongodb.updateMany`, `mongodb.deleteOne`, `mongodb.deleteMany`, `mongodb.replaceOne`, `mongodb.replaceMany` ([docs](docs/plugins/mongodb.md))
+**MongoDB Plugin** (FFI): `mongodb.find`, `mongodb.findOne`, `mongodb.insertOne`, `mongodb.insertMany`, `mongodb.updateOne`, `mongodb.updateMany`, `mongodb.deleteOne`, `mongodb.deleteMany`, `mongodb.replaceOne`, `mongodb.replaceMany` ([docs](docs/plugins/mongodb.md))
+
+**JavaScript Plugin** (WASM): `js.eval` - Execute JavaScript code inline ([docs](plugins-wasm/conveyor-plugin-js-wasm/README.md))
 
 ## Documentation
 

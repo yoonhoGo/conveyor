@@ -8,6 +8,7 @@ members = [
     "plugins/conveyor-plugin-kafka",
     "plugins-wasm/conveyor-plugin-echo-wasm",
     "plugins-wasm/conveyor-plugin-excel-wasm",
+    "plugins-wasm/conveyor-plugin-js-wasm",
 ]
 exclude = [
     "examples/plugin-template",  # Template for creating new plugins

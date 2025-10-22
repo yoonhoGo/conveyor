@@ -1,0 +1,65 @@
+# JavaScript Transform Example Pipeline
+# Demonstrates using inline JavaScript code to transform data
+
+[pipeline]
+name = "js-transform-example"
+version = "1.0.0"
+description = "Example pipeline using JavaScript inline transformation"
+
+[global]
+log_level = "info"
+wasm_plugins = ["js_wasm"]
+
+# Load sample user data from JSON
+[[stages]]
+id = "load_users"
+function = "json.read"
+inputs = []
+
+[stages.config]
+path = "examples/data/users.json"
+format = "records"
+
+# Transform data using JavaScript
+[[stages]]
+id = "js_transform"
+function = "js.eval"
+inputs = ["load_users"]
+
+[stages.config]
+script = '''
+function transform(row) {
+    // Calculate full name
+    const fullName = row.firstName + ' ' + row.lastName;
+
+    // Calculate age from birth year
+    const currentYear = new Date().getFullYear();
+    const age = currentYear - row.birthYear;
+
+    // Determine if adult
+    const isAdult = age >= 18;
+
+    // Return transformed row
+    return {
+        id: row.id,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        fullName: fullName,
+        birthYear: row.birthYear,
+        age: age,
+        isAdult: isAdult,
+        email: row.email,
+        status: row.status
+    };
+}
+'''
+
+# Display results
+[[stages]]
+id = "display"
+function = "stdout.write"
+inputs = ["js_transform"]
+
+[stages.config]
+format = "table"
+limit = 10

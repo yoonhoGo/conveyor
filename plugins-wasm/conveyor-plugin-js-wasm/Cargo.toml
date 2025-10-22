@@ -1,0 +1,26 @@
+[package]
+name = "conveyor-plugin-js-wasm"
+version = "0.1.0"
+edition = "2021"
+authors = ["Yoonho Go"]
+description = "JavaScript inline execution WASM plugin for Conveyor"
+license = "MIT"
+
+[dependencies]
+# WIT bindgen for WASM Component Model
+wit-bindgen = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# JavaScript engine (pure Rust)
+boa_engine = "0.19"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = "z"      # Optimize for size
+lto = true           # Link-time optimization
+strip = true         # Strip symbols
