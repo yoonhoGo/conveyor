@@ -10,92 +10,94 @@ Complete documentation for Conveyor - a high-performance, TOML-based ETL CLI too
 
 ## User Documentation
 
-Documentation for using Conveyor:
+Learn how to use Conveyor for your data pipelines.
 
-### Core Concepts
+### Getting Started
 
-- **[Configuration Reference](configuration.md)** - Complete TOML configuration guide
+- **[CLI Reference](cli-reference.md)** - All CLI commands and usage
+  - `run`, `validate`, `list`, `info`, `build`, `stage`
+  - Global options and environment variables
+  - Interactive features and discovery workflow
+
+- **[Configuration Guide](configuration.md)** - TOML pipeline configuration
   - Pipeline structure and metadata
-  - Global configuration options
+  - Global configuration and variables
   - Stage configuration
   - Error handling strategies
-  - Environment variables
 
 - **[DAG Pipelines](dag-pipelines.md)** - Pipeline composition and execution
   - DAG-based execution model
-  - Stage types and dependencies
   - Branching patterns (fan-out, fan-in)
   - Level-based parallelism
-  - Validation and error handling
+  - Data passing between stages
 
-### CLI Usage
+### Functions and Plugins
 
-- **[CLI Reference](cli-reference.md)** - Complete command-line interface guide
-  - `run` - Execute pipelines
-  - `validate` - Validate configurations
-  - `list` - Discover available modules
-  - `info` - Get detailed module information
-  - `build` - Interactive stage builder
-  - `stage` - Stage management commands
+- **[Modules Reference](modules-reference.md)** - Index of all available functions
+  - Quick navigation to all sources, transforms, and sinks
+  - Built-in and plugin function lists
 
-### Built-in Modules
-
-- **[Modules Reference](modules-reference.md)** - All built-in sources, transforms, and sinks
+- **[Built-in Functions](builtin-functions.md)** - Detailed documentation for built-in functions
   - Data Sources (CSV, JSON, stdin, file watching)
-  - Transforms (filter, map, select, group by, sort, AI generation, etc.)
+  - Transforms (filter, map, select, group by, sort, AI, etc.)
   - Sinks (CSV, JSON, stdout)
-  - Configuration options for each module
-  - Usage examples
+  - Configuration options and examples
+
+- **[HTTP Plugin](plugins/http.md)** - REST API integration
+  - GET, POST, PUT, PATCH, DELETE operations
+  - Authentication and custom headers
+  - Source and sink modes
+  - Complete examples
+
+- **[MongoDB Plugin](plugins/mongodb.md)** - Database operations
+  - Read operations (find, findOne)
+  - Write operations (insert, update, delete, replace)
+  - Query language and best practices
+  - Performance tips
 
 ### Advanced Features
+
+- **[HTTP Fetch Transform](http-fetch-transform.md)** - Dynamic API calls
+  - Per-row mode vs. batch mode
+  - Template-based URLs with Handlebars
+  - Authentication and error handling
+  - Multi-step pipeline examples
+
+## Developer Documentation
+
+Extend Conveyor and contribute to the project.
+
+### Plugin Development
+
+- **[Plugin Development Guide](plugin-system.md)** - Create custom plugins
+  - FFI plugins (high-performance, Rust-to-Rust)
+  - WASM plugins (cross-platform, sandboxed)
+  - Plugin capabilities (sources, transforms, sinks)
+  - Testing and distribution
 
 - **[Metadata System](metadata-system.md)** - Self-documenting features
   - StageMetadata structure
   - Parameter definitions and validation
-  - CLI integration (list, info, build commands)
-  - Creating metadata for custom stages
+  - CLI integration (list, info, build)
+  - Implementing metadata for custom stages
 
-- **[HTTP Fetch Transform](http-fetch-transform.md)** - Dynamic API calls within pipelines
-  - Per-row mode vs. batch mode
-  - Template-based URLs with Handlebars
-  - Authentication and custom headers
-  - Error handling
+### Contributing
 
-## Developer Documentation
-
-Documentation for contributing to and extending Conveyor:
-
-### Getting Started
-
-- **[Development Guide](development.md)** - Building, testing, and contributing
+- **[Development Guide](development.md)** - Build, test, contribute
   - Prerequisites and setup
   - Project structure
   - Development workflow
-  - Building plugins
-  - Code standards (formatting, linting, documentation)
-  - Testing strategy
-  - Debugging tips
+  - Code standards and testing
+  - Release process
 
-### Plugin Development
-
-- **[Plugin System](plugin-system.md)** - Create and use plugins
-  - FFI plugins (performance-critical)
-  - WASM plugins (cross-platform, sandboxed)
-  - Plugin safety features
-  - Creating custom plugins
-  - Troubleshooting
-
-### Architecture
-
-- **[CLAUDE.md](../CLAUDE.md)** - Technical implementation notes
+- **[Architecture (CLAUDE.md)](../CLAUDE.md)** - Technical implementation details
   - Architecture overview and design decisions
   - Workspace structure
-  - Core components
   - Implementation challenges and solutions
   - Lessons learned
-  - Performance considerations
+  - For AI agents and developers
 
-## Documentation Organization
+## Documentation Structure
 
 ```
 docs/
@@ -103,23 +105,72 @@ docs/
 ├── cli-reference.md             # CLI commands and usage
 ├── configuration.md             # TOML configuration reference
 ├── dag-pipelines.md             # DAG execution model
-├── development.md               # Building and contributing
+├── modules-reference.md         # Index of all functions
+├── builtin-functions.md         # Built-in functions detail
+├── plugins/                     # Plugin usage guides
+│   ├── http.md
+│   └── mongodb.md
 ├── http-fetch-transform.md      # HTTP fetch feature guide
 ├── metadata-system.md           # Self-documenting system
-├── modules-reference.md         # Built-in modules
-└── plugin-system.md             # Plugin development
+├── plugin-system.md             # Plugin development
+└── development.md               # Building and contributing
 ```
 
 ## Examples
 
 The [examples/](../examples/) directory contains complete pipeline examples:
 
-- CSV to JSON transformation
-- HTTP API integration
-- Data enrichment with API calls
-- Real-time stream processing
-- Windowing and aggregation
-- AI-powered data processing
+1. **CSV to JSON**: Simple data transformation
+2. **HTTP API Integration**: Fetch and process external data
+3. **Data Enrichment**: Combine data from multiple sources
+4. **Stream Processing**: Real-time data analysis with windowing
+5. **AI Classification**: Sentiment analysis with LLMs
+
+## Common Workflows
+
+### Discover Available Functions
+
+```bash
+# List all functions
+conveyor list
+
+# Filter by type
+conveyor list -t sources
+
+# Get detailed info
+conveyor info csv.read
+```
+
+### Build a Pipeline
+
+```bash
+# Create new pipeline
+conveyor stage new -o pipeline.toml
+
+# Build stages interactively
+conveyor build
+
+# Validate configuration
+conveyor validate pipeline.toml
+
+# Run pipeline
+conveyor run pipeline.toml
+```
+
+### Use Plugins
+
+```bash
+# Enable plugins in pipeline
+[global]
+plugins = ["http", "mongodb"]
+
+# Use plugin functions
+[[stages]]
+function = "http.get"
+
+[[stages]]
+function = "mongodb.find"
+```
 
 ## Support
 
@@ -129,4 +180,4 @@ The [examples/](../examples/) directory contains complete pipeline examples:
 
 ---
 
-**Tip**: Use `conveyor --help` and `conveyor <command> --help` for built-in help, or explore available modules with `conveyor list` and `conveyor info <function>`.
+**Tip**: Use `conveyor --help` for built-in help, or explore with `conveyor list` and `conveyor info <function>` for interactive discovery.

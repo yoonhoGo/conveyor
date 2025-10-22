@@ -271,9 +271,9 @@ let value = config
 - FFI in Rust is achievable with the right tools and patterns
 - Proper documentation and examples are crucial for plugin developers
 
-**Plugin Examples**:
-- **HTTP Plugin**: REST API source and sink (GET/POST/PUT/PATCH/DELETE)
-- **MongoDB Plugin**: Cursor-based pagination, batch inserts, connection pooling
+**Plugin Implementations**:
+- **HTTP Plugin**: REST API source and sink (GET/POST/PUT/PATCH/DELETE) → @docs/plugins/http.md
+- **MongoDB Plugin**: Cursor-based pagination, batch inserts, connection pooling → @docs/plugins/mongodb.md
 
 ### 4. WASM Plugin System
 
@@ -509,14 +509,17 @@ This document focuses on architecture decisions and implementation challenges. F
 - **[@docs/cli-reference.md](docs/cli-reference.md)** - Complete CLI command reference
 - **[@docs/configuration.md](docs/configuration.md)** - Pipeline configuration guide
 - **[@docs/dag-pipelines.md](docs/dag-pipelines.md)** - DAG pipeline composition and execution
-- **[@docs/modules-reference.md](docs/modules-reference.md)** - All built-in sources, transforms, and sinks
-- **[@docs/metadata-system.md](docs/metadata-system.md)** - Self-documenting features and metadata API
+- **[@docs/builtin-functions.md](docs/builtin-functions.md)** - Built-in sources, transforms, and sinks usage
+- **[@docs/plugins/http.md](docs/plugins/http.md)** - HTTP plugin usage and configuration
+- **[@docs/plugins/mongodb.md](docs/plugins/mongodb.md)** - MongoDB plugin usage and configuration
 - **[@docs/http-fetch-transform.md](docs/http-fetch-transform.md)** - Dynamic HTTP API calls within pipelines
+- **[@docs/modules-reference.md](docs/modules-reference.md)** - Index of all available modules
 
 ### Developer Documentation
-- **[@docs/plugin-system.md](docs/plugin-system.md)** - Creating and using plugins (FFI & WASM)
+- **[@docs/plugin-system.md](docs/plugin-system.md)** - Creating custom plugins (FFI & WASM)
+- **[@docs/metadata-system.md](docs/metadata-system.md)** - Self-documenting system for developers
 - **[@docs/development.md](docs/development.md)** - Building, testing, and contributing
-- **[README.md](README.md)** - Project overview and quick start
+- **[README.md](README.md)** - Project overview and quick start for users
 
 ### Testing Strategy
 
