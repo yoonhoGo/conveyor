@@ -12,7 +12,6 @@ use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 
 // For home directory access
-use dirs;
 
 // Generate host-side bindings from WIT file
 wasmtime::component::bindgen!({
