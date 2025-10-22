@@ -76,6 +76,7 @@ toml = { workspace = true }
 # Async runtime
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+tokio-util = "0.7"
 async-stream = "0.3"
 async-trait = { workspace = true }
 
