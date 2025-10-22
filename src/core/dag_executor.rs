@@ -1,15 +1,51 @@
 use anyhow::Result;
 use petgraph::algo::toposort;
 use petgraph::graph::{DiGraph, NodeIndex};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, warn};
 
 use crate::core::error::ConveyorError;
 use crate::core::stage::StageRef;
 use crate::core::strategy::ErrorStrategy;
 use crate::core::traits::DataFormat;
+
+/// Message type for broadcast channels (used in fan-out scenarios)
+pub enum BroadcastMessage {
+    /// Data to be sent to downstream stages
+    Data(DataFormat),
+    /// Signal that upstream stage has completed successfully
+    Complete,
+    /// Signal that upstream stage encountered an error
+    Error(String),
+}
+
+impl Clone for BroadcastMessage {
+    fn clone(&self) -> Self {
+        match self {
+            BroadcastMessage::Data(data) => {
+                // Use try_clone, fallback to empty DataFrame on error
+                let cloned = data
+                    .try_clone()
+                    .unwrap_or_else(|_| DataFormat::DataFrame(polars::prelude::DataFrame::empty()));
+                BroadcastMessage::Data(cloned)
+            }
+            BroadcastMessage::Complete => BroadcastMessage::Complete,
+            BroadcastMessage::Error(msg) => BroadcastMessage::Error(msg.clone()),
+        }
+    }
+}
+
+impl std::fmt::Debug for BroadcastMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BroadcastMessage::Data(_) => write!(f, "BroadcastMessage::Data(..)"),
+            BroadcastMessage::Complete => write!(f, "BroadcastMessage::Complete"),
+            BroadcastMessage::Error(msg) => write!(f, "BroadcastMessage::Error({})", msg),
+        }
+    }
+}
 
 /// Node in the DAG representing a pipeline stage
 #[derive(Clone)]
@@ -460,6 +496,29 @@ impl ChannelDagExecutor {
         }
     }
 
+    /// Identify nodes that need fan-out (out-degree > 1)
+    fn identify_fanout_nodes(&self) -> HashSet<NodeIndex> {
+        let mut fanout_nodes = HashSet::new();
+
+        for node_idx in self.graph.node_indices() {
+            let out_degree = self
+                .graph
+                .neighbors_directed(node_idx, petgraph::Direction::Outgoing)
+                .count();
+
+            if out_degree > 1 {
+                fanout_nodes.insert(node_idx);
+                let node_id = &self.graph[node_idx].id;
+                info!(
+                    "Stage '{}' has fan-out: {} downstream consumers",
+                    node_id, out_degree
+                );
+            }
+        }
+
+        fanout_nodes
+    }
+
     /// Execute the DAG pipeline with channel-based backpressure
     pub async fn execute(&self) -> Result<()> {
         // Validate DAG first
@@ -469,27 +528,57 @@ impl ChannelDagExecutor {
             ConveyorError::PipelineError("Cannot execute pipeline with cycles".to_string())
         })?;
 
+        // Identify fan-out nodes
+        let fanout_nodes = self.identify_fanout_nodes();
+
         info!(
-            "Executing channel-based pipeline with {} stages (buffer_size={})",
+            "Executing channel-based pipeline with {} stages (buffer_size={}, fan-out nodes={})",
             sorted.len(),
-            self.buffer_size
+            self.buffer_size,
+            fanout_nodes.len()
         );
 
         // Create channels for each edge in the graph
         type ChannelPair = (mpsc::Sender<DataFormat>, mpsc::Receiver<DataFormat>);
-        let mut channels: HashMap<(String, String), ChannelPair> = HashMap::new();
+        type BroadcastPair = (
+            broadcast::Sender<BroadcastMessage>,
+            broadcast::Receiver<BroadcastMessage>,
+        );
+
+        let mut mpsc_channels: HashMap<(String, String), ChannelPair> = HashMap::new();
+        let mut broadcast_channels: HashMap<String, BroadcastPair> = HashMap::new();
 
         // Build channels between stages
         for node_idx in &sorted {
             let node = &self.graph[*node_idx];
-            let successors = self
-                .graph
-                .neighbors_directed(*node_idx, petgraph::Direction::Outgoing);
 
-            for succ_idx in successors {
-                let succ_node = &self.graph[succ_idx];
-                let (tx, rx) = mpsc::channel(self.buffer_size);
-                channels.insert((node.id.clone(), succ_node.id.clone()), (tx, rx));
+            // Check if this node needs fan-out
+            if fanout_nodes.contains(node_idx) {
+                // Use broadcast channel for fan-out
+                let out_degree = self
+                    .graph
+                    .neighbors_directed(*node_idx, petgraph::Direction::Outgoing)
+                    .count();
+
+                let (tx, _rx) = broadcast::channel(self.buffer_size);
+                broadcast_channels.insert(node.id.clone(), (tx, _rx));
+
+                info!(
+                    "Created broadcast channel for stage '{}' with {} consumers",
+                    node.id, out_degree
+                );
+            } else {
+                // Use regular mpsc channel for single output
+                let successors: Vec<_> = self
+                    .graph
+                    .neighbors_directed(*node_idx, petgraph::Direction::Outgoing)
+                    .collect();
+
+                for succ_idx in successors {
+                    let succ_node = &self.graph[succ_idx];
+                    let (tx, rx) = mpsc::channel(self.buffer_size);
+                    mpsc_channels.insert((node.id.clone(), succ_node.id.clone()), (tx, rx));
+                }
             }
         }
 
@@ -501,33 +590,57 @@ impl ChannelDagExecutor {
             let stage = Arc::clone(&node.stage);
             let config = node.config.clone();
             let id = node.id.clone();
+            let is_fanout = fanout_nodes.contains(node_idx);
 
-            // Collect input receivers
+            // Collect input receivers (from either mpsc or broadcast channels)
             let predecessors: Vec<_> = self
                 .graph
                 .neighbors_directed(*node_idx, petgraph::Direction::Incoming)
                 .collect();
 
-            let mut input_receivers = Vec::new();
+            let mut mpsc_input_receivers = Vec::new();
+            let mut broadcast_input_receivers = Vec::new();
+
             for pred_idx in predecessors {
                 let pred_node = &self.graph[pred_idx];
-                // Remove receiver from channels map (each receiver can only be used once)
-                if let Some((_tx, rx)) = channels.remove(&(pred_node.id.clone(), id.clone())) {
-                    input_receivers.push((pred_node.id.clone(), rx));
+
+                // Check if predecessor uses broadcast
+                if fanout_nodes.contains(&pred_idx) {
+                    // Subscribe to broadcast channel
+                    if let Some((tx, _)) = broadcast_channels.get(&pred_node.id) {
+                        let rx = tx.subscribe();
+                        broadcast_input_receivers.push((pred_node.id.clone(), rx));
+                    }
+                } else {
+                    // Use mpsc channel
+                    if let Some((_tx, rx)) =
+                        mpsc_channels.remove(&(pred_node.id.clone(), id.clone()))
+                    {
+                        mpsc_input_receivers.push((pred_node.id.clone(), rx));
+                    }
                 }
             }
 
             // Collect output senders
-            let successors: Vec<_> = self
-                .graph
-                .neighbors_directed(*node_idx, petgraph::Direction::Outgoing)
-                .collect();
+            let broadcast_sender = if is_fanout {
+                broadcast_channels.get(&id).map(|(tx, _)| tx.clone())
+            } else {
+                None
+            };
 
-            let mut output_senders = Vec::new();
-            for succ_idx in successors {
-                let succ_node = &self.graph[succ_idx];
-                if let Some((tx, _rx)) = channels.get(&(id.clone(), succ_node.id.clone())) {
-                    output_senders.push(tx.clone());
+            let mut mpsc_output_senders = Vec::new();
+            if !is_fanout {
+                let successors: Vec<_> = self
+                    .graph
+                    .neighbors_directed(*node_idx, petgraph::Direction::Outgoing)
+                    .collect();
+
+                for succ_idx in successors {
+                    let succ_node = &self.graph[succ_idx];
+                    if let Some((tx, _rx)) = mpsc_channels.get(&(id.clone(), succ_node.id.clone()))
+                    {
+                        mpsc_output_senders.push(tx.clone());
+                    }
                 }
             }
 
@@ -535,12 +648,14 @@ impl ChannelDagExecutor {
 
             // Spawn stage task
             let task = tokio::spawn(async move {
-                Self::run_stage(
+                Self::run_stage_with_fanout(
                     id,
                     stage,
                     config,
-                    input_receivers,
-                    output_senders,
+                    mpsc_input_receivers,
+                    broadcast_input_receivers,
+                    mpsc_output_senders,
+                    broadcast_sender,
                     error_strategy,
                 )
                 .await
@@ -637,6 +752,131 @@ impl ChannelDagExecutor {
             // Send with backpressure
             if let Err(e) = tx.send(data).await {
                 warn!("Channel stage '{}': failed to send output: {}", id, e);
+            }
+        }
+
+        info!("Channel stage '{}' finished", id);
+        Ok(())
+    }
+
+    /// Run a single stage with fan-out support (broadcast channels)
+    #[allow(clippy::too_many_arguments)]
+    async fn run_stage_with_fanout(
+        id: String,
+        stage: StageRef,
+        config: HashMap<String, toml::Value>,
+        mut mpsc_input_receivers: Vec<(String, mpsc::Receiver<DataFormat>)>,
+        mut broadcast_input_receivers: Vec<(String, broadcast::Receiver<BroadcastMessage>)>,
+        mpsc_output_senders: Vec<mpsc::Sender<DataFormat>>,
+        broadcast_sender: Option<broadcast::Sender<BroadcastMessage>>,
+        error_strategy: ErrorStrategy,
+    ) -> Result<()> {
+        info!("Channel stage '{}' started (fan-out aware)", id);
+
+        // Collect inputs from both mpsc and broadcast channels
+        let mut inputs = HashMap::new();
+
+        // Receive from mpsc channels
+        for (input_id, rx) in mpsc_input_receivers.iter_mut() {
+            match rx.recv().await {
+                Some(data) => {
+                    info!("Stage '{}': received mpsc input from '{}'", id, input_id);
+                    inputs.insert(input_id.clone(), data);
+                }
+                None => {
+                    warn!(
+                        "Stage '{}': mpsc input channel from '{}' closed",
+                        id, input_id
+                    );
+                }
+            }
+        }
+
+        // Receive from broadcast channels
+        for (input_id, rx) in broadcast_input_receivers.iter_mut() {
+            match rx.recv().await {
+                Ok(BroadcastMessage::Data(data)) => {
+                    info!(
+                        "Stage '{}': received broadcast input from '{}'",
+                        id, input_id
+                    );
+                    inputs.insert(input_id.clone(), data);
+                }
+                Ok(BroadcastMessage::Complete) => {
+                    info!("Stage '{}': upstream '{}' completed", id, input_id);
+                }
+                Ok(BroadcastMessage::Error(err)) => {
+                    error!("Stage '{}': upstream '{}' failed: {}", id, input_id, err);
+                    return Err(anyhow::anyhow!(
+                        "Upstream stage '{}' failed: {}",
+                        input_id,
+                        err
+                    ));
+                }
+                Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                    warn!(
+                        "Stage '{}': lagged behind, skipped {} messages from '{}'",
+                        id, skipped, input_id
+                    );
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    warn!(
+                        "Stage '{}': broadcast channel from '{}' closed",
+                        id, input_id
+                    );
+                }
+            }
+        }
+
+        // Execute stage
+        info!("Executing channel stage '{}'", id);
+        let output = match stage.execute(inputs, &config).await {
+            Ok(data) => {
+                info!("Channel stage '{}' completed successfully", id);
+                data
+            }
+            Err(e) => {
+                if error_strategy.should_continue_on_error() {
+                    warn!("Channel stage '{}' failed: {}. Continuing...", id, e);
+                    DataFormat::DataFrame(polars::prelude::DataFrame::empty())
+                } else {
+                    // Send error to broadcast channel if this is a fan-out node
+                    if let Some(tx) = broadcast_sender {
+                        let _ = tx.send(BroadcastMessage::Error(e.to_string()));
+                    }
+                    return Err(e);
+                }
+            }
+        };
+
+        // Send to output channels
+        if let Some(tx) = broadcast_sender {
+            // Fan-out: send to broadcast channel
+            info!(
+                "Stage '{}': broadcasting output to {} subscribers",
+                id,
+                tx.receiver_count()
+            );
+
+            if let Err(e) = tx.send(BroadcastMessage::Data(output)) {
+                warn!("Channel stage '{}': failed to broadcast output: {}", id, e);
+            }
+
+            // Send completion signal
+            let _ = tx.send(BroadcastMessage::Complete);
+        } else {
+            // Single output: send to mpsc channels
+            for tx in mpsc_output_senders {
+                let data = output.try_clone().map_err(|e| {
+                    anyhow::anyhow!(
+                        "Cannot clone output from stage '{}': {}. Streaming data can only be consumed once.",
+                        id, e
+                    )
+                })?;
+
+                if let Err(e) = tx.send(data).await {
+                    warn!("Channel stage '{}': failed to send output: {}", id, e);
+                }
             }
         }
 
@@ -783,6 +1023,100 @@ mod channel_tests {
             elapsed.as_millis() >= 100,
             "Expected at least 100ms, got {:?}",
             elapsed
+        );
+    }
+
+    #[tokio::test]
+    async fn test_channel_dag_fanout() {
+        // Test fan-out: 1 source -> 3 sinks
+        let mut executor = ChannelDagExecutor::new(ErrorStrategy::Stop, 100);
+
+        let source = Arc::new(FastSourceStage) as StageRef;
+        let sink1 = Arc::new(SlowSinkStage) as StageRef;
+        let sink2 = Arc::new(SlowSinkStage) as StageRef;
+        let sink3 = Arc::new(SlowSinkStage) as StageRef;
+
+        executor
+            .add_stage("source".to_string(), source, HashMap::new())
+            .unwrap();
+        executor
+            .add_stage("sink1".to_string(), sink1, HashMap::new())
+            .unwrap();
+        executor
+            .add_stage("sink2".to_string(), sink2, HashMap::new())
+            .unwrap();
+        executor
+            .add_stage("sink3".to_string(), sink3, HashMap::new())
+            .unwrap();
+
+        // Create fan-out: source -> sink1, sink2, sink3
+        executor.add_dependency("source", "sink1").unwrap();
+        executor.add_dependency("source", "sink2").unwrap();
+        executor.add_dependency("source", "sink3").unwrap();
+
+        assert!(executor.validate().is_ok());
+
+        // Execute and verify no errors
+        let result = executor.execute().await;
+        assert!(result.is_ok(), "Fan-out execution failed: {:?}", result);
+    }
+
+    #[tokio::test]
+    async fn test_channel_dag_complex_fanout() {
+        // Test complex DAG with multiple fan-outs
+        //
+        //     source1  source2
+        //         \      /
+        //          \    /
+        //         transform (fan-out)
+        //         /   |   \
+        //      sink1 sink2 sink3
+        //
+        let mut executor = ChannelDagExecutor::new(ErrorStrategy::Stop, 100);
+
+        let source1 = Arc::new(FastSourceStage) as StageRef;
+        let source2 = Arc::new(FastSourceStage) as StageRef;
+        let transform = Arc::new(FastSourceStage) as StageRef; // Acts as pass-through
+        let sink1 = Arc::new(SlowSinkStage) as StageRef;
+        let sink2 = Arc::new(SlowSinkStage) as StageRef;
+        let sink3 = Arc::new(SlowSinkStage) as StageRef;
+
+        executor
+            .add_stage("source1".to_string(), source1, HashMap::new())
+            .unwrap();
+        executor
+            .add_stage("source2".to_string(), source2, HashMap::new())
+            .unwrap();
+        executor
+            .add_stage("transform".to_string(), transform, HashMap::new())
+            .unwrap();
+        executor
+            .add_stage("sink1".to_string(), sink1, HashMap::new())
+            .unwrap();
+        executor
+            .add_stage("sink2".to_string(), sink2, HashMap::new())
+            .unwrap();
+        executor
+            .add_stage("sink3".to_string(), sink3, HashMap::new())
+            .unwrap();
+
+        // Fan-in: source1, source2 -> transform
+        executor.add_dependency("source1", "transform").unwrap();
+        executor.add_dependency("source2", "transform").unwrap();
+
+        // Fan-out: transform -> sink1, sink2, sink3
+        executor.add_dependency("transform", "sink1").unwrap();
+        executor.add_dependency("transform", "sink2").unwrap();
+        executor.add_dependency("transform", "sink3").unwrap();
+
+        assert!(executor.validate().is_ok());
+
+        // Execute and verify no errors
+        let result = executor.execute().await;
+        assert!(
+            result.is_ok(),
+            "Complex fan-out execution failed: {:?}",
+            result
         );
     }
 }
