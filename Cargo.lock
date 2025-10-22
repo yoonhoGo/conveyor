@@ -1105,7 +1105,7 @@ dependencies = [
  "dialoguer",
  "dirs 5.0.1",
  "futures",
- "handlebars",
+ "handlebars 6.3.2",
  "indexmap 2.11.4",
  "libloading 0.8.9",
  "petgraph",
@@ -1197,6 +1197,7 @@ dependencies = [
  "chrono",
  "conveyor-plugin-api",
  "futures",
+ "handlebars 5.1.2",
  "mongodb",
  "serde",
  "serde_json",
@@ -2266,6 +2267,20 @@ checksum = "8588661a8607108a5ca69cab034063441a0413a0b041c13618a7dd348021ef6f"
 dependencies = [
  "hashbrown 0.14.5",
  "serde",
+]
+
+[[package]]
+name = "handlebars"
+version = "5.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d08485b96a0e6393e9e4d1b8d48cf74ad6c063cd905eb33f42c1ce3f0377539b"
+dependencies = [
+ "log",
+ "pest",
+ "pest_derive",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

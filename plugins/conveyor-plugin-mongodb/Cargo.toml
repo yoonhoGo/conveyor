@@ -16,6 +16,7 @@ toml = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+handlebars = "5.1"
 
 [lib]
 crate-type = ["cdylib"]

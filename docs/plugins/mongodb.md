@@ -10,6 +10,7 @@ MongoDB database integration plugin for Conveyor. Provides comprehensive CRUD op
 - **Batch operations** for efficiency
 - **Query filtering** with MongoDB query syntax
 - **Connection pooling** for performance
+- **Template support** for dynamic queries with Handlebars syntax
 
 ## Installation
 
@@ -85,6 +86,170 @@ uri = "mongodb+srv://user:password@cluster.mongodb.net/database"
 # Using environment variable
 uri = "${MONGODB_URI}"
 ```
+
+## Template Support
+
+MongoDB plugin supports Handlebars template syntax for dynamic configuration values. Templates can use data from previous pipeline stages to build dynamic queries, URIs, database names, and collection names.
+
+### Supported Fields
+
+All configuration fields support templates:
+- `uri` - Dynamic connection strings
+- `database` - Dynamic database selection
+- `collection` - Dynamic collection selection
+- `query` - Dynamic query filters
+- `pipeline` - Dynamic aggregation pipelines (for `mongodb.aggregate`)
+
+### Template Syntax
+
+Use `{{ field_name }}` to reference fields from input data:
+
+```toml
+[[stages]]
+id = "fetch_user_data"
+function = "mongodb.find"
+inputs = ["user_ids"]  # Previous stage with user data
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "myapp"
+collection = "users"
+query = '{ "user_id": "{{ user_id }}" }'  # Dynamic query based on input
+```
+
+### Example 1: Dynamic Query by User ID
+
+```toml
+[[stages]]
+id = "load_users"
+function = "json.read"
+inputs = []
+[stages.config]
+path = "users.json"
+# Data: [{"user_id": "123"}, {"user_id": "456"}]
+
+[[stages]]
+id = "fetch_orders"
+function = "mongodb.find"
+inputs = ["load_users"]
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "ecommerce"
+collection = "orders"
+query = '{ "user_id": "{{ user_id }}" }'  # Uses user_id from previous stage
+limit = 100
+```
+
+### Example 2: Dynamic Collection Name
+
+```toml
+[[stages]]
+id = "get_tenant_info"
+function = "json.read"
+inputs = []
+[stages.config]
+path = "tenant.json"
+# Data: [{"tenant_id": "acme", "db_name": "acme_prod"}]
+
+[[stages]]
+id = "fetch_data"
+function = "mongodb.find"
+inputs = ["get_tenant_info"]
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "{{ db_name }}"  # Dynamic database name
+collection = "logs"
+query = '{}'
+```
+
+### Example 3: Dynamic Aggregation Pipeline
+
+```toml
+[[stages]]
+id = "load_config"
+function = "json.read"
+inputs = []
+[stages.config]
+path = "config.json"
+# Data: [{"date_from": "2024-01-01", "status": "completed"}]
+
+[[stages]]
+id = "aggregate_sales"
+function = "mongodb.aggregate"
+inputs = ["load_config"]
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "sales"
+collection = "orders"
+pipeline = '''
+[
+  {
+    "$match": {
+      "status": "{{ status }}",
+      "created_at": { "$gte": "{{ date_from }}" }
+    }
+  },
+  {
+    "$group": {
+      "_id": "$product_id",
+      "total_revenue": { "$sum": "$amount" }
+    }
+  }
+]
+'''
+```
+
+### Example 4: Multi-Tenant Query
+
+```toml
+[[stages]]
+id = "load_tenant"
+function = "stdin.read"
+inputs = []
+[stages.config]
+format = "json"
+# Input: {"tenant_id": "company_a", "year": 2024}
+
+[[stages]]
+id = "fetch_tenant_data"
+function = "mongodb.find"
+inputs = ["load_tenant"]
+
+[stages.config]
+uri = "{{ env.MONGODB_URI }}"  # Environment variable
+database = "tenant_{{ tenant_id }}"  # Dynamic: tenant_company_a
+collection = "reports"
+query = '{ "year": {{ year }} }'  # Dynamic year
+```
+
+### Template Context
+
+When a stage has input data, the template context is created from:
+- **First record** of the input data (for per-row operations)
+- All fields from that record are available as template variables
+
+Example input data:
+```json
+[
+  {
+    "user_id": "user123",
+    "tenant": "acme",
+    "status": "active"
+  }
+]
+```
+
+Available template variables: `{{ user_id }}`, `{{ tenant }}`, `{{ status }}`
+
+### Notes
+
+- Templates are rendered before MongoDB operations execute
+- Invalid templates will cause execution errors with clear messages
+- Use single quotes for TOML strings containing JSON to avoid escaping issues
+- Environment variables can be combined with templates: `{{ env.VARIABLE_NAME }}`
 
 ## Read Operations
 

@@ -17,6 +17,7 @@ use mongodb::{
 };
 use serde_json::Value;
 use std::collections::HashMap;
+use handlebars::Handlebars;
 
 /// MongoDB operation types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,12 +52,60 @@ impl MongoDbStage {
         }
     }
 
+    /// Render template with input data context
+    fn render_template(
+        &self,
+        template: &str,
+        input_data: Option<&FfiDataFormat>,
+    ) -> RResult<String, RBoxError> {
+        let handlebars = Handlebars::new();
+
+        // Create context from input data
+        let context = if let Some(data) = input_data {
+            match data.to_json_records() {
+                ROk(records) if !records.is_empty() => {
+                    // Use first record as context
+                    serde_json::to_value(&records[0]).unwrap_or(serde_json::json!({}))
+                }
+                _ => serde_json::json!({}),
+            }
+        } else {
+            serde_json::json!({})
+        };
+
+        match handlebars.render_template(template, &context) {
+            Ok(rendered) => ROk(rendered),
+            Err(e) => RErr(RBoxError::from_fmt(&format_args!(
+                "Template rendering failed: {}",
+                e
+            ))),
+        }
+    }
+
+    /// Render config value with template support
+    fn render_config_value(
+        &self,
+        config: &HashMap<String, String>,
+        key: &str,
+        input_data: Option<&FfiDataFormat>,
+    ) -> RResult<Option<String>, RBoxError> {
+        if let Some(value) = config.get(key) {
+            match self.render_template(value, input_data) {
+                ROk(rendered) => ROk(Some(rendered)),
+                RErr(e) => RErr(e),
+            }
+        } else {
+            ROk(None)
+        }
+    }
+
     /// Execute find operation - read multiple documents
     async fn execute_find_async(
         &self,
         config: &HashMap<String, String>,
+        input_data: Option<&FfiDataFormat>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, input_data).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -64,7 +113,7 @@ impl MongoDbStage {
         let collection = db.collection::<Document>(&collection_name);
 
         // Build query filter
-        let filter = match self.parse_query(config) {
+        let filter = match self.parse_query(config, input_data) {
             ROk(f) => f,
             RErr(e) => return RErr(e),
         };
@@ -121,8 +170,9 @@ impl MongoDbStage {
     async fn execute_find_one_async(
         &self,
         config: &HashMap<String, String>,
+        input_data: Option<&FfiDataFormat>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, input_data).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -130,7 +180,7 @@ impl MongoDbStage {
         let collection = db.collection::<Document>(&collection_name);
 
         // Build query filter
-        let filter = match self.parse_query(config) {
+        let filter = match self.parse_query(config, input_data) {
             ROk(f) => f,
             RErr(e) => return RErr(e),
         };
@@ -177,7 +227,7 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -223,7 +273,7 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -278,7 +328,7 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -286,7 +336,7 @@ impl MongoDbStage {
         let collection = db.collection::<Document>(&collection_name);
 
         // Build filter
-        let filter = match self.parse_query(config) {
+        let filter = match self.parse_query(config, Some(input_data)) {
             ROk(f) => f,
             RErr(e) => return RErr(e),
         };
@@ -337,7 +387,7 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -345,7 +395,7 @@ impl MongoDbStage {
         let collection = db.collection::<Document>(&collection_name);
 
         // Build filter
-        let filter = match self.parse_query(config) {
+        let filter = match self.parse_query(config, Some(input_data)) {
             ROk(f) => f,
             RErr(e) => return RErr(e),
         };
@@ -394,8 +444,9 @@ impl MongoDbStage {
     async fn execute_delete_one_async(
         &self,
         config: &HashMap<String, String>,
+        input_data: Option<&FfiDataFormat>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, input_data).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -403,7 +454,7 @@ impl MongoDbStage {
         let collection = db.collection::<Document>(&collection_name);
 
         // Build filter
-        let filter = match self.parse_query(config) {
+        let filter = match self.parse_query(config, input_data) {
             ROk(f) => f,
             RErr(e) => return RErr(e),
         };
@@ -425,8 +476,9 @@ impl MongoDbStage {
     async fn execute_delete_many_async(
         &self,
         config: &HashMap<String, String>,
+        input_data: Option<&FfiDataFormat>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, input_data).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -434,7 +486,7 @@ impl MongoDbStage {
         let collection = db.collection::<Document>(&collection_name);
 
         // Build filter
-        let filter = match self.parse_query(config) {
+        let filter = match self.parse_query(config, input_data) {
             ROk(f) => f,
             RErr(e) => return RErr(e),
         };
@@ -458,7 +510,7 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -466,7 +518,7 @@ impl MongoDbStage {
         let collection = db.collection::<Document>(&collection_name);
 
         // Build filter
-        let filter = match self.parse_query(config) {
+        let filter = match self.parse_query(config, Some(input_data)) {
             ROk(f) => f,
             RErr(e) => return RErr(e),
         };
@@ -515,7 +567,7 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -523,7 +575,7 @@ impl MongoDbStage {
         let collection = db.collection::<Document>(&collection_name);
 
         // Build filter
-        let filter = match self.parse_query(config) {
+        let filter = match self.parse_query(config, Some(input_data)) {
             ROk(f) => f,
             RErr(e) => return RErr(e),
         };
@@ -597,7 +649,7 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
@@ -884,26 +936,28 @@ impl MongoDbStage {
     async fn execute_aggregate_async(
         &self,
         config: &HashMap<String, String>,
+        input_data: Option<&FfiDataFormat>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config, input_data).await {
             ROk(conn) => conn,
             RErr(e) => return RErr(e),
         };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
-        // Parse pipeline from config
-        let pipeline_str = match config.get("pipeline") {
-            Some(p) => p,
-            None => {
+        // Parse pipeline from config with template support
+        let pipeline_str = match self.render_config_value(config, "pipeline", input_data) {
+            ROk(Some(p)) => p,
+            ROk(None) => {
                 return RErr(RBoxError::from_fmt(&format_args!(
                     "Missing required 'pipeline' configuration"
                 )))
             }
+            RErr(e) => return RErr(e),
         };
 
         // Parse pipeline as JSON array
-        let pipeline_json: Vec<Value> = match serde_json::from_str(pipeline_str) {
+        let pipeline_json: Vec<Value> = match serde_json::from_str(&pipeline_str) {
             Ok(Value::Array(arr)) => arr,
             _ => {
                 return RErr(RBoxError::from_fmt(&format_args!(
@@ -982,35 +1036,39 @@ impl MongoDbStage {
     async fn connect_mongodb(
         &self,
         config: &HashMap<String, String>,
+        input_data: Option<&FfiDataFormat>,
     ) -> RResult<(Client, String, String), RBoxError> {
-        let uri = match config.get("uri") {
-            Some(u) => u,
-            None => {
+        let uri = match self.render_config_value(config, "uri", input_data) {
+            ROk(Some(u)) => u,
+            ROk(None) => {
                 return RErr(RBoxError::from_fmt(&format_args!(
                     "Missing required 'uri' configuration"
                 )))
             }
+            RErr(e) => return RErr(e),
         };
 
-        let database = match config.get("database") {
-            Some(d) => d,
-            None => {
+        let database = match self.render_config_value(config, "database", input_data) {
+            ROk(Some(d)) => d,
+            ROk(None) => {
                 return RErr(RBoxError::from_fmt(&format_args!(
                     "Missing required 'database' configuration"
                 )))
             }
+            RErr(e) => return RErr(e),
         };
 
-        let collection = match config.get("collection") {
-            Some(c) => c,
-            None => {
+        let collection = match self.render_config_value(config, "collection", input_data) {
+            ROk(Some(c)) => c,
+            ROk(None) => {
                 return RErr(RBoxError::from_fmt(&format_args!(
                     "Missing required 'collection' configuration"
                 )))
             }
+            RErr(e) => return RErr(e),
         };
 
-        let client_options = match ClientOptions::parse(uri).await {
+        let client_options = match ClientOptions::parse(&uri).await {
             Ok(opts) => opts,
             Err(e) => {
                 return RErr(RBoxError::from_fmt(&format_args!(
@@ -1030,26 +1088,32 @@ impl MongoDbStage {
             }
         };
 
-        ROk((client, database.clone(), collection.clone()))
+        ROk((client, database, collection))
     }
 
-    /// Parse query from config
-    fn parse_query(&self, config: &HashMap<String, String>) -> RResult<Document, RBoxError> {
-        if let Some(query_str) = config.get("query") {
-            match serde_json::from_str::<Value>(query_str) {
-                Ok(Value::Object(obj)) => {
-                    let mut filter_doc = Document::new();
-                    for (key, value) in obj {
-                        if let Some(bson_val) = json_to_bson(&value) {
-                            filter_doc.insert(key, bson_val);
-                        }
+    /// Parse query from config with template support
+    fn parse_query(
+        &self,
+        config: &HashMap<String, String>,
+        input_data: Option<&FfiDataFormat>,
+    ) -> RResult<Document, RBoxError> {
+        let query_str = match self.render_config_value(config, "query", input_data) {
+            ROk(Some(q)) => q,
+            ROk(None) => return ROk(Document::new()),
+            RErr(e) => return RErr(e),
+        };
+
+        match serde_json::from_str::<Value>(&query_str) {
+            Ok(Value::Object(obj)) => {
+                let mut filter_doc = Document::new();
+                for (key, value) in obj {
+                    if let Some(bson_val) = json_to_bson(&value) {
+                        filter_doc.insert(key, bson_val);
                     }
-                    ROk(filter_doc)
                 }
-                _ => ROk(Document::new()),
+                ROk(filter_doc)
             }
-        } else {
-            ROk(Document::new())
+            _ => ROk(Document::new()),
         }
     }
 
@@ -1210,13 +1274,16 @@ impl FfiStage for MongoDbStage {
         };
 
         runtime.block_on(async {
+            // Get input data if available
+            let input_data = context.inputs.into_iter().next().map(|tuple| tuple.1);
+
             match self.operation {
-                MongoOperation::Find => self.execute_find_async(&config).await,
-                MongoOperation::FindOne => self.execute_find_one_async(&config).await,
-                MongoOperation::Aggregate => self.execute_aggregate_async(&config).await,
+                MongoOperation::Find => self.execute_find_async(&config, input_data.as_ref()).await,
+                MongoOperation::FindOne => self.execute_find_one_async(&config, input_data.as_ref()).await,
+                MongoOperation::Aggregate => self.execute_aggregate_async(&config, input_data.as_ref()).await,
                 MongoOperation::BulkWrite => {
-                    let input_data = match context.inputs.into_iter().next() {
-                        Some(tuple) => tuple.1,
+                    let input_data = match input_data {
+                        Some(data) => data,
                         None => {
                             return RErr(RBoxError::from_fmt(&format_args!(
                                 "bulkWrite requires input data"
@@ -1226,8 +1293,8 @@ impl FfiStage for MongoDbStage {
                     self.execute_bulk_write_async(&input_data, &config).await
                 }
                 MongoOperation::InsertOne => {
-                    let input_data = match context.inputs.into_iter().next() {
-                        Some(tuple) => tuple.1,
+                    let input_data = match input_data {
+                        Some(data) => data,
                         None => {
                             return RErr(RBoxError::from_fmt(&format_args!(
                                 "insertOne requires input data"
@@ -1237,8 +1304,8 @@ impl FfiStage for MongoDbStage {
                     self.execute_insert_one_async(&input_data, &config).await
                 }
                 MongoOperation::InsertMany => {
-                    let input_data = match context.inputs.into_iter().next() {
-                        Some(tuple) => tuple.1,
+                    let input_data = match input_data {
+                        Some(data) => data,
                         None => {
                             return RErr(RBoxError::from_fmt(&format_args!(
                                 "insertMany requires input data"
@@ -1248,8 +1315,8 @@ impl FfiStage for MongoDbStage {
                     self.execute_insert_many_async(&input_data, &config).await
                 }
                 MongoOperation::UpdateOne => {
-                    let input_data = match context.inputs.into_iter().next() {
-                        Some(tuple) => tuple.1,
+                    let input_data = match input_data {
+                        Some(data) => data,
                         None => {
                             return RErr(RBoxError::from_fmt(&format_args!(
                                 "updateOne requires input data"
@@ -1259,8 +1326,8 @@ impl FfiStage for MongoDbStage {
                     self.execute_update_one_async(&input_data, &config).await
                 }
                 MongoOperation::UpdateMany => {
-                    let input_data = match context.inputs.into_iter().next() {
-                        Some(tuple) => tuple.1,
+                    let input_data = match input_data {
+                        Some(data) => data,
                         None => {
                             return RErr(RBoxError::from_fmt(&format_args!(
                                 "updateMany requires input data"
@@ -1269,11 +1336,11 @@ impl FfiStage for MongoDbStage {
                     };
                     self.execute_update_many_async(&input_data, &config).await
                 }
-                MongoOperation::DeleteOne => self.execute_delete_one_async(&config).await,
-                MongoOperation::DeleteMany => self.execute_delete_many_async(&config).await,
+                MongoOperation::DeleteOne => self.execute_delete_one_async(&config, input_data.as_ref()).await,
+                MongoOperation::DeleteMany => self.execute_delete_many_async(&config, input_data.as_ref()).await,
                 MongoOperation::ReplaceOne => {
-                    let input_data = match context.inputs.into_iter().next() {
-                        Some(tuple) => tuple.1,
+                    let input_data = match input_data {
+                        Some(data) => data,
                         None => {
                             return RErr(RBoxError::from_fmt(&format_args!(
                                 "replaceOne requires input data"
@@ -1283,8 +1350,8 @@ impl FfiStage for MongoDbStage {
                     self.execute_replace_one_async(&input_data, &config).await
                 }
                 MongoOperation::ReplaceMany => {
-                    let input_data = match context.inputs.into_iter().next() {
-                        Some(tuple) => tuple.1,
+                    let input_data = match input_data {
+                        Some(data) => data,
                         None => {
                             return RErr(RBoxError::from_fmt(&format_args!(
                                 "replaceMany requires input data"
@@ -1535,7 +1602,9 @@ fn create_find_metadata() -> FfiStageMetadata {
         "Find multiple documents from MongoDB collection",
         "Executes a MongoDB find query and returns all matching documents. \
          Supports filtering with MongoDB query syntax and limiting results. \
-         Uses cursor-based iteration for efficient large result sets.",
+         Uses cursor-based iteration for efficient large result sets. \
+         \n\nSupports Handlebars templates: uri, database, collection, and query fields \
+         can use {{ field }} syntax to reference input data fields.",
         params,
         vec!["mongodb", "database", "source", "find", "query"],
     )
