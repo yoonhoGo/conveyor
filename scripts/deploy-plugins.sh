@@ -44,13 +44,27 @@ else
     exit 1
 fi
 
+# Install WASM target if not already installed
+echo "Installing wasm32-wasip2 target..."
+rustup target add wasm32-wasip2
+
+# Build JS WASM plugin
+echo "Building JS WASM plugin..."
+cargo build --release -p conveyor-plugin-js-wasm --target wasm32-wasip2
+if [ $? -eq 0 ]; then
+    echo "✅ JS WASM plugin built"
+else
+    echo "❌ JS WASM plugin build failed"
+    exit 1
+fi
+
 echo ""
 echo "🔐 Generating checksums..."
 echo "--------------------------------------"
 
 cd target/release
 
-# Generate checksums
+# Generate checksums for FFI plugins
 HTTP_CHECKSUM=$(shasum -a 256 libconveyor_plugin_http.dylib | awk '{print $1}')
 MONGO_CHECKSUM=$(shasum -a 256 libconveyor_plugin_mongodb.dylib | awk '{print $1}')
 
@@ -61,7 +75,16 @@ echo "MongoDB Plugin SHA256: $MONGO_CHECKSUM"
 echo "$HTTP_CHECKSUM  libconveyor_plugin_http.dylib" > libconveyor_plugin_http.dylib.sha256
 echo "$MONGO_CHECKSUM  libconveyor_plugin_mongodb.dylib" > libconveyor_plugin_mongodb.dylib.sha256
 
-cd ../..
+# Generate checksum for WASM plugin
+cd ../wasm32-wasip2/release
+JS_WASM_CHECKSUM=$(shasum -a 256 conveyor_plugin_js_wasm.wasm | awk '{print $1}')
+
+echo "JS WASM Plugin SHA256: $JS_WASM_CHECKSUM"
+
+# Save checksum to file
+echo "$JS_WASM_CHECKSUM  conveyor_plugin_js_wasm.wasm" > conveyor_plugin_js_wasm.wasm.sha256
+
+cd ../../..
 
 echo ""
 echo "📤 Uploading to GitHub Release..."
@@ -94,6 +117,21 @@ if [ $? -eq 0 ]; then
     echo "✅ MongoDB plugin uploaded"
 else
     echo "❌ MongoDB plugin upload failed"
+    exit 1
+fi
+
+# Upload JS WASM plugin
+echo "Uploading JS WASM plugin..."
+gh release upload "$VERSION" \
+    target/wasm32-wasip2/release/conveyor_plugin_js_wasm.wasm \
+    target/wasm32-wasip2/release/conveyor_plugin_js_wasm.wasm.sha256 \
+    --repo "$REPO" \
+    --clobber
+
+if [ $? -eq 0 ]; then
+    echo "✅ JS WASM plugin uploaded"
+else
+    echo "❌ JS WASM plugin upload failed"
     exit 1
 fi
 
@@ -130,6 +168,20 @@ cat > registry.json <<EOF
         "darwin-aarch64": {
           "url": "https://github.com/yoonhoGo/conveyor/releases/download/$VERSION/libconveyor_plugin_mongodb.dylib",
           "checksum": "sha256:$MONGO_CHECKSUM"
+        }
+      }
+    },
+    "js_wasm": {
+      "name": "js_wasm",
+      "version": "0.1.0",
+      "description": "JavaScript inline execution WASM plugin using Boa engine",
+      "author": "Conveyor Team",
+      "repository": "https://github.com/yoonhoGo/conveyor",
+      "type": "wasm",
+      "downloads": {
+        "universal": {
+          "url": "https://github.com/yoonhoGo/conveyor/releases/download/$VERSION/conveyor_plugin_js_wasm.wasm",
+          "checksum": "sha256:$JS_WASM_CHECKSUM"
         }
       }
     }

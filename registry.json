@@ -27,6 +27,20 @@
           "checksum": "sha256:4c33e840d1a42ea506d3945beadab4f235a55ed418a34a194eb4717d1585a1f4"
         }
       }
+    },
+    "js_wasm": {
+      "name": "js_wasm",
+      "version": "0.1.0",
+      "description": "JavaScript inline execution WASM plugin using Boa engine",
+      "author": "Conveyor Team",
+      "repository": "https://github.com/yoonhoGo/conveyor",
+      "type": "wasm",
+      "downloads": {
+        "universal": {
+          "url": "https://github.com/yoonhoGo/conveyor/releases/download/v0.15.0/conveyor_plugin_js_wasm.wasm",
+          "checksum": "sha256:pending"
+        }
+      }
     }
   }
 }

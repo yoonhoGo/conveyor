@@ -25,6 +25,9 @@ jobs:
           profile: minimal
           override: true
 
+      - name: Add WASM target
+        run: rustup target add wasm32-wasip2
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -49,11 +52,16 @@ jobs:
       - name: Build MongoDB Plugin
         run: cargo build --release -p conveyor-plugin-mongodb
 
+      - name: Build JS WASM Plugin
+        run: cargo build --release -p conveyor-plugin-js-wasm --target wasm32-wasip2
+
       - name: Generate checksums
         run: |
           cd target/release
           shasum -a 256 libconveyor_plugin_http.dylib > libconveyor_plugin_http.dylib.sha256
           shasum -a 256 libconveyor_plugin_mongodb.dylib > libconveyor_plugin_mongodb.dylib.sha256
+          cd ../wasm32-wasip2/release
+          shasum -a 256 conveyor_plugin_js_wasm.wasm > conveyor_plugin_js_wasm.wasm.sha256
 
       - name: Determine release tag
         id: tag
@@ -73,4 +81,6 @@ jobs:
             target/release/libconveyor_plugin_http.dylib.sha256 \
             target/release/libconveyor_plugin_mongodb.dylib \
             target/release/libconveyor_plugin_mongodb.dylib.sha256 \
+            target/wasm32-wasip2/release/conveyor_plugin_js_wasm.wasm \
+            target/wasm32-wasip2/release/conveyor_plugin_js_wasm.wasm.sha256 \
             --clobber
