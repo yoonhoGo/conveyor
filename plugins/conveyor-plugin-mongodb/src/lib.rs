@@ -32,6 +32,7 @@ pub enum MongoOperation {
     ReplaceOne,
     ReplaceMany,
     Aggregate,
+    BulkWrite,
 }
 
 /// MongoDB Stage - operation-based
@@ -553,6 +554,203 @@ impl MongoDbStage {
         ROk(input_data.clone())
     }
 
+    /// Execute bulkWrite operation - batch write operations
+    async fn execute_bulk_write_async(
+        &self,
+        input_data: &FfiDataFormat,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Convert input data to operations
+        let records = match input_data.to_json_records() {
+            ROk(r) => r,
+            RErr(e) => return RErr(e),
+        };
+
+        if records.is_empty() {
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "No operations provided for bulkWrite"
+            )));
+        }
+
+        // Parse operations from input data
+        // Expected format: { "operations": [...] }
+        let operations_value = match records[0].get("operations") {
+            Some(v) => v,
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing 'operations' field in input data"
+                )))
+            }
+        };
+
+        let operations_array = match operations_value.as_array() {
+            Some(arr) => arr,
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "'operations' must be an array"
+                )))
+            }
+        };
+
+        // Execute each operation sequentially
+        let mut insert_count = 0;
+        let mut update_count = 0;
+        let mut delete_count = 0;
+        let mut replace_count = 0;
+
+        for operation in operations_array {
+            let op_obj = match operation.as_object() {
+                Some(obj) => obj,
+                None => continue,
+            };
+
+            let op_type = match op_obj.get("type").and_then(|v| v.as_str()) {
+                Some(t) => t,
+                None => continue,
+            };
+
+            match op_type {
+                "insertOne" => {
+                    if let Some(Value::Object(doc_obj)) = op_obj.get("document") {
+                        let doc_map: HashMap<String, Value> = doc_obj
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
+                        let doc = match self.json_record_to_bson(&doc_map) {
+                            ROk(d) => d,
+                            RErr(e) => return RErr(e),
+                        };
+                        match collection.insert_one(doc).await {
+                            Ok(_) => insert_count += 1,
+                            Err(e) => {
+                                return RErr(RBoxError::from_fmt(&format_args!(
+                                    "bulkWrite insertOne failed: {}",
+                                    e
+                                )))
+                            }
+                        }
+                    }
+                }
+                "updateOne" => {
+                    let filter = match op_obj.get("filter") {
+                        Some(Value::Object(f)) => {
+                            let mut filter_doc = Document::new();
+                            for (key, value) in f {
+                                if let Some(bson_val) = json_to_bson(value) {
+                                    filter_doc.insert(key.clone(), bson_val);
+                                }
+                            }
+                            filter_doc
+                        }
+                        _ => Document::new(),
+                    };
+
+                    if let Some(Value::Object(update_obj)) = op_obj.get("update") {
+                        let update_map: HashMap<String, Value> = update_obj
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
+                        let update_doc = match self.json_record_to_bson(&update_map) {
+                            ROk(d) => d,
+                            RErr(e) => return RErr(e),
+                        };
+                        let update = mongodb::bson::doc! { "$set": update_doc };
+                        match collection.update_one(filter, update).await {
+                            Ok(_) => update_count += 1,
+                            Err(e) => {
+                                return RErr(RBoxError::from_fmt(&format_args!(
+                                    "bulkWrite updateOne failed: {}",
+                                    e
+                                )))
+                            }
+                        }
+                    }
+                }
+                "deleteOne" => {
+                    let filter = match op_obj.get("filter") {
+                        Some(Value::Object(f)) => {
+                            let mut filter_doc = Document::new();
+                            for (key, value) in f {
+                                if let Some(bson_val) = json_to_bson(value) {
+                                    filter_doc.insert(key.clone(), bson_val);
+                                }
+                            }
+                            filter_doc
+                        }
+                        _ => Document::new(),
+                    };
+
+                    match collection.delete_one(filter).await {
+                        Ok(_) => delete_count += 1,
+                        Err(e) => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "bulkWrite deleteOne failed: {}",
+                                e
+                            )))
+                        }
+                    }
+                }
+                "replaceOne" => {
+                    let filter = match op_obj.get("filter") {
+                        Some(Value::Object(f)) => {
+                            let mut filter_doc = Document::new();
+                            for (key, value) in f {
+                                if let Some(bson_val) = json_to_bson(value) {
+                                    filter_doc.insert(key.clone(), bson_val);
+                                }
+                            }
+                            filter_doc
+                        }
+                        _ => Document::new(),
+                    };
+
+                    if let Some(Value::Object(replacement_obj)) = op_obj.get("replacement") {
+                        let replacement_map: HashMap<String, Value> = replacement_obj
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
+                        let replacement = match self.json_record_to_bson(&replacement_map) {
+                            ROk(d) => d,
+                            RErr(e) => return RErr(e),
+                        };
+                        match collection.replace_one(filter, replacement).await {
+                            Ok(_) => replace_count += 1,
+                            Err(e) => {
+                                return RErr(RBoxError::from_fmt(&format_args!(
+                                    "bulkWrite replaceOne failed: {}",
+                                    e
+                                )))
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    return RErr(RBoxError::from_fmt(&format_args!(
+                        "Unknown operation type: {}",
+                        op_type
+                    )))
+                }
+            }
+        }
+
+        // Return summary as JSON records
+        let summary = vec![HashMap::from([
+            ("inserted".to_string(), Value::Number(insert_count.into())),
+            ("updated".to_string(), Value::Number(update_count.into())),
+            ("deleted".to_string(), Value::Number(delete_count.into())),
+            ("replaced".to_string(), Value::Number(replace_count.into())),
+        ])];
+
+        FfiDataFormat::from_json_records(&summary)
+    }
+
     /// Execute aggregation operation - run aggregation pipeline
     async fn execute_aggregate_async(
         &self,
@@ -777,6 +975,17 @@ impl FfiStage for MongoDbStage {
                 MongoOperation::Find => self.execute_find_async(&config).await,
                 MongoOperation::FindOne => self.execute_find_one_async(&config).await,
                 MongoOperation::Aggregate => self.execute_aggregate_async(&config).await,
+                MongoOperation::BulkWrite => {
+                    let input_data = match context.inputs.into_iter().next() {
+                        Some(tuple) => tuple.1,
+                        None => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "bulkWrite requires input data"
+                            )))
+                        }
+                    };
+                    self.execute_bulk_write_async(&input_data, &config).await
+                }
                 MongoOperation::InsertOne => {
                     let input_data = match context.inputs.into_iter().next() {
                         Some(tuple) => tuple.1,
@@ -1035,6 +1244,18 @@ pub extern "C" fn create_mongodb_aggregate() -> FfiStage_TO<'static, RBox<()>> {
     )
 }
 
+#[no_mangle]
+pub extern "C" fn create_mongodb_bulkwrite() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-bulkwrite".to_string(),
+            MongoOperation::BulkWrite,
+            StageType::Sink,
+        ),
+        TD_Opaque,
+    )
+}
+
 // ============================================================================
 // Metadata Helper Functions
 // ============================================================================
@@ -1257,6 +1478,22 @@ fn create_aggregate_metadata() -> FfiStageMetadata {
     )
 }
 
+/// Create metadata for bulkWrite operation
+fn create_bulkwrite_metadata() -> FfiStageMetadata {
+    FfiStageMetadata::new(
+        "mongodb.bulkWrite",
+        "Execute multiple write operations in a single batch",
+        "Executes multiple write operations (insertOne, updateOne, deleteOne, replaceOne) in a single batch. \
+         Input data must contain an 'operations' array with operation objects. \
+         Each operation must have a 'type' field and operation-specific fields. \
+         Supported operation types: insertOne (requires 'document'), updateOne (requires 'filter' and 'update'), \
+         deleteOne (requires 'filter'), replaceOne (requires 'filter' and 'replacement'). \
+         Returns a summary with counts of inserted, updated, deleted, and replaced documents.",
+        common_mongodb_parameters(),
+        vec!["mongodb", "database", "sink", "bulk", "write", "batch"],
+    )
+}
+
 // ============================================================================
 // Plugin Capabilities
 // ============================================================================
@@ -1341,6 +1578,13 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
             "create_mongodb_replacemany",
             create_replacemany_metadata(),
         ),
+        PluginCapability::new(
+            "mongodb.bulkWrite",
+            StageType::Sink,
+            "MongoDB bulkWrite - execute multiple write operations",
+            "create_mongodb_bulkwrite",
+            create_bulkwrite_metadata(),
+        ),
     ]
     .into()
 }
@@ -1350,9 +1594,9 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
 pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
     api_version: PLUGIN_API_VERSION,
     name: rstr!("mongodb"),
-    version: rstr!("2.1.0"),
+    version: rstr!("2.2.0"),
     description: rstr!(
-        "MongoDB plugin with operation-based API (find, findOne, aggregate, insert, update, delete, replace)"
+        "MongoDB plugin with operation-based API (find, findOne, aggregate, insert, update, delete, replace, bulkWrite)"
     ),
     get_capabilities,
 };
@@ -1368,14 +1612,14 @@ mod tests {
     #[test]
     fn test_plugin_declaration() {
         assert_eq!(_plugin_declaration.name, "mongodb");
-        assert_eq!(_plugin_declaration.version, "2.1.0");
+        assert_eq!(_plugin_declaration.version, "2.2.0");
         assert!(_plugin_declaration.is_compatible());
     }
 
     #[test]
     fn test_capabilities() {
         let caps = get_capabilities();
-        assert_eq!(caps.len(), 11);
+        assert_eq!(caps.len(), 12);
 
         // Check find operation
         assert_eq!(caps[0].name.as_str(), "mongodb.find");
@@ -1396,6 +1640,10 @@ mod tests {
         // Check insertMany operation
         assert_eq!(caps[4].name.as_str(), "mongodb.insertMany");
         assert_eq!(caps[4].stage_type, StageType::Sink);
+
+        // Check bulkWrite operation
+        assert_eq!(caps[11].name.as_str(), "mongodb.bulkWrite");
+        assert_eq!(caps[11].stage_type, StageType::Sink);
     }
 
     #[test]
