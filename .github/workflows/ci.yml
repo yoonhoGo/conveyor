@@ -27,22 +27,42 @@ jobs:
           toolchain: ${{ matrix.rust }}
           components: rustfmt, clippy
 
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           key: macos-${{ matrix.rust }}
+          shared-key: "ci-cache"
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build plugins for tests
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
         run: |
           cargo build -p conveyor-plugin-test
           cargo build -p conveyor-plugin-http
           cargo build -p conveyor-plugin-mongodb
 
       - name: Run tests
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
         run: cargo test --all-features --workspace
 
       - name: Run doctests
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
         run: cargo test --doc --workspace
+
+      - name: Show sccache stats
+        run: ${SCCACHE_PATH} --show-stats
 
   lint:
     name: Lint
@@ -56,14 +76,29 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "ci-cache"
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Run clippy
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
         run: cargo clippy --all-features --workspace -- -D warnings
+
+      - name: Show sccache stats
+        run: ${SCCACHE_PATH} --show-stats
 
   wasm-build:
     name: WASM Plugin Build
@@ -77,18 +112,32 @@ jobs:
         with:
           targets: wasm32-wasip2
 
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           key: wasm32-wasip2
+          shared-key: "ci-cache"
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build WASM plugins
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
         run: |
           cargo build -p conveyor-plugin-echo-wasm --target wasm32-wasip2 --release
 
       - name: Check WASM binary size
         run: |
           ls -lh target/wasm32-wasip2/release/*.wasm
+
+      - name: Show sccache stats
+        run: ${SCCACHE_PATH} --show-stats
 
   security-audit:
     name: Security Audit
@@ -102,15 +151,14 @@ jobs:
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
-
-      - name: Cache cargo tools
-        uses: actions/cache@v4
         with:
-          path: ~/.cargo/bin
-          key: macos-cargo-tools-audit
+          shared-key: "ci-cache"
+          cache-on-failure: true
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --force
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
 
       - name: Run security audit
         run: cargo audit
@@ -126,25 +174,35 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Run sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
-
-      - name: Cache cargo tools
-        uses: actions/cache@v4
         with:
-          path: ~/.cargo/bin
-          key: macos-cargo-tools-tarpaulin
+          shared-key: "ci-cache"
+          cache-on-failure: true
 
       - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin --force
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin
 
       - name: Build plugins for coverage
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
         run: |
           cargo build -p conveyor-plugin-test
           cargo build -p conveyor-plugin-http
           cargo build -p conveyor-plugin-mongodb
 
       - name: Generate coverage
+        env:
+          SCCACHE_GHA_ENABLED: "true"
+          RUSTC_WRAPPER: "sccache"
         run: cargo tarpaulin --workspace --timeout 300 --out Xml
         continue-on-error: true  # Tarpaulin has issues with polars const evaluation
 
@@ -153,3 +211,6 @@ jobs:
         with:
           file: ./cobertura.xml
           fail_ci_if_error: false
+
+      - name: Show sccache stats
+        run: ${SCCACHE_PATH} --show-stats

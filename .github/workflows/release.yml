@@ -36,7 +36,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.platform.target }}
+          shared-key: "release-cache"
           cache-on-failure: true
+          workspaces: "."
+          cache-all-crates: true
 
       - name: Build
         run: cargo build --release --target ${{ matrix.platform.target }}
