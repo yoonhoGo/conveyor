@@ -6,8 +6,7 @@ use tokio::time::timeout;
 use tracing::{error, info};
 
 use crate::core::config::DagPipelineConfig;
-use crate::core::dag_builder::DagPipelineBuilder;
-use crate::core::dag_executor::DagExecutor;
+use crate::core::dag_builder::{DagPipelineBuilder, ExecutorVariant};
 use crate::core::error::ConveyorError;
 use crate::core::registry::ModuleRegistry;
 use crate::plugin_loader::PluginLoader;
@@ -18,7 +17,7 @@ pub struct DagPipeline {
     config: DagPipelineConfig,
     #[allow(dead_code)]
     registry: Arc<ModuleRegistry>,
-    executor: DagExecutor,
+    executor: ExecutorVariant,
     #[allow(dead_code)]
     plugin_loader: Option<Arc<PluginLoader>>,
     #[allow(dead_code)]
@@ -85,8 +84,11 @@ impl DagPipeline {
     }
 
     /// Execute the DAG pipeline
-    pub async fn execute(&self) -> Result<()> {
-        info!("Starting DAG pipeline: {}", self.config.pipeline.name);
+    pub async fn execute(&mut self) -> Result<()> {
+        info!(
+            "Starting DAG pipeline: {} (executor: {:?})",
+            self.config.pipeline.name, self.config.global.executor
+        );
 
         let timeout_duration = Duration::from_secs(self.config.global.timeout_seconds);
 

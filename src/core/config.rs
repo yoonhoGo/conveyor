@@ -22,6 +22,24 @@ impl Default for ExecutionMode {
     }
 }
 
+/// DAG executor type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutorType {
+    /// Default DAG executor (level-by-level, sequential)
+    Dag,
+    /// Channel-based executor (backpressure, concurrent)
+    Channel,
+    /// Actor-pattern executor (fully parallel)
+    Async,
+}
+
+impl Default for ExecutorType {
+    fn default() -> Self {
+        Self::Dag
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PipelineMetadata {
     pub name: String,
@@ -68,6 +86,18 @@ pub struct GlobalConfig {
     /// Supports environment variable substitution: ${ENV_VAR}
     #[serde(default)]
     pub variables: HashMap<String, String>,
+
+    /// Executor type: dag, channel, or async
+    #[serde(default)]
+    pub executor: ExecutorType,
+
+    /// Channel buffer size for channel and async executors
+    #[serde(default = "default_channel_buffer_size")]
+    pub channel_buffer_size: usize,
+
+    /// Concurrency level for concurrent executors
+    #[serde(default = "default_concurrency")]
+    pub concurrency: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -110,6 +140,14 @@ fn default_checkpoint_interval() -> usize {
     5000
 }
 
+fn default_channel_buffer_size() -> usize {
+    100
+}
+
+fn default_concurrency() -> usize {
+    10
+}
+
 impl Default for GlobalConfig {
     fn default() -> Self {
         Self {
@@ -122,6 +160,9 @@ impl Default for GlobalConfig {
             stream_batch_size: default_stream_batch_size(),
             checkpoint_interval: default_checkpoint_interval(),
             variables: HashMap::new(),
+            executor: ExecutorType::default(),
+            channel_buffer_size: default_channel_buffer_size(),
+            concurrency: default_concurrency(),
         }
     }
 }

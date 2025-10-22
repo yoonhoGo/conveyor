@@ -124,7 +124,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Run { config, dry_run } => {
             info!("Loading pipeline configuration from {:?}", config);
-            let pipeline = DagPipeline::from_file(&config).await?;
+            let mut pipeline = DagPipeline::from_file(&config).await?;
 
             if dry_run {
                 info!("Dry run mode - validating configuration");

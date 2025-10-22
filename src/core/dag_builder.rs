@@ -1,13 +1,110 @@
 use anyhow::Result;
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::core::config::{DagPipelineConfig, StageConfig};
-use crate::core::dag_executor::DagExecutor;
+use crate::core::config::{DagPipelineConfig, ExecutorType, StageConfig};
+use crate::core::dag_executor::{AsyncPipeline, ChannelDagExecutor, DagExecutor};
 use crate::core::error::ConveyorError;
 use crate::core::registry::ModuleRegistry;
 use crate::core::stage::{FfiPluginStageAdapter, StageRef, WasmPluginStageAdapter};
 use crate::plugin_loader::PluginLoader;
 use crate::wasm_plugin_loader::WasmPluginLoader;
+
+/// Enum to hold different executor types
+pub enum ExecutorVariant {
+    Dag(DagExecutor),
+    Channel(ChannelDagExecutor),
+    Async(AsyncPipeline),
+}
+
+impl ExecutorVariant {
+    /// Validate the executor
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            ExecutorVariant::Dag(e) => e.validate(),
+            ExecutorVariant::Channel(e) => e.validate(),
+            ExecutorVariant::Async(e) => e.validate(),
+        }
+    }
+
+    /// Execute the executor
+    pub async fn execute(&mut self) -> Result<()> {
+        match self {
+            ExecutorVariant::Dag(e) => e.execute().await,
+            ExecutorVariant::Channel(e) => e.execute().await,
+            ExecutorVariant::Async(e) => e.execute().await,
+        }
+    }
+}
+
+/// Common trait for all executor types
+trait ExecutorBuilder {
+    fn add_stage(
+        &mut self,
+        id: String,
+        stage: StageRef,
+        config: HashMap<String, toml::Value>,
+    ) -> Result<()>;
+    fn add_dependency(&mut self, from_id: &str, to_id: &str) -> Result<()>;
+    fn validate(&self) -> Result<()>;
+}
+
+impl ExecutorBuilder for DagExecutor {
+    fn add_stage(
+        &mut self,
+        id: String,
+        stage: StageRef,
+        config: HashMap<String, toml::Value>,
+    ) -> Result<()> {
+        self.add_stage(id, stage, config)
+    }
+
+    fn add_dependency(&mut self, from_id: &str, to_id: &str) -> Result<()> {
+        self.add_dependency(from_id, to_id)
+    }
+
+    fn validate(&self) -> Result<()> {
+        self.validate()
+    }
+}
+
+impl ExecutorBuilder for ChannelDagExecutor {
+    fn add_stage(
+        &mut self,
+        id: String,
+        stage: StageRef,
+        config: HashMap<String, toml::Value>,
+    ) -> Result<()> {
+        self.add_stage(id, stage, config)
+    }
+
+    fn add_dependency(&mut self, from_id: &str, to_id: &str) -> Result<()> {
+        self.add_dependency(from_id, to_id)
+    }
+
+    fn validate(&self) -> Result<()> {
+        self.validate()
+    }
+}
+
+impl ExecutorBuilder for AsyncPipeline {
+    fn add_stage(
+        &mut self,
+        id: String,
+        stage: StageRef,
+        config: HashMap<String, toml::Value>,
+    ) -> Result<()> {
+        self.add_stage(id, stage, config)
+    }
+
+    fn add_dependency(&mut self, from_id: &str, to_id: &str) -> Result<()> {
+        self.add_dependency(from_id, to_id)
+    }
+
+    fn validate(&self) -> Result<()> {
+        self.validate()
+    }
+}
 
 /// Builder for constructing DAG pipelines from configuration
 pub struct DagPipelineBuilder {
@@ -38,10 +135,38 @@ impl DagPipelineBuilder {
     }
 
     /// Build a DAG executor from configuration
-    pub fn build(&self, config: &DagPipelineConfig) -> Result<DagExecutor> {
+    pub fn build(&self, config: &DagPipelineConfig) -> Result<ExecutorVariant> {
         let error_strategy = config.error_handling.strategy.clone();
-        let mut executor = DagExecutor::new(error_strategy);
+        let executor_type = config.global.executor;
 
+        match executor_type {
+            ExecutorType::Dag => {
+                let mut executor = DagExecutor::new(error_strategy);
+                self.build_stages(&mut executor, config)?;
+                Ok(ExecutorVariant::Dag(executor))
+            }
+            ExecutorType::Channel => {
+                let buffer_size = config.global.channel_buffer_size;
+                let concurrency = config.global.concurrency;
+                let mut executor = ChannelDagExecutor::new(error_strategy, buffer_size, concurrency);
+                self.build_stages(&mut executor, config)?;
+                Ok(ExecutorVariant::Channel(executor))
+            }
+            ExecutorType::Async => {
+                let buffer_size = config.global.channel_buffer_size;
+                let mut executor = AsyncPipeline::new(error_strategy, buffer_size);
+                self.build_stages(&mut executor, config)?;
+                Ok(ExecutorVariant::Async(executor))
+            }
+        }
+    }
+
+    /// Build stages and dependencies for any executor type
+    fn build_stages<E: ExecutorBuilder>(
+        &self,
+        executor: &mut E,
+        config: &DagPipelineConfig,
+    ) -> Result<()> {
         // Create stages and add to executor
         for stage_config in &config.stages {
             let stage = self.create_stage(stage_config)?;
@@ -58,7 +183,7 @@ impl DagPipelineBuilder {
         // Validate the DAG (check for cycles)
         executor.validate()?;
 
-        Ok(executor)
+        Ok(())
     }
 
     /// Create a stage from configuration using function-based API
@@ -185,9 +310,12 @@ path = "output.json"
 "#;
 
         let config = DagPipelineConfig::from_str(config_str).unwrap();
-        let executor = builder.build(&config);
+        let result = builder.build(&config);
 
-        assert!(executor.is_ok());
+        assert!(result.is_ok());
+        if let Ok(executor) = result {
+            assert!(executor.validate().is_ok());
+        }
     }
 
     #[tokio::test]
@@ -207,8 +335,8 @@ inputs = []
 "#;
 
         let config = DagPipelineConfig::from_str(config_str).unwrap();
-        let executor = builder.build(&config);
+        let result = builder.build(&config);
 
-        assert!(executor.is_err());
+        assert!(result.is_err());
     }
 }

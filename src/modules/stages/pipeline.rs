@@ -176,7 +176,7 @@ version = "1.0"
 
         // Build executor
         let builder = DagPipelineBuilder::new(Arc::clone(&self.registry));
-        let executor = builder.build(&pipeline_config)?;
+        let mut executor = builder.build(&pipeline_config)?;
 
         // Execute sub-pipeline
         info!("Executing sub-pipeline");

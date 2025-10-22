@@ -1,0 +1,37 @@
+[pipeline]
+name = "test-executor-channel"
+version = "1.0.0"
+description = "Test Channel executor with backpressure"
+
+[global]
+log_level = "info"
+executor = "channel"
+channel_buffer_size = 10
+concurrency = 5
+
+[[stages]]
+id = "generate_data"
+function = "json.read"
+inputs = []
+
+[stages.config]
+path = "examples/users.json"
+
+[[stages]]
+id = "filter_active"
+function = "filter.apply"
+inputs = ["generate_data"]
+
+[stages.config]
+column = "id"
+operator = ">="
+value = 5
+
+[[stages]]
+id = "display"
+function = "stdout.write"
+inputs = ["filter_active"]
+
+[stages.config]
+format = "table"
+limit = 5
