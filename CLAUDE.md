@@ -426,9 +426,57 @@ tokio = { workspace = true }
     - Interactive builder for guided stage creation
     - Single source of truth for all documentation
 
+### Parallel Processing and Streaming
+
+15. **Three Execution Models**: Each optimized for different use cases
+    - **DagExecutor** (default): Level-based parallel execution
+      - Most stable and predictable
+      - Memory efficient (processes one level at a time)
+      - Best for simple pipelines
+    - **ChannelDagExecutor**: Channel-based with automatic backpressure
+      - All stages run concurrently as tokio tasks
+      - Bounded channels prevent memory overflow
+      - Best for I/O-intensive pipelines
+    - **AsyncPipeline**: Actor pattern with independent event loops
+      - Maximum concurrency and isolation
+      - Graceful shutdown with CancellationToken
+      - Best for complex fan-out/fan-in patterns
+
+16. **buffer_unordered for I/O Parallelism**: Key performance multiplier
+    - `StreamStage` trait enables parallel record processing
+    - HTTP fetch with `concurrency=10` achieves **10x speedup**
+    - Example: 100 records × 100ms latency = 10s → 1s with parallelism
+    - Implementation uses `futures::stream::buffer_unordered`
+    - Critical for I/O-bound operations (HTTP, DB queries)
+
+17. **Backpressure is Essential**: Prevents memory exhaustion
+    - Bounded channels create natural backpressure
+    - Fast upstream automatically slows to match slow downstream
+    - Configuration: `channel_buffer_size` controls threshold
+    - Example: buffer_size=100 limits memory to ~100 records
+    - Without backpressure: memory grows unbounded with fast sources
+
+18. **Channel vs Actor Patterns**: Different concurrency models
+    - **Channels** (ChannelDagExecutor):
+      - mpsc for single output, broadcast for fan-out
+      - Simple stage execution with async I/O
+      - Better for straightforward pipelines
+    - **Actors** (AsyncPipeline):
+      - Each stage has independent event loop
+      - tokio::select! for multiple inputs
+      - Better for complex coordination
+      - More overhead but maximum isolation
+
+19. **Performance Tuning Guidelines**:
+    - Start with `concurrency=10`, `buffer_size=100`
+    - Adjust based on API rate limits and memory constraints
+    - Formula: `buffer_size ≈ concurrency × 10`
+    - Monitor with `log_level=debug` to see parallel execution
+    - Test both sequential and parallel to measure actual gains
+
 ### Development Workflow
 
-15. **Debug vs Release Builds**:
+20. **Debug vs Release Builds**:
     - Use debug mode during active development for faster iteration
     - Always run release build before completing work
     - Release build catches optimization-related issues
@@ -443,7 +491,7 @@ tokio = { workspace = true }
       cargo run --release -- run pipeline.toml
       ```
 
-16. **Code Quality Checks**:
+21. **Code Quality Checks**:
     - Always run format and lint before committing
     - Format ensures consistent code style
     - Clippy catches common mistakes and suggests improvements

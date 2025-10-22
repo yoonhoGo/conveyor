@@ -12,6 +12,7 @@ A high-performance, TOML-based ETL (Extract, Transform, Load) CLI tool built in 
 - **⚡ 10-100x Faster**: Built with Rust and Polars for exceptional performance
 - **📋 Simple Configuration**: Declarative TOML pipelines, no code required
 - **🔀 Flexible DAG Pipelines**: Compose stages with automatic dependency resolution and parallel execution
+- **🚀 Parallel Execution**: Three execution modes (DagExecutor, Channel-based, Actor pattern) with automatic backpressure
 - **🔌 Extensible**: Dynamic plugin system (FFI + WASM) for custom sources and sinks
 - **🌊 Stream Processing**: Real-time data processing with windowing and aggregation
 - **🤖 AI-Powered**: Built-in LLM transforms (OpenAI, Anthropic, OpenRouter, Ollama)
@@ -111,7 +112,38 @@ inputs = ["data"]  # Parallel
 
 See [DAG Pipelines Guide](docs/dag-pipelines.md).
 
-### 3. Plugin System
+### 3. Parallel Execution
+
+Achieve 10x speedup for I/O-intensive pipelines with automatic concurrency:
+
+```toml
+[global]
+executor = "channel"      # Enable channel-based parallel execution
+channel_buffer_size = 100 # Automatic backpressure control
+concurrency = 10          # Process 10 HTTP requests simultaneously
+
+[[stages]]
+id = "enrich"
+function = "http.fetch"
+inputs = ["users"]
+[stages.config]
+url = "https://api.example.com/users/{{ id }}/profile"
+mode = "per_row"
+```
+
+**Performance Example:**
+- 100 records × 100ms API latency
+- Sequential: 10 seconds
+- Parallel (concurrency=10): **1 second (10x faster!)**
+
+**Three Execution Modes:**
+- **DagExecutor** (default): Level-based parallel execution, most stable
+- **ChannelDagExecutor**: Channel-based with automatic backpressure, best for I/O
+- **AsyncPipeline**: Actor pattern, maximum concurrency for complex DAGs
+
+📖 [Parallel Processing Guide](docs/parallel-processing.md)
+
+### 4. Plugin System
 
 Extend Conveyor with plugins loaded on-demand:
 
@@ -196,6 +228,7 @@ Supports: OpenAI, Anthropic, OpenRouter, Ollama
 - 📖 [CLI Reference](docs/cli-reference.md) - All commands and options
 - ⚙️ [Configuration Guide](docs/configuration.md) - TOML configuration reference
 - 🔀 [DAG Pipelines](docs/dag-pipelines.md) - Pipeline composition and execution
+- 🚀 [Parallel Processing](docs/parallel-processing.md) - Execution modes and performance tuning
 - 📦 [Built-in Functions](docs/builtin-functions.md) - Sources, transforms, sinks
 - 🔌 [HTTP Plugin](docs/plugins/http.md) - REST API integration
 - 🍃 [MongoDB Plugin](docs/plugins/mongodb.md) - Database operations
