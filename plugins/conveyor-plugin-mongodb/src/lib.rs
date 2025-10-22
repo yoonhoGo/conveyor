@@ -10,6 +10,7 @@ use conveyor_plugin_api::{
     PluginDeclaration, RBox, RBoxError, RErr, RHashMap, ROk, RResult, RString, RVec, StageType,
     PLUGIN_API_VERSION,
 };
+use handlebars::Handlebars;
 use mongodb::{
     bson::Document,
     options::{ClientOptions, FindOneOptions, FindOptions, ReplaceOptions, UpdateOptions},
@@ -17,7 +18,6 @@ use mongodb::{
 };
 use serde_json::Value;
 use std::collections::HashMap;
-use handlebars::Handlebars;
 
 /// MongoDB operation types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,10 +105,11 @@ impl MongoDbStage {
         config: &HashMap<String, String>,
         input_data: Option<&FfiDataFormat>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, input_data).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, input_data).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -172,10 +173,11 @@ impl MongoDbStage {
         config: &HashMap<String, String>,
         input_data: Option<&FfiDataFormat>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, input_data).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, input_data).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -227,10 +229,11 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, Some(input_data)).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -273,10 +276,11 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, Some(input_data)).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -328,10 +332,11 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, Some(input_data)).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -387,10 +392,11 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, Some(input_data)).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -446,10 +452,11 @@ impl MongoDbStage {
         config: &HashMap<String, String>,
         input_data: Option<&FfiDataFormat>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, input_data).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, input_data).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -478,10 +485,11 @@ impl MongoDbStage {
         config: &HashMap<String, String>,
         input_data: Option<&FfiDataFormat>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, input_data).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, input_data).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -510,10 +518,11 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, Some(input_data)).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -567,10 +576,11 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, Some(input_data)).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -649,10 +659,11 @@ impl MongoDbStage {
         input_data: &FfiDataFormat,
         config: &HashMap<String, String>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, Some(input_data)).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, Some(input_data)).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -938,10 +949,11 @@ impl MongoDbStage {
         config: &HashMap<String, String>,
         input_data: Option<&FfiDataFormat>,
     ) -> RResult<FfiDataFormat, RBoxError> {
-        let (client, db_name, collection_name) = match self.connect_mongodb(config, input_data).await {
-            ROk(conn) => conn,
-            RErr(e) => return RErr(e),
-        };
+        let (client, db_name, collection_name) =
+            match self.connect_mongodb(config, input_data).await {
+                ROk(conn) => conn,
+                RErr(e) => return RErr(e),
+            };
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
@@ -1135,14 +1147,15 @@ impl MongoDbStage {
     }
 
     /// Parse document from config (for direct document specification)
-    fn parse_document_from_config(&self, config: &HashMap<String, String>) -> RResult<Option<Document>, RBoxError> {
+    fn parse_document_from_config(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<Option<Document>, RBoxError> {
         if let Some(doc_str) = config.get("document") {
             match serde_json::from_str::<Value>(doc_str) {
                 Ok(Value::Object(obj)) => {
-                    let record: HashMap<String, Value> = obj
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect();
+                    let record: HashMap<String, Value> =
+                        obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                     match self.json_record_to_bson(&record) {
                         ROk(doc) => ROk(Some(doc)),
                         RErr(e) => RErr(e),
@@ -1164,17 +1177,18 @@ impl MongoDbStage {
     }
 
     /// Parse documents array from config (for insertMany)
-    fn parse_documents_from_config(&self, config: &HashMap<String, String>) -> RResult<Option<Vec<Document>>, RBoxError> {
+    fn parse_documents_from_config(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<Option<Vec<Document>>, RBoxError> {
         if let Some(docs_str) = config.get("documents") {
             match serde_json::from_str::<Value>(docs_str) {
                 Ok(Value::Array(arr)) => {
                     let mut documents = Vec::new();
                     for item in arr {
                         if let Value::Object(obj) = item {
-                            let record: HashMap<String, Value> = obj
-                                .iter()
-                                .map(|(k, v)| (k.clone(), v.clone()))
-                                .collect();
+                            let record: HashMap<String, Value> =
+                                obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                             match self.json_record_to_bson(&record) {
                                 ROk(doc) => documents.push(doc),
                                 RErr(e) => return RErr(e),
@@ -1199,14 +1213,15 @@ impl MongoDbStage {
     }
 
     /// Parse update document from config (for update operations)
-    fn parse_update_from_config(&self, config: &HashMap<String, String>) -> RResult<Option<Document>, RBoxError> {
+    fn parse_update_from_config(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<Option<Document>, RBoxError> {
         if let Some(update_str) = config.get("update") {
             match serde_json::from_str::<Value>(update_str) {
                 Ok(Value::Object(obj)) => {
-                    let record: HashMap<String, Value> = obj
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect();
+                    let record: HashMap<String, Value> =
+                        obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                     match self.json_record_to_bson(&record) {
                         ROk(doc) => ROk(Some(doc)),
                         RErr(e) => RErr(e),
@@ -1222,14 +1237,15 @@ impl MongoDbStage {
     }
 
     /// Parse replacement document from config (for replace operations)
-    fn parse_replacement_from_config(&self, config: &HashMap<String, String>) -> RResult<Option<Document>, RBoxError> {
+    fn parse_replacement_from_config(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<Option<Document>, RBoxError> {
         if let Some(repl_str) = config.get("replacement") {
             match serde_json::from_str::<Value>(repl_str) {
                 Ok(Value::Object(obj)) => {
-                    let record: HashMap<String, Value> = obj
-                        .iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect();
+                    let record: HashMap<String, Value> =
+                        obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                     match self.json_record_to_bson(&record) {
                         ROk(doc) => ROk(Some(doc)),
                         RErr(e) => RErr(e),
@@ -1279,8 +1295,14 @@ impl FfiStage for MongoDbStage {
 
             match self.operation {
                 MongoOperation::Find => self.execute_find_async(&config, input_data.as_ref()).await,
-                MongoOperation::FindOne => self.execute_find_one_async(&config, input_data.as_ref()).await,
-                MongoOperation::Aggregate => self.execute_aggregate_async(&config, input_data.as_ref()).await,
+                MongoOperation::FindOne => {
+                    self.execute_find_one_async(&config, input_data.as_ref())
+                        .await
+                }
+                MongoOperation::Aggregate => {
+                    self.execute_aggregate_async(&config, input_data.as_ref())
+                        .await
+                }
                 MongoOperation::BulkWrite => {
                     let input_data = match input_data {
                         Some(data) => data,
@@ -1336,8 +1358,14 @@ impl FfiStage for MongoDbStage {
                     };
                     self.execute_update_many_async(&input_data, &config).await
                 }
-                MongoOperation::DeleteOne => self.execute_delete_one_async(&config, input_data.as_ref()).await,
-                MongoOperation::DeleteMany => self.execute_delete_many_async(&config, input_data.as_ref()).await,
+                MongoOperation::DeleteOne => {
+                    self.execute_delete_one_async(&config, input_data.as_ref())
+                        .await
+                }
+                MongoOperation::DeleteMany => {
+                    self.execute_delete_many_async(&config, input_data.as_ref())
+                        .await
+                }
                 MongoOperation::ReplaceOne => {
                     let input_data = match input_data {
                         Some(data) => data,

@@ -52,6 +52,10 @@ pub fn register_functions() -> HashMap<String, StageRef> {
 
     // Transform functions
     functions.insert(
+        "chunk.apply".to_string(),
+        Arc::new(transforms::chunk::ChunkTransform) as StageRef,
+    );
+    functions.insert(
         "decrypt.apply".to_string(),
         Arc::new(transforms::decrypt::DecryptTransform) as StageRef,
     );

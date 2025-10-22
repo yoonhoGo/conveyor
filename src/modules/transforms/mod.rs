@@ -1,5 +1,6 @@
 pub mod aggregate_stream;
 pub mod ai;
+pub mod chunk;
 pub mod decrypt;
 pub mod distinct;
 pub mod encrypt;
