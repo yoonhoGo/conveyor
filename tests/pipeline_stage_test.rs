@@ -93,7 +93,7 @@ format = "json"
     let config = DagPipelineConfig::from_str(&config_str)?;
     let registry = Arc::new(ModuleRegistry::with_defaults().await?);
     let builder = DagPipelineBuilder::new(registry);
-    let executor = builder.build(&config)?;
+    let mut executor = builder.build(&config)?;
 
     // Should execute without errors
     executor.execute().await?;
@@ -228,7 +228,7 @@ format = "table"
     let config = DagPipelineConfig::from_str(&config_str)?;
     let registry = Arc::new(ModuleRegistry::with_defaults().await?);
     let builder = DagPipelineBuilder::new(registry);
-    let executor = builder.build(&config)?;
+    let mut executor = builder.build(&config)?;
 
     executor.execute().await?;
 

@@ -148,7 +148,8 @@ impl DagPipelineBuilder {
             ExecutorType::Channel => {
                 let buffer_size = config.global.channel_buffer_size;
                 let concurrency = config.global.concurrency;
-                let mut executor = ChannelDagExecutor::new(error_strategy, buffer_size, concurrency);
+                let mut executor =
+                    ChannelDagExecutor::new(error_strategy, buffer_size, concurrency);
                 self.build_stages(&mut executor, config)?;
                 Ok(ExecutorVariant::Channel(executor))
             }

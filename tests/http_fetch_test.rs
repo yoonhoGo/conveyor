@@ -60,7 +60,7 @@ format = "records"
     );
 
     let config = DagPipelineConfig::from_str(&config_str)?;
-    let pipeline = DagPipeline::new(config).await?;
+    let mut pipeline = DagPipeline::new(config).await?;
 
     pipeline.validate()?;
     pipeline.execute().await?;
@@ -127,7 +127,7 @@ format = "json"
     );
 
     let config = DagPipelineConfig::from_str(&config_str)?;
-    let pipeline = DagPipeline::new(config).await?;
+    let mut pipeline = DagPipeline::new(config).await?;
 
     // Should validate successfully
     assert!(pipeline.validate().is_ok());
