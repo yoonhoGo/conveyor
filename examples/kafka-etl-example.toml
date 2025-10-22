@@ -1,0 +1,92 @@
+# Kafka ETL Example
+#
+# This pipeline demonstrates a complete ETL workflow:
+# 1. Consume messages from input topic
+# 2. Transform the data (filter, enrich, aggregate)
+# 3. Produce results to output topic
+#
+# Prerequisites:
+# 1. Kafka cluster running (default: localhost:9092)
+# 2. Input topic "raw-events" exists with messages
+# 3. Output topic "processed-events" exists (or auto-create is enabled)
+# 4. Build the Kafka plugin: cargo build -p conveyor-plugin-kafka --release
+
+[pipeline]
+name = "kafka-etl-pipeline"
+version = "1.0.0"
+description = "ETL pipeline: Kafka → Transform → Kafka"
+
+[global]
+log_level = "info"
+plugins = ["kafka"]  # Enable Kafka plugin
+
+# Stage 1: Consume from input topic
+[[stages]]
+id = "consume"
+function = "kafka"
+inputs = []
+
+[stages.config]
+brokers = "localhost:9092"
+topic = "raw-events"
+group_id = "etl-processor"
+max_messages = "1000"
+timeout_ms = "30000"
+
+# Stage 2: Filter high-value events
+[[stages]]
+id = "filter_high_value"
+function = "filter.apply"
+inputs = ["consume"]
+
+[stages.config]
+column = "amount"
+operator = ">="
+value = "100"
+
+# Stage 3: Add processing timestamp
+[[stages]]
+id = "add_timestamp"
+function = "map.apply"
+inputs = ["filter_high_value"]
+
+[stages.config]
+# In real scenario, you'd use a timestamp function
+# This is a simple example
+expression = "1000000"  # Placeholder
+output_column = "processed_at"
+
+# Stage 4: Select relevant fields
+[[stages]]
+id = "select_fields"
+function = "select.apply"
+inputs = ["add_timestamp"]
+
+[stages.config]
+columns = ["id", "user_id", "amount", "event_type", "processed_at"]
+
+# Stage 5: Produce to output topic
+[[stages]]
+id = "produce"
+function = "kafka"
+inputs = ["select_fields"]
+
+[stages.config]
+brokers = "localhost:9092"
+topic = "processed-events"
+key_field = "user_id"  # Partition by user_id
+
+# Stage 6: Display processing summary
+[[stages]]
+id = "summary"
+function = "stdout.write"
+inputs = ["produce"]
+
+[stages.config]
+format = "table"
+limit = 10
+
+[error_handling]
+strategy = "continue"  # Continue processing even if some messages fail
+max_retries = 3
+retry_delay_seconds = 1

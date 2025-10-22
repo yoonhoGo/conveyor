@@ -1,0 +1,20 @@
+[package]
+name = "conveyor-plugin-kafka"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+conveyor-plugin-api = { path = "../../conveyor-plugin-api" }
+abi_stable = "0.11"
+async-trait = "0.1"
+anyhow = "1.0"
+tokio = { version = "1.47", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+rdkafka = { version = "0.36", features = ["tokio"] }
+arrow = "54.3"
+tracing = "0.1"
+
+[lib]
+crate-type = ["cdylib"]

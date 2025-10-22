@@ -1,0 +1,60 @@
+# Kafka Consumer Example
+#
+# This pipeline reads messages from a Kafka topic and saves them to a JSON file.
+#
+# Prerequisites:
+# 1. Kafka cluster running (default: localhost:9092)
+# 2. Topic "test-topic" exists with messages
+# 3. Build the Kafka plugin: cargo build -p conveyor-plugin-kafka --release
+
+[pipeline]
+name = "kafka-consumer-example"
+version = "1.0.0"
+description = "Consume messages from Kafka and save to JSON"
+
+[global]
+log_level = "info"
+plugins = ["kafka"]  # Enable Kafka plugin
+
+# Stage 1: Consume messages from Kafka
+[[stages]]
+id = "consume"
+function = "kafka"
+inputs = []
+
+[stages.config]
+# Required: Kafka brokers (comma-separated)
+brokers = "localhost:9092"
+
+# Required: Topic to consume from
+topic = "test-topic"
+
+# Required for source: Consumer group ID
+group_id = "conveyor-consumer-group"
+
+# Optional: Maximum messages to consume (default: 1000)
+max_messages = "100"
+
+# Optional: Timeout in milliseconds (default: 30000)
+timeout_ms = "10000"
+
+# Stage 2: Save to JSON file
+[[stages]]
+id = "save"
+function = "json.write"
+inputs = ["consume"]
+
+[stages.config]
+path = "output/kafka-messages.json"
+format = "records"
+pretty = true
+
+# Stage 3: Display preview
+[[stages]]
+id = "preview"
+function = "stdout.write"
+inputs = ["consume"]
+
+[stages.config]
+format = "table"
+limit = 10

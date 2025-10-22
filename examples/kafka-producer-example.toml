@@ -1,0 +1,66 @@
+# Kafka Producer Example
+#
+# This pipeline reads data from a JSON file and produces messages to a Kafka topic.
+#
+# Prerequisites:
+# 1. Kafka cluster running (default: localhost:9092)
+# 2. Topic "output-topic" exists (or auto-create is enabled)
+# 3. Input JSON file exists: examples/data/users.json
+# 4. Build the Kafka plugin: cargo build -p conveyor-plugin-kafka --release
+
+[pipeline]
+name = "kafka-producer-example"
+version = "1.0.0"
+description = "Read JSON data and produce to Kafka topic"
+
+[global]
+log_level = "info"
+plugins = ["kafka"]  # Enable Kafka plugin
+
+# Stage 1: Load data from JSON file
+[[stages]]
+id = "load"
+function = "json.read"
+inputs = []
+
+[stages.config]
+path = "examples/data/users.json"
+format = "records"
+
+# Stage 2: Filter active users
+[[stages]]
+id = "filter"
+function = "filter.apply"
+inputs = ["load"]
+
+[stages.config]
+column = "status"
+operator = "=="
+value = "active"
+
+# Stage 3: Produce to Kafka
+[[stages]]
+id = "produce"
+function = "kafka"
+inputs = ["filter"]
+
+[stages.config]
+# Required: Kafka brokers (comma-separated)
+brokers = "localhost:9092"
+
+# Required: Topic to produce to
+topic = "output-topic"
+
+# Optional: Field to use as message key (for partitioning)
+# If not specified, messages will use null key
+key_field = "id"
+
+# Stage 4: Display what was sent
+[[stages]]
+id = "preview"
+function = "stdout.write"
+inputs = ["produce"]
+
+[stages.config]
+format = "table"
+limit = 10
