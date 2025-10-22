@@ -36,18 +36,39 @@ impl Stage for MapTransform {
             toml::Value::String("total".to_string()),
         );
 
+        let mut example3 = HashMap::new();
+        example3.insert(
+            "expression".to_string(),
+            toml::Value::String("false".to_string()),
+        );
+        example3.insert(
+            "output_column".to_string(),
+            toml::Value::String("active".to_string()),
+        );
+
+        let mut example4 = HashMap::new();
+        example4.insert(
+            "expression".to_string(),
+            toml::Value::String("\"pending\"".to_string()),
+        );
+        example4.insert(
+            "output_column".to_string(),
+            toml::Value::String("status".to_string()),
+        );
+
         StageMetadata::builder("map", StageCategory::Transform)
             .description("Apply mathematical expressions to create new columns")
             .long_description(
                 "Creates new columns by applying mathematical expressions to existing columns. \
                 Supports basic arithmetic operations: +, -, *, /. \
                 Can operate on single columns with constants or between two columns. \
+                Also supports boolean constants (true/false), numeric constants, and string constants (quoted). \
                 Useful for calculated fields and data transformations.",
             )
             .parameter(ConfigParameter::required(
                 "expression",
                 ParameterType::String,
-                "Mathematical expression (e.g., 'column * 2', 'col1 + col2')",
+                "Mathematical expression (e.g., 'column * 2', 'col1 + col2') or constant (e.g., 'true', 'false', '42', '\"text\"')",
             ))
             .parameter(ConfigParameter::required(
                 "output_column",
@@ -63,6 +84,16 @@ impl Stage for MapTransform {
                 "Calculate total",
                 example2,
                 Some("Multiply quantity by price to get total"),
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Add boolean field",
+                example3,
+                Some("Add active column with false value for all rows"),
+            ))
+            .example(crate::core::metadata::ConfigExample::new(
+                "Add string field",
+                example4,
+                Some("Add status column with 'pending' value for all rows"),
             ))
             .tag("map")
             .tag("expression")
@@ -174,9 +205,23 @@ impl Stage for MapTransform {
             }
         } else {
             // Assume it's a column name or constant
-            if let Ok(constant) = expression.parse::<f64>() {
+            // Try parsing as boolean first
+            let trimmed_expr = expression.trim();
+            if trimmed_expr.eq_ignore_ascii_case("true") {
+                Series::new(output_column.into(), vec![true; df.height()])
+            } else if trimmed_expr.eq_ignore_ascii_case("false") {
+                Series::new(output_column.into(), vec![false; df.height()])
+            } else if (trimmed_expr.starts_with('"') && trimmed_expr.ends_with('"'))
+                || (trimmed_expr.starts_with('\'') && trimmed_expr.ends_with('\''))
+            {
+                // String constant (quoted)
+                let string_value = &trimmed_expr[1..trimmed_expr.len() - 1];
+                Series::new(output_column.into(), vec![string_value; df.height()])
+            } else if let Ok(constant) = expression.parse::<f64>() {
+                // Try parsing as number
                 Series::new(output_column.into(), vec![constant; df.height()])
             } else {
+                // Assume it's a column name
                 df.column(expression)?.as_materialized_series().clone()
             }
         };
