@@ -1,7 +1,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio_stream::{Stream, StreamExt};
 
 use crate::core::metadata::StageMetadata;
 use crate::core::traits::DataFormat;
@@ -45,6 +47,89 @@ pub trait Stage: Send + Sync {
     /// Whether this stage produces output (false for sinks)
     fn produces_output(&self) -> bool {
         true
+    }
+}
+
+/// Trait for stages that support streaming/parallel processing with buffer_unordered
+///
+/// This trait enables stages to process records in parallel using tokio-stream's
+/// buffer_unordered, which is ideal for I/O-bound operations like HTTP requests
+/// or database queries.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use conveyor::core::stage::StreamStage;
+/// use tokio_stream::{Stream, StreamExt};
+///
+/// impl StreamStage for HttpFetchTransform {
+///     async fn transform_stream(
+///         &self,
+///         input: impl Stream<Item = Result<Record>> + Send,
+///         config: &HashMap<String, toml::Value>,
+///         concurrency: usize,
+///     ) -> Result<impl Stream<Item = Result<Record>> + Send> {
+///         // Process records in parallel with buffer_unordered
+///         Ok(input
+///             .map(|record_result| async move {
+///                 let record = record_result?;
+///                 // Make HTTP request (async I/O)
+///                 let result = fetch_from_api(&record).await?;
+///                 Ok(merge_record(record, result))
+///             })
+///             .buffer_unordered(concurrency))  // Up to N concurrent requests!
+///     }
+/// }
+/// ```
+#[async_trait]
+pub trait StreamStage: Stage {
+    /// Transform a stream of records with configurable concurrency
+    ///
+    /// # Arguments
+    /// * `input` - Stream of input records (each is a HashMap<String, JsonValue>)
+    /// * `config` - Stage configuration from TOML
+    /// * `concurrency` - Maximum number of concurrent operations (buffer_unordered size)
+    ///
+    /// # Returns
+    /// * Stream of transformed records
+    ///
+    /// # Default Implementation
+    /// The default implementation processes records sequentially by calling the
+    /// stage's execute() method for each record. Override this for parallel processing.
+    async fn transform_stream(
+        &self,
+        input: impl Stream<Item = Result<HashMap<String, JsonValue>>> + Send + 'async_trait,
+        config: &HashMap<String, toml::Value>,
+        concurrency: usize,
+    ) -> Result<impl Stream<Item = Result<HashMap<String, JsonValue>>> + Send> {
+        // Default implementation: sequential processing (no parallelism)
+        // Stages that override this can use buffer_unordered for parallel processing
+        let _ = concurrency; // Suppress unused warning
+
+        Ok(input.then(move |record_result| {
+            let config = config.clone();
+            async move {
+                match record_result {
+                    Ok(record) => {
+                        // Convert single record to RecordBatch
+                        let batch = vec![record];
+                        let mut inputs = HashMap::new();
+                        inputs.insert("input".to_string(), DataFormat::RecordBatch(batch));
+
+                        // Execute stage
+                        let result = self.execute(inputs, &config).await?;
+
+                        // Extract single record from result
+                        let mut result_batch = result.as_record_batch()?;
+                        match result_batch.pop() {
+                            Some(r) => Ok(r),
+                            None => Err(anyhow::anyhow!("Stage produced empty result")),
+                        }
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+        }))
     }
 }
 

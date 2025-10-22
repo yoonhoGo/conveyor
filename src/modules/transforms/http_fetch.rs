@@ -1,16 +1,18 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::StreamExt as FuturesStreamExt;
 use handlebars::Handlebars;
 use reqwest::Client;
 use serde_json::{json, Value as JsonValue};
 use std::collections::HashMap;
 use std::time::Duration;
+use tokio_stream::Stream;
 use tracing::{debug, info, warn};
 
 use crate::core::metadata::{
     ConfigParameter, ParameterType, ParameterValidation, StageCategory, StageMetadata,
 };
-use crate::core::stage::Stage;
+use crate::core::stage::{Stage, StreamStage};
 use crate::core::traits::DataFormat;
 
 /// HTTP Fetch Transform
@@ -398,6 +400,166 @@ impl HttpFetchTransform {
 
         Ok(json)
     }
+}
+
+// ============================================================================
+// StreamStage Implementation for Parallel HTTP Requests
+// ============================================================================
+
+#[async_trait]
+impl StreamStage for HttpFetchTransform {
+    /// Transform a stream of records with parallel HTTP requests
+    ///
+    /// This implementation uses buffer_unordered to make concurrent HTTP requests,
+    /// dramatically improving throughput for per_row mode.
+    ///
+    /// # Performance
+    /// - Sequential (default): 1 request at a time
+    /// - Parallel (this impl): up to `concurrency` requests concurrently
+    ///
+    /// For 100 records with 100ms latency each:
+    /// - Sequential: ~10 seconds
+    /// - Parallel (concurrency=10): ~1 second (10x faster!)
+    async fn transform_stream(
+        &self,
+        input: impl Stream<Item = Result<HashMap<String, JsonValue>>> + Send + 'async_trait,
+        config: &HashMap<String, toml::Value>,
+        concurrency: usize,
+    ) -> Result<impl Stream<Item = Result<HashMap<String, JsonValue>>> + Send> {
+        // Parse configuration
+        let url_template = config
+            .get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow::anyhow!("Missing 'url' in http_fetch config"))?
+            .to_string();
+
+        let method = config
+            .get("method")
+            .and_then(|v| v.as_str())
+            .unwrap_or("GET")
+            .to_string();
+
+        let result_field = config
+            .get("result_field")
+            .and_then(|v| v.as_str())
+            .unwrap_or("http_result")
+            .to_string();
+
+        let body_template = config
+            .get("body")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        // Get headers
+        let mut headers = HashMap::new();
+        if let Some(headers_config) = config.get("headers") {
+            if let Some(headers_table) = headers_config.as_table() {
+                for (key, value) in headers_table {
+                    if let Some(val_str) = value.as_str() {
+                        headers.insert(key.clone(), val_str.to_string());
+                    }
+                }
+            }
+        }
+
+        // Clone client for use in async blocks
+        let client = self.client.clone();
+        let handlebars = Handlebars::new();
+
+        // Create stream of HTTP requests
+        Ok(FuturesStreamExt::map(input, move |record_result| {
+            let client = client.clone();
+            let handlebars = handlebars.clone();
+            let url_template = url_template.clone();
+            let method = method.clone();
+            let body_template = body_template.clone();
+            let headers = headers.clone();
+            let result_field = result_field.clone();
+
+            async move {
+                let record = record_result?;
+
+                // Render URL template
+                let url = handlebars
+                    .render_template(&url_template, &record)
+                    .map_err(|e| anyhow::anyhow!("Failed to render URL template: {}", e))?;
+
+                debug!("Parallel HTTP request to: {}", url);
+
+                // Render body template if present
+                let body =
+                    if let Some(template) = &body_template {
+                        Some(handlebars.render_template(template, &record).map_err(|e| {
+                            anyhow::anyhow!("Failed to render body template: {}", e)
+                        })?)
+                    } else {
+                        None
+                    };
+
+                // Make HTTP request
+                match make_request_static(&client, &url, &method, body.as_deref(), &headers).await {
+                    Ok(response_data) => {
+                        // Clone the original record and add the result
+                        let mut new_record = record.clone();
+                        new_record.insert(result_field.clone(), response_data);
+                        Ok(new_record)
+                    }
+                    Err(e) => {
+                        warn!("Parallel HTTP request failed for URL {}: {}", url, e);
+                        // Add null result on error
+                        let mut new_record = record.clone();
+                        new_record.insert(result_field.clone(), JsonValue::Null);
+                        Ok(new_record)
+                    }
+                }
+            }
+        })
+        .buffer_unordered(concurrency)) // KEY: Parallel execution!
+    }
+}
+
+/// Static version of make_request for use in async closures
+async fn make_request_static(
+    client: &Client,
+    url: &str,
+    method: &str,
+    body: Option<&str>,
+    headers: &HashMap<String, String>,
+) -> Result<JsonValue> {
+    let mut request = match method {
+        "GET" => client.get(url),
+        "POST" => client.post(url),
+        "PUT" => client.put(url),
+        "PATCH" => client.patch(url),
+        "DELETE" => client.delete(url),
+        _ => return Err(anyhow::anyhow!("Unsupported HTTP method: {}", method)),
+    };
+
+    // Add headers
+    for (key, value) in headers {
+        request = request.header(key, value);
+    }
+
+    // Add body if present
+    if let Some(body_str) = body {
+        request = request
+            .header("Content-Type", "application/json")
+            .body(body_str.to_string());
+    }
+
+    // Execute request
+    let response = request.send().await?;
+    let status = response.status();
+
+    if !status.is_success() {
+        anyhow::bail!("HTTP request failed with status: {}", status);
+    }
+
+    // Parse response as JSON
+    let text = response.text().await?;
+    let json: JsonValue = serde_json::from_str(&text).unwrap_or(JsonValue::String(text));
+
+    Ok(json)
 }
 
 #[cfg(test)]
