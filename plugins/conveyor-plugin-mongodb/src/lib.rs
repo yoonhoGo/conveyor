@@ -31,6 +31,7 @@ pub enum MongoOperation {
     DeleteMany,
     ReplaceOne,
     ReplaceMany,
+    Aggregate,
 }
 
 /// MongoDB Stage - operation-based
@@ -552,6 +553,102 @@ impl MongoDbStage {
         ROk(input_data.clone())
     }
 
+    /// Execute aggregation operation - run aggregation pipeline
+    async fn execute_aggregate_async(
+        &self,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        let (client, db_name, collection_name) = match self.connect_mongodb(config).await {
+            ROk(conn) => conn,
+            RErr(e) => return RErr(e),
+        };
+        let db = client.database(&db_name);
+        let collection = db.collection::<Document>(&collection_name);
+
+        // Parse pipeline from config
+        let pipeline_str = match config.get("pipeline") {
+            Some(p) => p,
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing required 'pipeline' configuration"
+                )))
+            }
+        };
+
+        // Parse pipeline as JSON array
+        let pipeline_json: Vec<Value> = match serde_json::from_str(pipeline_str) {
+            Ok(Value::Array(arr)) => arr,
+            _ => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Pipeline must be a JSON array"
+                )))
+            }
+        };
+
+        // Convert JSON pipeline to BSON documents
+        let pipeline: Vec<Document> = pipeline_json
+            .iter()
+            .filter_map(|stage| {
+                if let Value::Object(obj) = stage {
+                    let mut doc = Document::new();
+                    for (key, value) in obj {
+                        if let Some(bson_val) = json_to_bson(value) {
+                            doc.insert(key.clone(), bson_val);
+                        }
+                    }
+                    Some(doc)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if pipeline.is_empty() {
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "Pipeline cannot be empty"
+            )));
+        }
+
+        // Execute aggregation
+        let mut cursor = match collection.aggregate(pipeline).await {
+            Ok(c) => c,
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "MongoDB aggregation failed: {}",
+                    e
+                )))
+            }
+        };
+
+        // Collect results
+        let mut records: Vec<HashMap<String, Value>> = Vec::new();
+        use futures::stream::TryStreamExt;
+        loop {
+            match cursor.try_next().await {
+                Ok(Some(doc)) => {
+                    if let Ok(json_str) = serde_json::to_string(&doc) {
+                        if let Ok(json_val) = serde_json::from_str::<Value>(&json_str) {
+                            if let Some(obj) = json_val.as_object() {
+                                let record: HashMap<String, Value> =
+                                    obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                                records.push(record);
+                            }
+                        }
+                    }
+                }
+                Ok(None) => break,
+                Err(e) => {
+                    return RErr(RBoxError::from_fmt(&format_args!(
+                        "Failed to fetch aggregation result: {}",
+                        e
+                    )))
+                }
+            }
+        }
+
+        FfiDataFormat::from_json_records(&records)
+    }
+
     // Helper methods
 
     /// Connect to MongoDB and return client, database name, and collection name
@@ -679,6 +776,7 @@ impl FfiStage for MongoDbStage {
             match self.operation {
                 MongoOperation::Find => self.execute_find_async(&config).await,
                 MongoOperation::FindOne => self.execute_find_one_async(&config).await,
+                MongoOperation::Aggregate => self.execute_aggregate_async(&config).await,
                 MongoOperation::InsertOne => {
                     let input_data = match context.inputs.into_iter().next() {
                         Some(tuple) => tuple.1,
@@ -925,6 +1023,18 @@ pub extern "C" fn create_mongodb_replacemany() -> FfiStage_TO<'static, RBox<()>>
     )
 }
 
+#[no_mangle]
+pub extern "C" fn create_mongodb_aggregate() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-aggregate".to_string(),
+            MongoOperation::Aggregate,
+            StageType::Source,
+        ),
+        TD_Opaque,
+    )
+}
+
 // ============================================================================
 // Metadata Helper Functions
 // ============================================================================
@@ -1127,6 +1237,26 @@ fn create_replacemany_metadata() -> FfiStageMetadata {
     )
 }
 
+/// Create metadata for aggregate operation
+fn create_aggregate_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.push(FfiConfigParameter::required(
+        "pipeline",
+        FfiParameterType::String,
+        "MongoDB aggregation pipeline as JSON array (e.g., '[{\"$match\": {\"status\": \"active\"}}, {\"$group\": {\"_id\": \"$category\", \"count\": {\"$sum\": 1}}}]')",
+    ));
+
+    FfiStageMetadata::new(
+        "mongodb.aggregate",
+        "Run aggregation pipeline on MongoDB collection",
+        "Executes a MongoDB aggregation pipeline and returns results. \
+         Supports all MongoDB aggregation stages ($match, $group, $project, $sort, $limit, etc.). \
+         Pipeline must be provided as a JSON array of stage objects.",
+        params,
+        vec!["mongodb", "database", "source", "aggregation", "pipeline"],
+    )
+}
+
 // ============================================================================
 // Plugin Capabilities
 // ============================================================================
@@ -1147,6 +1277,13 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
             "MongoDB findOne - read single document",
             "create_mongodb_findone",
             create_findone_metadata(),
+        ),
+        PluginCapability::new(
+            "mongodb.aggregate",
+            StageType::Source,
+            "MongoDB aggregate - run aggregation pipeline",
+            "create_mongodb_aggregate",
+            create_aggregate_metadata(),
         ),
         PluginCapability::new(
             "mongodb.insertOne",
@@ -1213,9 +1350,9 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
 pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
     api_version: PLUGIN_API_VERSION,
     name: rstr!("mongodb"),
-    version: rstr!("2.0.0"),
+    version: rstr!("2.1.0"),
     description: rstr!(
-        "MongoDB plugin with operation-based API (find, findOne, insert, update, delete, replace)"
+        "MongoDB plugin with operation-based API (find, findOne, aggregate, insert, update, delete, replace)"
     ),
     get_capabilities,
 };
@@ -1231,14 +1368,14 @@ mod tests {
     #[test]
     fn test_plugin_declaration() {
         assert_eq!(_plugin_declaration.name, "mongodb");
-        assert_eq!(_plugin_declaration.version, "2.0.0");
+        assert_eq!(_plugin_declaration.version, "2.1.0");
         assert!(_plugin_declaration.is_compatible());
     }
 
     #[test]
     fn test_capabilities() {
         let caps = get_capabilities();
-        assert_eq!(caps.len(), 10);
+        assert_eq!(caps.len(), 11);
 
         // Check find operation
         assert_eq!(caps[0].name.as_str(), "mongodb.find");
@@ -1248,13 +1385,17 @@ mod tests {
         assert_eq!(caps[1].name.as_str(), "mongodb.findOne");
         assert_eq!(caps[1].stage_type, StageType::Source);
 
+        // Check aggregate operation
+        assert_eq!(caps[2].name.as_str(), "mongodb.aggregate");
+        assert_eq!(caps[2].stage_type, StageType::Source);
+
         // Check insertOne operation
-        assert_eq!(caps[2].name.as_str(), "mongodb.insertOne");
-        assert_eq!(caps[2].stage_type, StageType::Sink);
+        assert_eq!(caps[3].name.as_str(), "mongodb.insertOne");
+        assert_eq!(caps[3].stage_type, StageType::Sink);
 
         // Check insertMany operation
-        assert_eq!(caps[3].name.as_str(), "mongodb.insertMany");
-        assert_eq!(caps[3].stage_type, StageType::Sink);
+        assert_eq!(caps[4].name.as_str(), "mongodb.insertMany");
+        assert_eq!(caps[4].stage_type, StageType::Sink);
     }
 
     #[test]

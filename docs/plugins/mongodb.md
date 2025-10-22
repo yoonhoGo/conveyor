@@ -5,6 +5,7 @@ MongoDB database integration plugin for Conveyor. Provides comprehensive CRUD op
 ## Features
 
 - **Complete CRUD** operations (Create, Read, Update, Delete)
+- **Aggregation pipelines** for complex data transformations
 - **Cursor-based pagination** for large datasets
 - **Batch operations** for efficiency
 - **Query filtering** with MongoDB query syntax
@@ -25,6 +26,7 @@ plugins = ["mongodb"]
 
 - `mongodb.find` - Find multiple documents
 - `mongodb.findOne` - Find single document
+- `mongodb.aggregate` - Run aggregation pipeline
 
 ### Write Operations (Sinks)
 
@@ -139,6 +141,124 @@ uri = "mongodb://localhost:27017"
 database = "myapp"
 collection = "users"
 query = '{ "_id": "user123" }'
+```
+
+### mongodb.aggregate
+
+Run aggregation pipeline for complex data transformations.
+
+**Configuration:**
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `pipeline` | String | ✅ Yes | - | MongoDB aggregation pipeline (JSON array string) |
+
+**Example:**
+
+```toml
+[[stages]]
+id = "aggregate_sales"
+function = "mongodb.aggregate"
+inputs = []
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "myapp"
+collection = "sales"
+pipeline = '''
+[
+  { "$match": { "status": "completed" } },
+  { "$group": {
+    "_id": "$product_id",
+    "total_revenue": { "$sum": "$amount" },
+    "count": { "$sum": 1 }
+  }},
+  { "$sort": { "total_revenue": -1 } },
+  { "$limit": 10 }
+]
+'''
+```
+
+**Common Aggregation Stages:**
+
+```toml
+# Match: Filter documents
+{ "$match": { "status": "active", "age": { "$gte": 18 } } }
+
+# Group: Group and aggregate
+{ "$group": {
+  "_id": "$category",
+  "total": { "$sum": "$amount" },
+  "avg": { "$avg": "$price" },
+  "count": { "$sum": 1 }
+}}
+
+# Project: Select and transform fields
+{ "$project": {
+  "name": 1,
+  "total_price": { "$multiply": ["$price", "$quantity"] },
+  "year": { "$year": "$created_at" }
+}}
+
+# Sort: Order results
+{ "$sort": { "created_at": -1 } }
+
+# Limit: Limit results
+{ "$limit": 100 }
+
+# Lookup: Join collections
+{ "$lookup": {
+  "from": "users",
+  "localField": "user_id",
+  "foreignField": "_id",
+  "as": "user_info"
+}}
+
+# Unwind: Flatten arrays
+{ "$unwind": "$tags" }
+```
+
+**Advanced Example:**
+
+```toml
+[[stages]]
+id = "user_analytics"
+function = "mongodb.aggregate"
+inputs = []
+
+[stages.config]
+uri = "mongodb://localhost:27017"
+database = "analytics"
+collection = "events"
+pipeline = '''
+[
+  { "$match": {
+    "event_type": "purchase",
+    "created_at": { "$gte": "2024-01-01" }
+  }},
+  { "$group": {
+    "_id": {
+      "user_id": "$user_id",
+      "month": { "$month": "$created_at" }
+    },
+    "total_spent": { "$sum": "$amount" },
+    "purchase_count": { "$sum": 1 },
+    "avg_order_value": { "$avg": "$amount" }
+  }},
+  { "$match": {
+    "total_spent": { "$gte": 1000 }
+  }},
+  { "$sort": { "total_spent": -1 } },
+  { "$project": {
+    "user_id": "$_id.user_id",
+    "month": "$_id.month",
+    "total_spent": 1,
+    "purchase_count": 1,
+    "avg_order_value": { "$round": ["$avg_order_value", 2] },
+    "_id": 0
+  }}
+]
+'''
 ```
 
 ## Write Operations
@@ -473,6 +593,101 @@ inputs = ["load_data"]
 
 [stages.config]
 path = "reports_2024.csv"
+has_headers = true
+```
+
+### Example 5: Aggregation Pipeline with Data Processing
+
+```toml
+[pipeline]
+name = "sales_analytics"
+version = "1.0.0"
+
+[global]
+plugins = ["mongodb"]
+
+[global.variables]
+mongo_uri = "${MONGODB_URI}"
+
+# Run aggregation to calculate sales metrics
+[[stages]]
+id = "aggregate_sales"
+function = "mongodb.aggregate"
+inputs = []
+
+[stages.config]
+uri = "{{mongo_uri}}"
+database = "sales"
+collection = "orders"
+pipeline = '''
+[
+  {
+    "$match": {
+      "status": "completed",
+      "order_date": { "$gte": "2024-01-01" }
+    }
+  },
+  {
+    "$group": {
+      "_id": {
+        "region": "$region",
+        "category": "$product_category"
+      },
+      "total_revenue": { "$sum": "$amount" },
+      "total_orders": { "$sum": 1 },
+      "avg_order_value": { "$avg": "$amount" },
+      "min_order": { "$min": "$amount" },
+      "max_order": { "$max": "$amount" }
+    }
+  },
+  {
+    "$project": {
+      "region": "$_id.region",
+      "category": "$_id.category",
+      "total_revenue": { "$round": ["$total_revenue", 2] },
+      "total_orders": 1,
+      "avg_order_value": { "$round": ["$avg_order_value", 2] },
+      "min_order": { "$round": ["$min_order", 2] },
+      "max_order": { "$round": ["$max_order", 2] },
+      "_id": 0
+    }
+  },
+  {
+    "$sort": { "total_revenue": -1 }
+  }
+]
+'''
+
+# Filter high-performing regions
+[[stages]]
+id = "filter_top_regions"
+function = "filter.apply"
+inputs = ["aggregate_sales"]
+
+[stages.config]
+column = "total_revenue"
+operator = ">="
+value = 100000.0
+
+# Save results
+[[stages]]
+id = "save_results"
+function = "mongodb.insertMany"
+inputs = ["filter_top_regions"]
+
+[stages.config]
+uri = "{{mongo_uri}}"
+database = "analytics"
+collection = "regional_performance"
+
+# Export to CSV for reporting
+[[stages]]
+id = "export_csv"
+function = "csv.write"
+inputs = ["filter_top_regions"]
+
+[stages.config]
+path = "top_regional_performance.csv"
 has_headers = true
 ```
 
