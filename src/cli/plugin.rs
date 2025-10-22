@@ -9,10 +9,18 @@ pub enum PluginCommand {
     Install {
         /// Plugin name to install
         name: String,
+
+        /// Force refresh registry before installing
+        #[arg(short, long)]
+        refresh: bool,
     },
 
     /// List installed plugins
-    List,
+    List {
+        /// Force refresh registry before listing
+        #[arg(short, long)]
+        refresh: bool,
+    },
 
     /// Uninstall a plugin
     Uninstall {
@@ -24,23 +32,38 @@ pub enum PluginCommand {
     Info {
         /// Plugin name
         name: String,
+
+        /// Force refresh registry before showing info
+        #[arg(short, long)]
+        refresh: bool,
     },
+
+    /// Update plugin registry cache
+    Update,
 }
 
 impl PluginCommand {
     pub async fn execute(&self) -> Result<()> {
         match self {
-            PluginCommand::Install { name } => install_plugin(name).await,
-            PluginCommand::List => list_plugins().await,
+            PluginCommand::Install { name, refresh } => install_plugin(name, *refresh).await,
+            PluginCommand::List { refresh } => list_plugins(*refresh).await,
             PluginCommand::Uninstall { name } => uninstall_plugin(name),
-            PluginCommand::Info { name } => show_plugin_info(name).await,
+            PluginCommand::Info { name, refresh } => show_plugin_info(name, *refresh).await,
+            PluginCommand::Update => update_registry().await,
         }
     }
 }
 
 /// Install a plugin
-async fn install_plugin(name: &str) -> Result<()> {
+async fn install_plugin(name: &str, refresh: bool) -> Result<()> {
     let manager = PluginManager::new()?;
+
+    // Refresh registry if requested
+    if refresh {
+        println!("Refreshing plugin registry...");
+        manager.get_registry(true).await?;
+        println!("✓ Registry updated\n");
+    }
 
     // Check if already installed
     if manager.is_installed(name) {
@@ -58,8 +81,15 @@ async fn install_plugin(name: &str) -> Result<()> {
 }
 
 /// List installed plugins
-async fn list_plugins() -> Result<()> {
+async fn list_plugins(refresh: bool) -> Result<()> {
     let manager = PluginManager::new()?;
+
+    // Refresh registry if requested
+    if refresh {
+        println!("Refreshing plugin registry...");
+        manager.get_registry(true).await?;
+        println!("✓ Registry updated\n");
+    }
 
     // Get installed plugins
     let installed = manager.list_installed()?;
@@ -119,8 +149,15 @@ fn uninstall_plugin(name: &str) -> Result<()> {
 }
 
 /// Show plugin information
-async fn show_plugin_info(name: &str) -> Result<()> {
+async fn show_plugin_info(name: &str, refresh: bool) -> Result<()> {
     let manager = PluginManager::new()?;
+
+    // Refresh registry if requested
+    if refresh {
+        println!("Refreshing plugin registry...");
+        manager.get_registry(true).await?;
+        println!("✓ Registry updated\n");
+    }
 
     // Get registry
     let registry = manager.get_registry(false).await?;
@@ -160,6 +197,20 @@ async fn show_plugin_info(name: &str) -> Result<()> {
     }
 
     println!();
+
+    Ok(())
+}
+
+/// Update plugin registry cache
+async fn update_registry() -> Result<()> {
+    let manager = PluginManager::new()?;
+
+    println!("Updating plugin registry...");
+    let registry = manager.get_registry(true).await?;
+
+    println!("✓ Registry updated successfully");
+    println!("  {} plugins available", registry.list_plugins().len());
+    println!("  Registry version: {}", registry.version);
 
     Ok(())
 }
