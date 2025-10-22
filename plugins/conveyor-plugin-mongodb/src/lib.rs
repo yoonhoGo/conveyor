@@ -184,22 +184,27 @@ impl MongoDbStage {
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
-        // Convert input data to document
-        let records = match input_data.to_json_records() {
-            ROk(r) => r,
-            RErr(e) => return RErr(e),
-        };
-
-        if records.is_empty() {
-            return RErr(RBoxError::from_fmt(&format_args!(
-                "No data provided for insertOne"
-            )));
-        }
-
-        let record = &records[0];
-        let doc = match self.json_record_to_bson(record) {
-            ROk(d) => d,
-            RErr(e) => return RErr(e),
+        // Try to get document from input data first, then fall back to config
+        let doc = match input_data.to_json_records() {
+            ROk(records) if !records.is_empty() => {
+                // Use first record from input data
+                match self.json_record_to_bson(&records[0]) {
+                    ROk(d) => d,
+                    RErr(e) => return RErr(e),
+                }
+            }
+            _ => {
+                // Input data is empty or invalid, try config
+                match self.parse_document_from_config(config) {
+                    ROk(Some(d)) => d,
+                    ROk(None) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "No data provided for insertOne. Provide either input data or 'document' in config"
+                        )))
+                    }
+                    RErr(e) => return RErr(e),
+                }
+            }
         };
 
         // Insert document
@@ -225,23 +230,31 @@ impl MongoDbStage {
         let db = client.database(&db_name);
         let collection = db.collection::<Document>(&collection_name);
 
-        // Convert input data to documents
-        let records = match input_data.to_json_records() {
-            ROk(r) => r,
-            RErr(e) => return RErr(e),
+        // Try to get documents from input data first, then fall back to config
+        let documents: Vec<Document> = match input_data.to_json_records() {
+            ROk(records) if !records.is_empty() => {
+                // Use records from input data
+                records
+                    .iter()
+                    .filter_map(|record| match self.json_record_to_bson(record) {
+                        ROk(d) => Some(d),
+                        RErr(_) => None,
+                    })
+                    .collect()
+            }
+            _ => {
+                // Input data is empty or invalid, try config
+                match self.parse_documents_from_config(config) {
+                    ROk(Some(docs)) => docs,
+                    ROk(None) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "No data provided for insertMany. Provide either input data or 'documents' in config"
+                        )))
+                    }
+                    RErr(e) => return RErr(e),
+                }
+            }
         };
-
-        if records.is_empty() {
-            return ROk(input_data.clone());
-        }
-
-        let documents: Vec<Document> = records
-            .iter()
-            .filter_map(|record| match self.json_record_to_bson(record) {
-                ROk(d) => Some(d),
-                RErr(_) => None,
-            })
-            .collect();
 
         if documents.is_empty() {
             return RErr(RBoxError::from_fmt(&format_args!(
@@ -278,21 +291,27 @@ impl MongoDbStage {
             RErr(e) => return RErr(e),
         };
 
-        // Build update document from input data
-        let records = match input_data.to_json_records() {
-            ROk(r) => r,
-            RErr(e) => return RErr(e),
-        };
-
-        if records.is_empty() {
-            return RErr(RBoxError::from_fmt(&format_args!(
-                "No data provided for updateOne"
-            )));
-        }
-
-        let update_doc = match self.json_record_to_bson(&records[0]) {
-            ROk(d) => d,
-            RErr(e) => return RErr(e),
+        // Try to get update document from input data first, then fall back to config
+        let update_doc = match input_data.to_json_records() {
+            ROk(records) if !records.is_empty() => {
+                // Use first record from input data
+                match self.json_record_to_bson(&records[0]) {
+                    ROk(d) => d,
+                    RErr(e) => return RErr(e),
+                }
+            }
+            _ => {
+                // Input data is empty or invalid, try config
+                match self.parse_update_from_config(config) {
+                    ROk(Some(d)) => d,
+                    ROk(None) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "No data provided for updateOne. Provide either input data or 'update' in config"
+                        )))
+                    }
+                    RErr(e) => return RErr(e),
+                }
+            }
         };
 
         // Wrap in $set operator
@@ -331,21 +350,27 @@ impl MongoDbStage {
             RErr(e) => return RErr(e),
         };
 
-        // Build update document from input data
-        let records = match input_data.to_json_records() {
-            ROk(r) => r,
-            RErr(e) => return RErr(e),
-        };
-
-        if records.is_empty() {
-            return RErr(RBoxError::from_fmt(&format_args!(
-                "No data provided for updateMany"
-            )));
-        }
-
-        let update_doc = match self.json_record_to_bson(&records[0]) {
-            ROk(d) => d,
-            RErr(e) => return RErr(e),
+        // Try to get update document from input data first, then fall back to config
+        let update_doc = match input_data.to_json_records() {
+            ROk(records) if !records.is_empty() => {
+                // Use first record from input data
+                match self.json_record_to_bson(&records[0]) {
+                    ROk(d) => d,
+                    RErr(e) => return RErr(e),
+                }
+            }
+            _ => {
+                // Input data is empty or invalid, try config
+                match self.parse_update_from_config(config) {
+                    ROk(Some(d)) => d,
+                    ROk(None) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "No data provided for updateMany. Provide either input data or 'update' in config"
+                        )))
+                    }
+                    RErr(e) => return RErr(e),
+                }
+            }
         };
 
         // Wrap in $set operator
@@ -446,21 +471,27 @@ impl MongoDbStage {
             RErr(e) => return RErr(e),
         };
 
-        // Build replacement document from input data
-        let records = match input_data.to_json_records() {
-            ROk(r) => r,
-            RErr(e) => return RErr(e),
-        };
-
-        if records.is_empty() {
-            return RErr(RBoxError::from_fmt(&format_args!(
-                "No data provided for replaceOne"
-            )));
-        }
-
-        let replacement = match self.json_record_to_bson(&records[0]) {
-            ROk(d) => d,
-            RErr(e) => return RErr(e),
+        // Try to get replacement document from input data first, then fall back to config
+        let replacement = match input_data.to_json_records() {
+            ROk(records) if !records.is_empty() => {
+                // Use first record from input data
+                match self.json_record_to_bson(&records[0]) {
+                    ROk(d) => d,
+                    RErr(e) => return RErr(e),
+                }
+            }
+            _ => {
+                // Input data is empty or invalid, try config
+                match self.parse_replacement_from_config(config) {
+                    ROk(Some(d)) => d,
+                    ROk(None) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "No data provided for replaceOne. Provide either input data or 'replacement' in config"
+                        )))
+                    }
+                    RErr(e) => return RErr(e),
+                }
+            }
         };
 
         // Execute replace
@@ -508,21 +539,27 @@ impl MongoDbStage {
             }
         };
 
-        // Build replacement document from input data
-        let records = match input_data.to_json_records() {
-            ROk(r) => r,
-            RErr(e) => return RErr(e),
-        };
-
-        if records.is_empty() {
-            return RErr(RBoxError::from_fmt(&format_args!(
-                "No data provided for replaceMany"
-            )));
-        }
-
-        let replacement = match self.json_record_to_bson(&records[0]) {
-            ROk(d) => d,
-            RErr(e) => return RErr(e),
+        // Try to get replacement document from input data first, then fall back to config
+        let replacement = match input_data.to_json_records() {
+            ROk(records) if !records.is_empty() => {
+                // Use first record from input data
+                match self.json_record_to_bson(&records[0]) {
+                    ROk(d) => d,
+                    RErr(e) => return RErr(e),
+                }
+            }
+            _ => {
+                // Input data is empty or invalid, try config
+                match self.parse_replacement_from_config(config) {
+                    ROk(Some(d)) => d,
+                    ROk(None) => {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "No data provided for replaceMany. Provide either input data or 'replacement' in config"
+                        )))
+                    }
+                    RErr(e) => return RErr(e),
+                }
+            }
         };
 
         // Replace each document
@@ -1032,6 +1069,116 @@ impl MongoDbStage {
             ROk(doc)
         }
     }
+
+    /// Parse document from config (for direct document specification)
+    fn parse_document_from_config(&self, config: &HashMap<String, String>) -> RResult<Option<Document>, RBoxError> {
+        if let Some(doc_str) = config.get("document") {
+            match serde_json::from_str::<Value>(doc_str) {
+                Ok(Value::Object(obj)) => {
+                    let record: HashMap<String, Value> = obj
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                    match self.json_record_to_bson(&record) {
+                        ROk(doc) => ROk(Some(doc)),
+                        RErr(e) => RErr(e),
+                    }
+                }
+                Ok(Value::Array(_)) => {
+                    // For insertMany, return error - should use documents (plural)
+                    RErr(RBoxError::from_fmt(&format_args!(
+                        "For multiple documents, use 'documents' field instead of 'document'"
+                    )))
+                }
+                _ => RErr(RBoxError::from_fmt(&format_args!(
+                    "Invalid document format in config"
+                ))),
+            }
+        } else {
+            ROk(None)
+        }
+    }
+
+    /// Parse documents array from config (for insertMany)
+    fn parse_documents_from_config(&self, config: &HashMap<String, String>) -> RResult<Option<Vec<Document>>, RBoxError> {
+        if let Some(docs_str) = config.get("documents") {
+            match serde_json::from_str::<Value>(docs_str) {
+                Ok(Value::Array(arr)) => {
+                    let mut documents = Vec::new();
+                    for item in arr {
+                        if let Value::Object(obj) = item {
+                            let record: HashMap<String, Value> = obj
+                                .iter()
+                                .map(|(k, v)| (k.clone(), v.clone()))
+                                .collect();
+                            match self.json_record_to_bson(&record) {
+                                ROk(doc) => documents.push(doc),
+                                RErr(e) => return RErr(e),
+                            }
+                        }
+                    }
+                    if documents.is_empty() {
+                        RErr(RBoxError::from_fmt(&format_args!(
+                            "No valid documents found in config"
+                        )))
+                    } else {
+                        ROk(Some(documents))
+                    }
+                }
+                _ => RErr(RBoxError::from_fmt(&format_args!(
+                    "documents field must be a JSON array"
+                ))),
+            }
+        } else {
+            ROk(None)
+        }
+    }
+
+    /// Parse update document from config (for update operations)
+    fn parse_update_from_config(&self, config: &HashMap<String, String>) -> RResult<Option<Document>, RBoxError> {
+        if let Some(update_str) = config.get("update") {
+            match serde_json::from_str::<Value>(update_str) {
+                Ok(Value::Object(obj)) => {
+                    let record: HashMap<String, Value> = obj
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                    match self.json_record_to_bson(&record) {
+                        ROk(doc) => ROk(Some(doc)),
+                        RErr(e) => RErr(e),
+                    }
+                }
+                _ => RErr(RBoxError::from_fmt(&format_args!(
+                    "Invalid update format in config"
+                ))),
+            }
+        } else {
+            ROk(None)
+        }
+    }
+
+    /// Parse replacement document from config (for replace operations)
+    fn parse_replacement_from_config(&self, config: &HashMap<String, String>) -> RResult<Option<Document>, RBoxError> {
+        if let Some(repl_str) = config.get("replacement") {
+            match serde_json::from_str::<Value>(repl_str) {
+                Ok(Value::Object(obj)) => {
+                    let record: HashMap<String, Value> = obj
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect();
+                    match self.json_record_to_bson(&record) {
+                        ROk(doc) => ROk(Some(doc)),
+                        RErr(e) => RErr(e),
+                    }
+                }
+                _ => RErr(RBoxError::from_fmt(&format_args!(
+                    "Invalid replacement format in config"
+                ))),
+            }
+        } else {
+            ROk(None)
+        }
+    }
 }
 
 impl FfiStage for MongoDbStage {
@@ -1416,24 +1563,41 @@ fn create_findone_metadata() -> FfiStageMetadata {
 
 /// Create metadata for insertOne operation
 fn create_insertone_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.push(FfiConfigParameter::optional(
+        "document",
+        FfiParameterType::String,
+        "",
+        "Document to insert as JSON string (alternative to input data). Example: '{\"name\": \"John\", \"age\": 30}'",
+    ));
+
     FfiStageMetadata::new(
         "mongodb.insertOne",
         "Insert single document into MongoDB collection",
-        "Inserts a single document from the input data into MongoDB. \
-         Takes the first record from the input dataset.",
-        common_mongodb_parameters(),
+        "Inserts a single document into MongoDB. \
+         Document can be provided via input data (first record) or 'document' config parameter.",
+        params,
         vec!["mongodb", "database", "sink", "insert"],
     )
 }
 
 /// Create metadata for insertMany operation
 fn create_insertmany_metadata() -> FfiStageMetadata {
+    let mut params = common_mongodb_parameters();
+    params.push(FfiConfigParameter::optional(
+        "documents",
+        FfiParameterType::String,
+        "",
+        "Documents to insert as JSON array string (alternative to input data). Example: '[{\"name\": \"John\"}, {\"name\": \"Jane\"}]'",
+    ));
+
     FfiStageMetadata::new(
         "mongodb.insertMany",
         "Insert multiple documents into MongoDB collection",
-        "Inserts all documents from the input data into MongoDB in a single batch operation. \
+        "Inserts multiple documents into MongoDB in a single batch operation. \
+         Documents can be provided via input data (all records) or 'documents' config parameter. \
          Efficient for bulk inserts.",
-        common_mongodb_parameters(),
+        params,
         vec!["mongodb", "database", "sink", "insert", "bulk"],
     )
 }
@@ -1446,12 +1610,18 @@ fn create_updateone_metadata() -> FfiStageMetadata {
         FfiParameterType::String,
         "MongoDB query filter to match the document to update",
     ));
+    params.push(FfiConfigParameter::optional(
+        "update",
+        FfiParameterType::String,
+        "",
+        "Fields to update as JSON string (alternative to input data). Example: '{\"status\": \"active\", \"updated_at\": \"2024-01-01\"}'",
+    ));
 
     FfiStageMetadata::new(
         "mongodb.updateOne",
         "Update single document in MongoDB collection",
         "Updates the first document matching the query filter using $set operator. \
-         Update fields are taken from the first record in input data.",
+         Update fields can be provided via input data (first record) or 'update' config parameter.",
         params,
         vec!["mongodb", "database", "sink", "update"],
     )
@@ -1465,12 +1635,18 @@ fn create_updatemany_metadata() -> FfiStageMetadata {
         FfiParameterType::String,
         "MongoDB query filter to match documents to update",
     ));
+    params.push(FfiConfigParameter::optional(
+        "update",
+        FfiParameterType::String,
+        "",
+        "Fields to update as JSON string (alternative to input data). Example: '{\"status\": \"active\", \"updated_at\": \"2024-01-01\"}'",
+    ));
 
     FfiStageMetadata::new(
         "mongodb.updateMany",
         "Update multiple documents in MongoDB collection",
         "Updates all documents matching the query filter using $set operator. \
-         Update fields are taken from the first record in input data.",
+         Update fields can be provided via input data (first record) or 'update' config parameter.",
         params,
         vec!["mongodb", "database", "sink", "update", "bulk"],
     )
@@ -1520,12 +1696,19 @@ fn create_replaceone_metadata() -> FfiStageMetadata {
         FfiParameterType::String,
         "MongoDB query filter to match the document to replace",
     ));
+    params.push(FfiConfigParameter::optional(
+        "replacement",
+        FfiParameterType::String,
+        "",
+        "Replacement document as JSON string (alternative to input data). Example: '{\"name\": \"Alice\", \"age\": 30}'",
+    ));
 
     FfiStageMetadata::new(
         "mongodb.replaceOne",
         "Replace single document in MongoDB collection",
-        "Replaces the entire document matching the query filter with new document from input data. \
-         Unlike update, this replaces the whole document (except _id).",
+        "Replaces the entire document matching the query filter with new document. \
+         Unlike update, this replaces the whole document (except _id). \
+         Document can be provided via input data (first record) or 'replacement' config parameter.",
         params,
         vec!["mongodb", "database", "sink", "replace"],
     )
@@ -1539,12 +1722,19 @@ fn create_replacemany_metadata() -> FfiStageMetadata {
         FfiParameterType::String,
         "MongoDB query filter to match documents to replace",
     ));
+    params.push(FfiConfigParameter::optional(
+        "replacement",
+        FfiParameterType::String,
+        "",
+        "Replacement document as JSON string (alternative to input data). Example: '{\"name\": \"Alice\", \"age\": 30}'",
+    ));
 
     FfiStageMetadata::new(
         "mongodb.replaceMany",
         "Replace multiple documents in MongoDB collection",
-        "Replaces all documents matching the query filter with new document from input data. \
-         Iterates through matching documents and replaces each one individually.",
+        "Replaces all documents matching the query filter with new document. \
+         Iterates through matching documents and replaces each one individually. \
+         Document can be provided via input data (first record) or 'replacement' config parameter.",
         params,
         vec!["mongodb", "database", "sink", "replace", "bulk"],
     )
@@ -1804,5 +1994,121 @@ mod tests {
         } else {
             panic!("Expected string");
         }
+    }
+
+    #[test]
+    fn test_parse_document_from_config() {
+        let stage = MongoDbStage::new(
+            "mongodb.insertOne".to_string(),
+            MongoOperation::InsertOne,
+            StageType::Sink,
+        );
+
+        // Test valid document
+        let mut config = HashMap::new();
+        config.insert(
+            "document".to_string(),
+            r#"{"name": "John", "age": 30}"#.to_string(),
+        );
+
+        let result = stage.parse_document_from_config(&config);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+
+        // Test invalid JSON
+        config.insert("document".to_string(), "invalid json".to_string());
+        let result = stage.parse_document_from_config(&config);
+        assert!(result.is_err());
+
+        // Test no document field
+        config.clear();
+        let result = stage.parse_document_from_config(&config);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_parse_documents_from_config() {
+        let stage = MongoDbStage::new(
+            "mongodb.insertMany".to_string(),
+            MongoOperation::InsertMany,
+            StageType::Sink,
+        );
+
+        // Test valid documents array
+        let mut config = HashMap::new();
+        config.insert(
+            "documents".to_string(),
+            r#"[{"name": "John"}, {"name": "Jane"}]"#.to_string(),
+        );
+
+        let result = stage.parse_documents_from_config(&config);
+        assert!(result.is_ok());
+        let docs = result.unwrap();
+        assert!(docs.is_some());
+        assert_eq!(docs.unwrap().len(), 2);
+
+        // Test empty array
+        config.insert("documents".to_string(), "[]".to_string());
+        let result = stage.parse_documents_from_config(&config);
+        assert!(result.is_err());
+
+        // Test no documents field
+        config.clear();
+        let result = stage.parse_documents_from_config(&config);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_parse_update_from_config() {
+        let stage = MongoDbStage::new(
+            "mongodb.updateOne".to_string(),
+            MongoOperation::UpdateOne,
+            StageType::Sink,
+        );
+
+        // Test valid update
+        let mut config = HashMap::new();
+        config.insert(
+            "update".to_string(),
+            r#"{"status": "active", "updated_at": "2024-01-01"}"#.to_string(),
+        );
+
+        let result = stage.parse_update_from_config(&config);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+
+        // Test no update field
+        config.clear();
+        let result = stage.parse_update_from_config(&config);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_parse_replacement_from_config() {
+        let stage = MongoDbStage::new(
+            "mongodb.replaceOne".to_string(),
+            MongoOperation::ReplaceOne,
+            StageType::Sink,
+        );
+
+        // Test valid replacement
+        let mut config = HashMap::new();
+        config.insert(
+            "replacement".to_string(),
+            r#"{"name": "Alice", "age": 30}"#.to_string(),
+        );
+
+        let result = stage.parse_replacement_from_config(&config);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_some());
+
+        // Test no replacement field
+        config.clear();
+        let result = stage.parse_replacement_from_config(&config);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }
