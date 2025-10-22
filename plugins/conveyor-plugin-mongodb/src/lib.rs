@@ -638,6 +638,39 @@ impl MongoDbStage {
                         }
                     }
                 }
+                "insertMany" => {
+                    if let Some(Value::Array(docs_array)) = op_obj.get("documents") {
+                        let documents: Vec<Document> = docs_array
+                            .iter()
+                            .filter_map(|val| {
+                                if let Value::Object(doc_obj) = val {
+                                    let doc_map: HashMap<String, Value> = doc_obj
+                                        .iter()
+                                        .map(|(k, v)| (k.clone(), v.clone()))
+                                        .collect();
+                                    match self.json_record_to_bson(&doc_map) {
+                                        ROk(d) => Some(d),
+                                        RErr(_) => None,
+                                    }
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+
+                        if !documents.is_empty() {
+                            match collection.insert_many(documents.clone()).await {
+                                Ok(_) => insert_count += documents.len() as i32,
+                                Err(e) => {
+                                    return RErr(RBoxError::from_fmt(&format_args!(
+                                        "bulkWrite insertMany failed: {}",
+                                        e
+                                    )))
+                                }
+                            }
+                        }
+                    }
+                }
                 "updateOne" => {
                     let filter = match op_obj.get("filter") {
                         Some(Value::Object(f)) => {
@@ -673,6 +706,41 @@ impl MongoDbStage {
                         }
                     }
                 }
+                "updateMany" => {
+                    let filter = match op_obj.get("filter") {
+                        Some(Value::Object(f)) => {
+                            let mut filter_doc = Document::new();
+                            for (key, value) in f {
+                                if let Some(bson_val) = json_to_bson(value) {
+                                    filter_doc.insert(key.clone(), bson_val);
+                                }
+                            }
+                            filter_doc
+                        }
+                        _ => Document::new(),
+                    };
+
+                    if let Some(Value::Object(update_obj)) = op_obj.get("update") {
+                        let update_map: HashMap<String, Value> = update_obj
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
+                        let update_doc = match self.json_record_to_bson(&update_map) {
+                            ROk(d) => d,
+                            RErr(e) => return RErr(e),
+                        };
+                        let update = mongodb::bson::doc! { "$set": update_doc };
+                        match collection.update_many(filter, update).await {
+                            Ok(result) => update_count += result.modified_count as i32,
+                            Err(e) => {
+                                return RErr(RBoxError::from_fmt(&format_args!(
+                                    "bulkWrite updateMany failed: {}",
+                                    e
+                                )))
+                            }
+                        }
+                    }
+                }
                 "deleteOne" => {
                     let filter = match op_obj.get("filter") {
                         Some(Value::Object(f)) => {
@@ -692,6 +760,30 @@ impl MongoDbStage {
                         Err(e) => {
                             return RErr(RBoxError::from_fmt(&format_args!(
                                 "bulkWrite deleteOne failed: {}",
+                                e
+                            )))
+                        }
+                    }
+                }
+                "deleteMany" => {
+                    let filter = match op_obj.get("filter") {
+                        Some(Value::Object(f)) => {
+                            let mut filter_doc = Document::new();
+                            for (key, value) in f {
+                                if let Some(bson_val) = json_to_bson(value) {
+                                    filter_doc.insert(key.clone(), bson_val);
+                                }
+                            }
+                            filter_doc
+                        }
+                        _ => Document::new(),
+                    };
+
+                    match collection.delete_many(filter).await {
+                        Ok(result) => delete_count += result.deleted_count as i32,
+                        Err(e) => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "bulkWrite deleteMany failed: {}",
                                 e
                             )))
                         }
@@ -733,7 +825,7 @@ impl MongoDbStage {
                 }
                 _ => {
                     return RErr(RBoxError::from_fmt(&format_args!(
-                        "Unknown operation type: {}",
+                        "Unsupported operation type '{}'. Supported types: insertOne, insertMany, updateOne, updateMany, deleteOne, deleteMany, replaceOne",
                         op_type
                     )))
                 }
@@ -1483,12 +1575,18 @@ fn create_bulkwrite_metadata() -> FfiStageMetadata {
     FfiStageMetadata::new(
         "mongodb.bulkWrite",
         "Execute multiple write operations in a single batch",
-        "Executes multiple write operations (insertOne, updateOne, deleteOne, replaceOne) in a single batch. \
+        "Executes multiple write operations in a single batch for efficient bulk processing. \
          Input data must contain an 'operations' array with operation objects. \
          Each operation must have a 'type' field and operation-specific fields. \
-         Supported operation types: insertOne (requires 'document'), updateOne (requires 'filter' and 'update'), \
-         deleteOne (requires 'filter'), replaceOne (requires 'filter' and 'replacement'). \
-         Returns a summary with counts of inserted, updated, deleted, and replaced documents.",
+         \n\nSupported operation types:\n\
+         - insertOne: Insert single document (requires 'document' field)\n\
+         - insertMany: Insert multiple documents (requires 'documents' array field)\n\
+         - updateOne: Update single document (requires 'filter' and 'update' fields)\n\
+         - updateMany: Update multiple documents (requires 'filter' and 'update' fields)\n\
+         - deleteOne: Delete single document (requires 'filter' field)\n\
+         - deleteMany: Delete multiple documents (requires 'filter' field)\n\
+         - replaceOne: Replace single document (requires 'filter' and 'replacement' fields)\n\
+         \n\nReturns a summary with counts of inserted, updated, deleted, and replaced documents.",
         common_mongodb_parameters(),
         vec!["mongodb", "database", "sink", "bulk", "write", "batch"],
     )
