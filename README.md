@@ -207,6 +207,32 @@ Supports: OpenAI, Anthropic, OpenRouter, Ollama
 - 🔧 [Plugin Development](docs/plugin-system.md) - Create custom plugins
 - 🏗️ [Architecture (CLAUDE.md)](CLAUDE.md) - Technical implementation details
 
+### Local Plugin Development
+
+Build and use WASM plugins locally:
+
+```bash
+# Build all WASM plugins
+./scripts/build-wasm-plugins.sh
+
+# Or build a specific plugin
+cargo build --target wasm32-wasip2 --release -p conveyor-plugin-js-wasm
+
+# Plugins are automatically loaded from: target/wasm32-wasip2/release/
+```
+
+Use in pipelines:
+
+```toml
+[global]
+wasm_plugins = ["js_wasm"]  # No installation needed!
+
+[[stages]]
+function = "js.eval"
+[stages.config]
+script = '''function transform(row) { return row; }'''
+```
+
 ## Examples
 
 See [examples/](examples/) directory for complete pipeline examples:

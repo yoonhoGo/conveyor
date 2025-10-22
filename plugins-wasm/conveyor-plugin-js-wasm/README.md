@@ -14,13 +14,38 @@ WebAssembly plugin for Conveyor that enables inline JavaScript code execution fo
 
 The plugin is built as a WebAssembly module and loaded dynamically by Conveyor.
 
-### Build
+### Local Development (Quick Start)
 
 ```bash
+# 1. Build the plugin using the helper script
+./scripts/build-wasm-plugins.sh
+
+# 2. The plugin is now ready to use!
+# Location: target/wasm32-wasip2/release/conveyor_plugin_js_wasm.wasm
+
+# 3. Use in your pipeline
+conveyor run examples/js-transform-example.toml
+```
+
+### Manual Build
+
+```bash
+# Install wasm32-wasip2 target (one-time setup)
+rustup target add wasm32-wasip2
+
 # Build the WASM plugin
 cargo build -p conveyor-plugin-js-wasm --target wasm32-wasip2 --release
 
-# Output: target/wasm32-wasip2/release/conveyor_plugin_js_wasm.wasm
+# Output: target/wasm32-wasip2/release/conveyor_plugin_js_wasm.wasm (5.4 MB)
+```
+
+### Plugin Loading
+
+Conveyor automatically loads WASM plugins from `target/wasm32-wasip2/release/` directory. Just specify the plugin in your pipeline configuration:
+
+```toml
+[global]
+wasm_plugins = ["js_wasm"]  # Loads conveyor_plugin_js_wasm.wasm
 ```
 
 ## Usage
