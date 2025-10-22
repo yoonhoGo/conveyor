@@ -1434,6 +1434,60 @@ fn json_to_bson(value: &Value) -> Option<mongodb::bson::Bson> {
             Some(mongodb::bson::Bson::Array(bson_arr))
         }
         Value::Object(obj) => {
+            // Check for MongoDB Extended JSON format
+            // $oid: ObjectId
+            if let Some(Value::String(oid_str)) = obj.get("$oid") {
+                if let Ok(oid) = mongodb::bson::oid::ObjectId::parse_str(oid_str) {
+                    return Some(mongodb::bson::Bson::ObjectId(oid));
+                }
+            }
+
+            // $date: DateTime (ISO 8601 string or $numberLong)
+            if let Some(date_value) = obj.get("$date") {
+                if let Value::String(date_str) = date_value {
+                    // Try parsing as ISO 8601 string
+                    if let Ok(datetime) = mongodb::bson::DateTime::parse_rfc3339_str(date_str) {
+                        return Some(mongodb::bson::Bson::DateTime(datetime));
+                    }
+                } else if let Some(Value::String(millis_str)) =
+                    date_value.as_object().and_then(|o| o.get("$numberLong"))
+                {
+                    // Extended JSON format: { "$date": { "$numberLong": "1234567890" } }
+                    if let Ok(millis) = millis_str.parse::<i64>() {
+                        return Some(mongodb::bson::Bson::DateTime(
+                            mongodb::bson::DateTime::from_millis(millis),
+                        ));
+                    }
+                } else if let Some(millis) = date_value.as_i64() {
+                    // Simple number format: { "$date": 1234567890 }
+                    return Some(mongodb::bson::Bson::DateTime(
+                        mongodb::bson::DateTime::from_millis(millis),
+                    ));
+                }
+            }
+
+            // $numberLong: 64-bit integer
+            if let Some(Value::String(long_str)) = obj.get("$numberLong") {
+                if let Ok(long_val) = long_str.parse::<i64>() {
+                    return Some(mongodb::bson::Bson::Int64(long_val));
+                }
+            }
+
+            // $numberInt: 32-bit integer
+            if let Some(Value::String(int_str)) = obj.get("$numberInt") {
+                if let Ok(int_val) = int_str.parse::<i32>() {
+                    return Some(mongodb::bson::Bson::Int32(int_val));
+                }
+            }
+
+            // $numberDouble: Double
+            if let Some(Value::String(double_str)) = obj.get("$numberDouble") {
+                if let Ok(double_val) = double_str.parse::<f64>() {
+                    return Some(mongodb::bson::Bson::Double(double_val));
+                }
+            }
+
+            // Regular object - convert to BSON Document
             let mut doc = Document::new();
             for (k, v) in obj {
                 if let Some(bson_val) = json_to_bson(v) {
@@ -2090,6 +2144,95 @@ mod tests {
             assert_eq!(s, "hello");
         } else {
             panic!("Expected string");
+        }
+    }
+
+    #[test]
+    fn test_json_to_bson_extended_json() {
+        use serde_json::json;
+
+        // Test ObjectId ($oid)
+        let val = json!({"$oid": "507f1f77bcf86cd799439011"});
+        if let Some(mongodb::bson::Bson::ObjectId(oid)) = json_to_bson(&val) {
+            assert_eq!(oid.to_hex(), "507f1f77bcf86cd799439011");
+        } else {
+            panic!("Expected ObjectId");
+        }
+
+        // Test invalid ObjectId (should fall back to document)
+        let val = json!({"$oid": "invalid"});
+        assert!(matches!(
+            json_to_bson(&val),
+            Some(mongodb::bson::Bson::Document(_))
+        ));
+
+        // Test $numberLong
+        let val = json!({"$numberLong": "9223372036854775807"});
+        assert!(matches!(
+            json_to_bson(&val),
+            Some(mongodb::bson::Bson::Int64(9223372036854775807))
+        ));
+
+        // Test $numberInt
+        let val = json!({"$numberInt": "2147483647"});
+        assert!(matches!(
+            json_to_bson(&val),
+            Some(mongodb::bson::Bson::Int32(2147483647))
+        ));
+
+        // Test $numberDouble
+        let val = json!({"$numberDouble": "3.14159"});
+        if let Some(mongodb::bson::Bson::Double(d)) = json_to_bson(&val) {
+            assert!((d - 3.14159).abs() < 0.00001);
+        } else {
+            panic!("Expected Double");
+        }
+
+        // Test $date with ISO 8601 string
+        let val = json!({"$date": "2024-01-01T00:00:00Z"});
+        assert!(matches!(
+            json_to_bson(&val),
+            Some(mongodb::bson::Bson::DateTime(_))
+        ));
+
+        // Test $date with milliseconds
+        let val = json!({"$date": 1609459200000i64});
+        assert!(matches!(
+            json_to_bson(&val),
+            Some(mongodb::bson::Bson::DateTime(_))
+        ));
+
+        // Test $date with $numberLong
+        let val = json!({"$date": {"$numberLong": "1609459200000"}});
+        assert!(matches!(
+            json_to_bson(&val),
+            Some(mongodb::bson::Bson::DateTime(_))
+        ));
+    }
+
+    #[test]
+    fn test_objectid_in_query() {
+        use serde_json::json;
+
+        // Test query with ObjectId
+        let query_json = json!({
+            "_id": {"$oid": "507f1f77bcf86cd799439011"},
+            "status": "active"
+        });
+
+        if let Some(mongodb::bson::Bson::Document(doc)) = json_to_bson(&query_json) {
+            // Check _id is ObjectId
+            assert!(matches!(
+                doc.get("_id"),
+                Some(mongodb::bson::Bson::ObjectId(_))
+            ));
+            // Check status is String
+            assert!(matches!(
+                doc.get("status"),
+                Some(mongodb::bson::Bson::String(_))
+            ));
+        } else {
+            panic!("Expected Document");
         }
     }
 
