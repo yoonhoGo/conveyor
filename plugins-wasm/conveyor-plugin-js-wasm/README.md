@@ -41,12 +41,32 @@ cargo build -p conveyor-plugin-js-wasm --target wasm32-wasip2 --release
 
 ### Plugin Loading
 
-Conveyor automatically loads WASM plugins from `target/wasm32-wasip2/release/` directory. Just specify the plugin in your pipeline configuration:
+Conveyor searches for WASM plugins in the following locations (in priority order):
+
+1. **`~/.conveyor/wasm-plugins/`** - Installed plugins (production)
+2. **`target/wasm32-wasip2/release/`** - Development builds (local)
+
+Just specify the plugin in your pipeline configuration:
 
 ```toml
 [global]
 wasm_plugins = ["js_wasm"]  # Loads conveyor_plugin_js_wasm.wasm
 ```
+
+### System-Wide Installation
+
+To use the plugin from anywhere (not just the development directory):
+
+```bash
+# Create the plugins directory
+mkdir -p ~/.conveyor/wasm-plugins
+
+# Copy the built plugin
+cp target/wasm32-wasip2/release/conveyor_plugin_js_wasm.wasm \
+   ~/.conveyor/wasm-plugins/
+```
+
+Now you can use the plugin from any location without needing the development build!
 
 ## Usage
 

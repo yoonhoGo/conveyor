@@ -11,6 +11,9 @@ use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 
+// For home directory access
+use dirs;
+
 // Generate host-side bindings from WIT file
 wasmtime::component::bindgen!({
     path: "conveyor-wasm-plugin-api/wit/conveyor-plugin.wit",
@@ -108,14 +111,26 @@ impl WasmPluginLoader {
 
     /// Load a WASM plugin by name
     pub async fn load_plugin(&mut self, name: &str) -> Result<()> {
-        // Construct plugin path
-        let plugin_path = self
-            .plugin_dir
-            .join(format!("conveyor_plugin_{}.wasm", name));
+        let plugin_filename = format!("conveyor_plugin_{}.wasm", name);
 
-        if !plugin_path.exists() {
-            anyhow::bail!("WASM plugin '{}' not found at {:?}", name, plugin_path);
+        // Search for plugin in multiple locations
+        let search_paths = get_wasm_plugin_search_paths();
+        let mut plugin_path = None;
+
+        for search_dir in search_paths {
+            let candidate = search_dir.join(&plugin_filename);
+            if candidate.exists() {
+                plugin_path = Some(candidate);
+                break;
+            }
         }
+
+        let plugin_path = plugin_path.ok_or_else(|| {
+            anyhow::anyhow!(
+                "WASM plugin '{}' not found. Searched:\n  - ~/.conveyor/wasm-plugins/\n  - target/wasm32-wasip2/release/",
+                name
+            )
+        })?;
 
         tracing::info!("Loading WASM plugin '{}' from {:?}", name, plugin_path);
 
@@ -362,6 +377,21 @@ impl Default for WasmPluginLoader {
     fn default() -> Self {
         Self::new().expect("Failed to create WASM plugin loader")
     }
+}
+
+/// Get WASM plugin search paths in priority order
+fn get_wasm_plugin_search_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    // 1. System-wide WASM plugins: ~/.conveyor/wasm-plugins
+    if let Some(home_dir) = dirs::home_dir() {
+        paths.push(home_dir.join(".conveyor").join("wasm-plugins"));
+    }
+
+    // 2. Development WASM plugins: ./target/wasm32-wasip2/release
+    paths.push(PathBuf::from("target/wasm32-wasip2/release"));
+
+    paths
 }
 
 #[cfg(test)]
