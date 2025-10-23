@@ -250,7 +250,7 @@ Actor[source1]  Actor[source2]
 
 ```toml
 [global]
-executor = "actor"
+executor = "async"
 channel_buffer_size = 100
 ```
 
@@ -258,7 +258,7 @@ channel_buffer_size = 100
 
 ```toml
 [global]
-executor = "actor"
+executor = "async"
 channel_buffer_size = 100
 
 # Multiple sources
@@ -310,7 +310,7 @@ inputs = ["transform"]
 ```toml
 [global]
 # 기본값: "dag" (DagExecutor)
-executor = "channel"  # or "dag" or "actor"
+executor = "channel"  # or "dag" or "async"
 ```
 
 ### Channel 설정
@@ -594,13 +594,13 @@ concurrency = 5
 
 ```toml
 [global]
-executor = "actor"
+executor = "async"
 channel_buffer_size = 100
 execution_mode = "streaming"
 ```
 
 **이유:**
-- `actor`: Graceful shutdown 필요
+- `async`: Graceful shutdown 필요
 - `streaming`: 실시간 처리 모드
 - `buffer_size=100`: 버스트 트래픽 대응
 
