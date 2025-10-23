@@ -34,6 +34,7 @@ pub enum MongoOperation {
     ReplaceMany,
     Aggregate,
     BulkWrite,
+    ToObjectId,
 }
 
 /// MongoDB Stage - operation-based
@@ -651,6 +652,99 @@ impl MongoDbStage {
         }
 
         ROk(input_data.clone())
+    }
+
+    /// Execute toObjectId operation - convert fields to MongoDB ObjectId
+    async fn execute_to_objectid_async(
+        &self,
+        input_data: &FfiDataFormat,
+        config: &HashMap<String, String>,
+    ) -> RResult<FfiDataFormat, RBoxError> {
+        // Get columns to convert from config
+        let columns_str = match config.get("columns") {
+            Some(s) => s,
+            None => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "toObjectId requires 'columns' configuration (e.g., columns = '[\"field1\", \"field2\"]')"
+                )))
+            }
+        };
+
+        // Parse columns array
+        let columns: Vec<String> = match serde_json::from_str(columns_str) {
+            Ok(cols) => cols,
+            Err(e) => {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Failed to parse 'columns' as JSON array: {}. Expected format: '[\"field1\", \"field2\"]'",
+                    e
+                )))
+            }
+        };
+
+        if columns.is_empty() {
+            return RErr(RBoxError::from_fmt(&format_args!(
+                "toObjectId requires at least one column to convert"
+            )));
+        }
+
+        // Get records from input data
+        let mut records = match input_data.to_json_records() {
+            ROk(r) => r,
+            RErr(e) => return RErr(e),
+        };
+
+        // Convert specified columns to ObjectId format
+        for record in &mut records {
+            for column in &columns {
+                if let Some(value) = record.get(column) {
+                    // Try to convert the value to ObjectId
+                    let objectid_value = if let Some(s) = value.as_str() {
+                        // If it's a string, try to parse as ObjectId
+                        match mongodb::bson::oid::ObjectId::parse_str(s) {
+                            Ok(oid) => {
+                                // Convert ObjectId to MongoDB extended JSON format
+                                serde_json::json!({"$oid": oid.to_hex()})
+                            }
+                            Err(e) => {
+                                return RErr(RBoxError::from_fmt(&format_args!(
+                                    "Failed to convert '{}' to ObjectId in column '{}': {}",
+                                    s, column, e
+                                )))
+                            }
+                        }
+                    } else if let Some(obj) = value.as_object() {
+                        // If it's already an object with $oid, validate it
+                        if let Some(oid_str) = obj.get("$oid").and_then(|v| v.as_str()) {
+                            match mongodb::bson::oid::ObjectId::parse_str(oid_str) {
+                                Ok(_) => value.clone(), // Already valid ObjectId format
+                                Err(e) => {
+                                    return RErr(RBoxError::from_fmt(&format_args!(
+                                        "Invalid ObjectId format in column '{}': {}",
+                                        column, e
+                                    )))
+                                }
+                            }
+                        } else {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "Column '{}' has object value but not in ObjectId format (expected {{\"$oid\": \"...\"}})",
+                                column
+                            )));
+                        }
+                    } else {
+                        return RErr(RBoxError::from_fmt(&format_args!(
+                            "Column '{}' must be a string or ObjectId object, got: {:?}",
+                            column, value
+                        )));
+                    };
+
+                    // Update the record with ObjectId format
+                    record.insert(column.clone(), objectid_value);
+                }
+            }
+        }
+
+        // Return converted records
+        FfiDataFormat::from_json_records(&records)
     }
 
     /// Execute bulkWrite operation - batch write operations
@@ -1388,12 +1482,34 @@ impl FfiStage for MongoDbStage {
                     };
                     self.execute_replace_many_async(&input_data, &config).await
                 }
+                MongoOperation::ToObjectId => {
+                    let input_data = match input_data {
+                        Some(data) => data,
+                        None => {
+                            return RErr(RBoxError::from_fmt(&format_args!(
+                                "toObjectId requires input data"
+                            )))
+                        }
+                    };
+                    self.execute_to_objectid_async(&input_data, &config).await
+                }
             }
         })
     }
 
     fn validate_config(&self, config: RHashMap<RString, RString>) -> RResult<(), RBoxError> {
-        // Check required fields
+        // ToObjectId has different requirements than other operations
+        if self.operation == MongoOperation::ToObjectId {
+            // ToObjectId only requires 'columns' configuration
+            if !config.contains_key("columns") {
+                return RErr(RBoxError::from_fmt(&format_args!(
+                    "Missing required 'columns' configuration for toObjectId"
+                )));
+            }
+            return ROk(());
+        }
+
+        // All other operations require uri, database, and collection
         if !config.contains_key("uri") {
             return RErr(RBoxError::from_fmt(&format_args!(
                 "Missing required 'uri' configuration"
@@ -1639,6 +1755,18 @@ pub extern "C" fn create_mongodb_bulkwrite() -> FfiStage_TO<'static, RBox<()>> {
             "mongodb-bulkwrite".to_string(),
             MongoOperation::BulkWrite,
             StageType::Sink,
+        ),
+        TD_Opaque,
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn create_mongodb_toobjectid() -> FfiStage_TO<'static, RBox<()>> {
+    FfiStage_TO::from_value(
+        MongoDbStage::new(
+            "mongodb-toobjectid".to_string(),
+            MongoOperation::ToObjectId,
+            StageType::Transform,
         ),
         TD_Opaque,
     )
@@ -1933,6 +2061,29 @@ fn create_bulkwrite_metadata() -> FfiStageMetadata {
     )
 }
 
+/// Create metadata for toObjectId operation
+fn create_toobjectid_metadata() -> FfiStageMetadata {
+    let params = vec![FfiConfigParameter::required(
+        "columns",
+        FfiParameterType::String,
+        "JSON array of column names to convert to ObjectId (e.g., '[\"_id\", \"user_id\"]')",
+    )];
+
+    FfiStageMetadata::new(
+        "mongodb.toObjectId",
+        "Convert string fields to MongoDB ObjectId format",
+        "Converts specified columns from string values to MongoDB ObjectId format. \
+         This is useful when you need to prepare data for MongoDB operations that require ObjectId types. \
+         \n\nInput values can be:\n\
+         - 24-character hexadecimal strings (e.g., '507f1f77bcf86cd799439011')\n\
+         - Already in ObjectId format (e.g., {'$oid': '507f1f77bcf86cd799439011'})\n\
+         \n\nThe converted fields will be in MongoDB extended JSON format: {'$oid': 'hexstring'}.\n\
+         This format is compatible with other MongoDB plugin operations like insertOne, updateOne, etc.",
+        params,
+        vec!["mongodb", "objectid", "transform", "type", "conversion"],
+    )
+}
+
 // ============================================================================
 // Plugin Capabilities
 // ============================================================================
@@ -2024,6 +2175,13 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
             "create_mongodb_bulkwrite",
             create_bulkwrite_metadata(),
         ),
+        PluginCapability::new(
+            "mongodb.toObjectId",
+            StageType::Transform,
+            "MongoDB toObjectId - convert fields to ObjectId format",
+            "create_mongodb_toobjectid",
+            create_toobjectid_metadata(),
+        ),
     ]
     .into()
 }
@@ -2033,9 +2191,9 @@ extern "C" fn get_capabilities() -> RVec<PluginCapability> {
 pub static _plugin_declaration: PluginDeclaration = PluginDeclaration {
     api_version: PLUGIN_API_VERSION,
     name: rstr!("mongodb"),
-    version: rstr!("2.2.0"),
+    version: rstr!("2.3.0"),
     description: rstr!(
-        "MongoDB plugin with operation-based API (find, findOne, aggregate, insert, update, delete, replace, bulkWrite)"
+        "MongoDB plugin with operation-based API (find, findOne, aggregate, insert, update, delete, replace, bulkWrite, toObjectId)"
     ),
     get_capabilities,
 };
@@ -2051,14 +2209,14 @@ mod tests {
     #[test]
     fn test_plugin_declaration() {
         assert_eq!(_plugin_declaration.name, "mongodb");
-        assert_eq!(_plugin_declaration.version, "2.2.0");
+        assert_eq!(_plugin_declaration.version, "2.3.0");
         assert!(_plugin_declaration.is_compatible());
     }
 
     #[test]
     fn test_capabilities() {
         let caps = get_capabilities();
-        assert_eq!(caps.len(), 12);
+        assert_eq!(caps.len(), 13);
 
         // Check find operation
         assert_eq!(caps[0].name.as_str(), "mongodb.find");
